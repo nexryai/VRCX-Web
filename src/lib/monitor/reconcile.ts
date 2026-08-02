@@ -8,6 +8,7 @@ import { getMongoDatabase } from "@/lib/mongodb/client";
 import { type ActivityEventDocument, collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
+import { upsertCachedUser, upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
 import { requestVrchat, type VrchatCookies } from "@/lib/vrchat/client";
 import { type VrchatNotification, type VrchatUser, vrchatNotificationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
@@ -105,7 +106,13 @@ export async function reconcileRemoteState(cookies: VrchatCookies): Promise<{ us
     }));
     const current = toFriendSnapshots(combined, onlineIds);
     const observedAt = new Date();
-    await Promise.all([replaceActiveNotifications(user.id, "legacy", legacyNotifications.notifications, observedAt), replaceActiveNotifications(user.id, "v2", v2Notifications.notifications, observedAt), replaceActiveNotifications(user.id, "hidden", hiddenNotifications.notifications, observedAt)]);
+    await Promise.all([
+        upsertCachedUser(user.id, user, "auth", observedAt),
+        upsertCachedUsers(user.id, combined, "friends", observedAt),
+        replaceActiveNotifications(user.id, "legacy", legacyNotifications.notifications, observedAt),
+        replaceActiveNotifications(user.id, "v2", v2Notifications.notifications, observedAt),
+        replaceActiveNotifications(user.id, "hidden", hiddenNotifications.notifications, observedAt),
+    ]);
     const changes = previous.length ? diffFriendSnapshots(previous, current, observedAt.toISOString()) : [];
     const snapshotOperations = combined.map((friend) => {
         const document: FriendSnapshotDocument = {

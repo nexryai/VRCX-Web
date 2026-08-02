@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { upsertCachedGroups, upsertCachedWorlds } from "@/lib/mongodb/entity-repository";
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
+import { upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatGroupSchema, vrchatUserSchema, vrchatWorldSchema } from "@/lib/vrchat/types";
@@ -26,6 +29,10 @@ export async function GET(request: NextRequest) {
         const upstream = await requestVrchat<unknown>(type, { cookies, query });
         const schema = type === "users" ? vrchatUserSchema : type === "worlds" ? vrchatWorldSchema : vrchatGroupSchema;
         const results = z.array(schema).parse(upstream.data);
+        const ownerId = await requireActiveUserId();
+        if (type === "users") await upsertCachedUsers(ownerId, z.array(vrchatUserSchema).parse(results), "search");
+        if (type === "worlds") await upsertCachedWorlds(ownerId, z.array(vrchatWorldSchema).parse(results), "search");
+        if (type === "groups") await upsertCachedGroups(ownerId, z.array(vrchatGroupSchema).parse(results), "search");
         const response = NextResponse.json({ type, results, offset, pageSize: 10 });
         await persistRotatedVrchatCookies(upstream.cookies);
         response.headers.set("Cache-Control", "private, no-store");

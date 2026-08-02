@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { upsertCachedAvatars, upsertCachedWorlds } from "@/lib/mongodb/entity-repository";
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import type { VrchatCookies } from "@/lib/vrchat/protocol";
@@ -42,9 +44,16 @@ export async function GET(request: NextRequest) {
         }
 
         const endpoint = query.data.type === "world" ? "worlds/favorites" : "avatars/favorites";
-        const schema = query.data.type === "world" ? vrchatWorldSchema : vrchatAvatarSchema;
         const upstream = await requestVrchat<unknown>(endpoint, { cookies, query: { n: 100, offset: 0, tag: query.data.tag } });
-        return await favoriteResponse({ items: z.array(schema).parse(upstream.data) }, upstream.cookies);
+        const ownerId = await requireActiveUserId();
+        if (query.data.type === "world") {
+            const items = z.array(vrchatWorldSchema).parse(upstream.data);
+            await upsertCachedWorlds(ownerId, items, "favorite");
+            return await favoriteResponse({ items }, upstream.cookies);
+        }
+        const items = z.array(vrchatAvatarSchema).parse(upstream.data);
+        await upsertCachedAvatars(ownerId, items, "favorite");
+        return await favoriteResponse({ items }, upstream.cookies);
     } catch (error) {
         return await favoriteError(error, "The VRChat favorites response was not valid.");
     }

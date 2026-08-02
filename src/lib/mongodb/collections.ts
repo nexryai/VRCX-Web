@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Collection, Db } from "mongodb";
 
-import type { VrchatNotification, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatAvatar, VrchatGroup, VrchatNotification, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
     algorithm: "aes-256-gcm";
@@ -51,6 +51,46 @@ export type FriendSnapshotDocument = {
     friendId: string;
     online: boolean;
     user: VrchatUser;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type UserDocument = {
+    _id: string;
+    ownerId: string;
+    userId: string;
+    user: VrchatUser;
+    source: "auth" | "friends" | "lookup" | "pipeline" | "search";
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type WorldDocument = {
+    _id: string;
+    ownerId: string;
+    worldId: string;
+    world: VrchatWorld;
+    source: "favorite" | "lookup" | "search" | "session";
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type GroupDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    group: VrchatGroup;
+    source: "lookup" | "search" | "session";
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type AvatarDocument = {
+    _id: string;
+    ownerId: string;
+    avatarId: string;
+    avatar: VrchatAvatar;
+    source: "favorite" | "lookup" | "owned" | "search";
     observedAt: Date;
     updatedAt: Date;
 };
@@ -120,6 +160,10 @@ export type Collections = {
     appSettings: Collection<AppSettingsDocument>;
     vrchatSession: Collection<VrchatSessionDocument>;
     monitorState: Collection<MonitorStateDocument>;
+    users: Collection<UserDocument>;
+    worlds: Collection<WorldDocument>;
+    groups: Collection<GroupDocument>;
+    avatars: Collection<AvatarDocument>;
     friendSnapshots: Collection<FriendSnapshotDocument>;
     activityEvents: Collection<ActivityEventDocument>;
     gameSessions: Collection<GameSessionDocument>;
@@ -133,6 +177,10 @@ export function collections(db: Db): Collections {
         appSettings: db.collection<AppSettingsDocument>("app_settings"),
         vrchatSession: db.collection<VrchatSessionDocument>("vrchat_session"),
         monitorState: db.collection<MonitorStateDocument>("monitor_state"),
+        users: db.collection<UserDocument>("users"),
+        worlds: db.collection<WorldDocument>("worlds"),
+        groups: db.collection<GroupDocument>("groups"),
+        avatars: db.collection<AvatarDocument>("avatars"),
         friendSnapshots: db.collection<FriendSnapshotDocument>("friend_snapshots"),
         activityEvents: db.collection<ActivityEventDocument>("activity_events"),
         gameSessions: db.collection<GameSessionDocument>("game_sessions"),

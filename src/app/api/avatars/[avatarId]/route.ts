@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { removeCachedAvatar, upsertCachedAvatars } from "@/lib/mongodb/entity-repository";
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
@@ -25,7 +27,9 @@ export async function PATCH(request: NextRequest, context: RouteContext<"/api/av
     try {
         const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "PUT", cookies, body: { id: avatarId.data, ...body.data } });
-        const response = NextResponse.json({ avatar: vrchatAvatarSchema.parse(upstream.data) });
+        const avatar = vrchatAvatarSchema.parse(upstream.data);
+        await upsertCachedAvatars(await requireActiveUserId(), [avatar], "owned");
+        const response = NextResponse.json({ avatar });
         await persistRotatedVrchatCookies(upstream.cookies);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
@@ -42,6 +46,7 @@ export async function DELETE(request: NextRequest, context: RouteContext<"/api/a
     try {
         const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "DELETE", cookies });
+        await removeCachedAvatar(await requireActiveUserId(), avatarId.data);
         const response = NextResponse.json({ success: true });
         await persistRotatedVrchatCookies(upstream.cookies);
         response.headers.set("Cache-Control", "private, no-store");

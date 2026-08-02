@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { upsertCachedUser } from "@/lib/mongodb/user-repository";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { createBasicAuthorization, requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearLegacyVrchatCookies, parseSessionPayload, persistAuthenticatedVrchatSession, persistPendingVrchatSession } from "@/lib/vrchat/session";
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
         const snapshot = parseSessionPayload(upstream.data);
         if (snapshot.status === "authenticated") {
             await persistAuthenticatedVrchatSession(upstream.cookies, snapshot.user.id);
+            await upsertCachedUser(snapshot.user.id, snapshot.user, "auth");
         } else {
             await persistPendingVrchatSession(upstream.cookies);
         }

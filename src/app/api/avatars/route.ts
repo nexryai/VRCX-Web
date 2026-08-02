@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { upsertCachedAvatars } from "@/lib/mongodb/entity-repository";
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema } from "@/lib/vrchat/types";
@@ -27,7 +29,9 @@ export async function GET(request: NextRequest) {
                 user: "me",
             },
         });
-        const response = NextResponse.json({ avatars: z.array(vrchatAvatarSchema).parse(upstream.data) });
+        const avatars = z.array(vrchatAvatarSchema).parse(upstream.data);
+        await upsertCachedAvatars(await requireActiveUserId(), avatars, "owned");
+        const response = NextResponse.json({ avatars });
         await persistRotatedVrchatCookies(upstream.cookies);
         response.headers.set("Cache-Control", "private, no-store");
         return response;

@@ -91,6 +91,27 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 3,
+        name: "add-user-cache-indexes",
+        async apply(c) {
+            await Promise.all([c.users.createIndex({ ownerId: 1, userId: 1 }, { unique: true, name: "owner_user_unique" }), c.users.createIndex({ ownerId: 1, "user.displayName": 1 }, { name: "owner_display_name" }), c.users.createIndex({ ownerId: 1, updatedAt: -1 }, { name: "owner_updated" })]);
+        },
+    },
+    {
+        version: 4,
+        name: "add-remote-entity-cache-indexes",
+        async apply(c) {
+            await Promise.all([
+                c.worlds.createIndex({ ownerId: 1, worldId: 1 }, { unique: true, name: "owner_world_unique" }),
+                c.worlds.createIndex({ ownerId: 1, "world.name": 1 }, { name: "owner_world_name" }),
+                c.groups.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }),
+                c.groups.createIndex({ ownerId: 1, "group.name": 1 }, { name: "owner_group_name" }),
+                c.avatars.createIndex({ ownerId: 1, avatarId: 1 }, { unique: true, name: "owner_avatar_unique" }),
+                c.avatars.createIndex({ ownerId: 1, "avatar.name": 1 }, { name: "owner_avatar_name" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

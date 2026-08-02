@@ -3,6 +3,7 @@ import "server-only";
 import type { NextResponse } from "next/server";
 
 import { clearStoredVrchatSession, getStoredVrchatSession, saveAuthenticatedVrchatSession, savePendingVrchatSession, updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
+import { getCachedUser, upsertCachedUser } from "@/lib/mongodb/user-repository";
 import { requestVrchat, VrchatApiError } from "./client";
 import { parseSessionPayload, type VrchatCookies } from "./protocol";
 import type { SessionSnapshot } from "./types";
@@ -62,12 +63,18 @@ export async function fetchVrchatSession(): Promise<SessionSnapshot> {
         return { status: "two-factor-required", methods: ["totp", "otp", "emailOtp"] };
     }
 
+    if (stored.activeUserId) {
+        const cached = await getCachedUser(stored.activeUserId, stored.activeUserId);
+        if (cached) return { status: "authenticated", user: cached };
+    }
+
     try {
         const response = await requestVrchat<unknown>("auth/user", { cookies: stored.cookies });
         const snapshot = parseSessionPayload(response.data);
         await persistRotatedVrchatCookies(response.cookies);
         if (snapshot.status === "authenticated") {
             await persistAuthenticatedVrchatSession({ ...stored.cookies, ...response.cookies }, snapshot.user.id);
+            await upsertCachedUser(snapshot.user.id, snapshot.user, "auth");
         }
         return snapshot;
     } catch (error) {
