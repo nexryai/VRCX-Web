@@ -67,7 +67,7 @@ The initial source audit below records the production scope. A feature marked `A
 | User details | Implemented | Port additional remote-backed tabs such as mutual friends, groups, worlds, and avatars |
 | Search | Implemented for users, worlds, and groups | Add avatar-provider search when its optional remote-provider configuration is defined; replace external world/group links with full dialogs |
 | Favorites | Not started | Port remote friend/world/avatar favorite groups and browser-safe local groups |
-| Friend List | Not started | Port table/card modes and relationship actions |
+| Friend List | Implemented | Add advanced VRCX columns, bulk mutual-data refresh, and favorite-only filtering |
 | Moderation | Not started | Port player and avatar moderation lists/actions |
 | Notifications | Not started | Port notification list and response actions |
 | My Avatars | Not started | Port remote management; omit desktop history |

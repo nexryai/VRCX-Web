@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { fetchAllFriends } from "@/lib/friends-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
 import { UserDialog } from "./user-dialog";
 
@@ -15,22 +16,6 @@ type FriendsContextValue = {
 };
 
 const FriendsContext = createContext<FriendsContextValue | null>(null);
-
-async function fetchFriendPage(offset: number, signal: AbortSignal) {
-    const response = await fetch(`/api/friends?offline=false&n=100&offset=${offset}`, {
-        cache: "no-store",
-        signal,
-    });
-    const payload = (await response.json()) as { error?: string; friends?: VrchatUser[] };
-    if (response.status === 401) {
-        window.location.assign("/login");
-        throw new Error("The VRChat session expired.");
-    }
-    if (!response.ok || !payload.friends) {
-        throw new Error(payload.error || "The friend list could not be loaded.");
-    }
-    return payload.friends;
-}
 
 export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const [friends, setFriends] = useState<VrchatUser[]>([]);
@@ -47,12 +32,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         setError("");
 
         try {
-            const result: VrchatUser[] = [];
-            for (let offset = 0; offset <= 7500; offset += 100) {
-                const page = await fetchFriendPage(offset, nextController.signal);
-                result.push(...page);
-                if (page.length < 100) break;
-            }
+            const result = await fetchAllFriends(false, nextController.signal);
             setFriends(result);
         } catch (refreshError) {
             if (refreshError instanceof DOMException && refreshError.name === "AbortError") return;
