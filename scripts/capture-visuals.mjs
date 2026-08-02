@@ -17,6 +17,8 @@ const captures = [
     { name: "game-log", path: "/game-log", readyText: "Midnight Rooftop" },
     { name: "search", path: "/search", readyText: "Found through the VRChat user search.", searchQuery: "sample creator" },
     { name: "favorite-friends", path: "/favorite/friends", readyText: "Building a new world", favoriteKind: "friend" },
+    { name: "favorite-friends-import", path: "/favorite/friends", readyText: "Import favorite friends", favoriteKind: "friend", favoriteDialog: "Import" },
+    { name: "favorite-friends-export", path: "/favorite/friends", readyText: "Export favorite friends", favoriteKind: "friend", favoriteDialog: "Export" },
     { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
@@ -105,6 +107,10 @@ for (const width of [360, 768, 1280, 1920]) {
             });
         }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
+        if (capture.favoriteDialog) {
+            await page.getByLabel("Favorite card settings").click();
+            await page.getByRole("button", { name: capture.favoriteDialog, exact: true }).click();
+        }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
         }

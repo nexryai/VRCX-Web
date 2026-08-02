@@ -17,6 +17,11 @@ export async function upsertCachedWorlds(ownerId: string, worlds: VrchatWorld[],
     );
 }
 
+export async function getCachedWorld(ownerId: string, worldId: string) {
+    await ensureMongoSchema();
+    return (await collections(await getMongoDatabase()).worlds.findOne({ _id: `${ownerId}:${worldId}` }))?.world || null;
+}
+
 export async function upsertCachedGroups(ownerId: string, groups: VrchatGroup[], source: GroupDocument["source"], observedAt = new Date()) {
     if (!groups.length) return;
     await ensureMongoSchema();
@@ -60,6 +65,11 @@ export async function upsertCachedAvatars(ownerId: string, avatars: VrchatAvatar
         }),
         { ordered: false },
     );
+}
+
+export async function getCachedAvatar(ownerId: string, avatarId: string) {
+    await ensureMongoSchema();
+    return (await collections(await getMongoDatabase()).avatars.findOne({ _id: `${ownerId}:${avatarId}` }))?.avatar || null;
 }
 
 export async function removeCachedAvatar(ownerId: string, avatarId: string) {

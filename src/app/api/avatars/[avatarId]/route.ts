@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
-import { removeCachedAvatar, upsertCachedAvatars } from "@/lib/mongodb/entity-repository";
+import { getCachedAvatar, removeCachedAvatar, upsertCachedAvatars } from "@/lib/mongodb/entity-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
@@ -17,6 +17,30 @@ const updateSchema = z
         releaseStatus: z.enum(["private", "public"]).optional(),
     })
     .refine((body) => Object.values(body).some((value) => value !== undefined));
+
+export async function GET(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]">) {
+    const avatarId = avatarIdSchema.safeParse((await context.params).avatarId);
+    const refresh = request.nextUrl.searchParams.get("refresh") === "true";
+    if (!avatarId.success) return NextResponse.json({ error: "The avatar ID is invalid." }, { status: 400 });
+    const ownerId = await requireActiveUserId();
+    if (!refresh) {
+        const cached = await getCachedAvatar(ownerId, avatarId.data);
+        if (cached) return avatarResponse({ avatar: cached });
+    }
+    let expectedAuthCookie: string | undefined;
+    try {
+        const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
+        const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { cookies });
+        const avatar = vrchatAvatarSchema.parse(upstream.data);
+        await upsertCachedAvatars(ownerId, [avatar], "lookup");
+        const response = avatarResponse({ avatar });
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
+        return response;
+    } catch (error) {
+        return await avatarMutationError(error, "The avatar could not be loaded.", expectedAuthCookie);
+    }
+}
 
 export async function PATCH(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]">) {
     if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
@@ -65,5 +89,11 @@ async function avatarMutationError(error: unknown, fallback: string, expectedAut
     const status = error instanceof VrchatApiError ? error.status : 502;
     const response = NextResponse.json({ error: message }, { status });
     if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
+    return response;
+}
+
+function avatarResponse(payload: object) {
+    const response = NextResponse.json(payload);
+    response.headers.set("Cache-Control", "private, no-store");
     return response;
 }

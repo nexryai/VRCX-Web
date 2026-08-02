@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Ellipsis, ImageIcon, Loader2, Pencil, Plus, RefreshCcw, RefreshCw, Search, Trash2, User, X } from "lucide-react";
+import { Download, Ellipsis, ImageIcon, Loader2, Pencil, Plus, RefreshCcw, RefreshCw, Search, Trash2, Upload, User, X } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { useFriends } from "@/components/friends/friends-provider";
+import { formatFavoriteCsv, parseFavoriteIds } from "@/lib/favorites-transfer";
 import { locationLabel } from "@/lib/friends";
 import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatFavoriteLimits, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
@@ -172,10 +173,13 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
     const [newLocalName, setNewLocalName] = useState("");
     const [editingRemote, setEditingRemote] = useState<FavoriteGroupView | null>(null);
     const [editingLocal, setEditingLocal] = useState<LocalGroup | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
+    const [exportOpen, setExportOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
     const controllerRef = useRef<AbortController | null>(null);
+    const toolbarMenuRef = useRef<HTMLDetailsElement | null>(null);
 
     const remoteGroupViews = useMemo(() => buildGroups(kind, records, remoteGroups, limits), [kind, limits, records, remoteGroups]);
 
@@ -234,22 +238,27 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
     const friendsById = useMemo(() => new Map(allFriends.map((friend) => [friend.id, friend])), [allFriends]);
     const remoteById = useMemo(() => new Map(remoteItems.map((item) => [item.id, item])), [remoteItems]);
 
-    const entries = useMemo(() => {
+    const allEntries = useMemo(() => {
         const result: DisplayEntry[] = [];
         const remoteRecords = records.filter((record) => objectKindMatches(kind, record));
         for (const [index, record] of remoteRecords.entries()) {
             const group = remoteGroupViews.find((candidate) => candidate.type === record.type && candidate.name === record.tags[0]);
-            if (!group || (!search && selectedRemote?.key !== group.key)) continue;
+            if (!group) continue;
             const item = kind === "friend" ? friendsById.get(record.favoriteId) || ({ id: record.favoriteId, displayName: record.favoriteId } as VrchatUser) : remoteById.get(record.favoriteId) || ({ id: record.favoriteId, name: record.favoriteId } as VrchatAvatar);
             result.push({ key: `remote:${group.key}:${record.favoriteId}`, source: "remote", objectId: record.favoriteId, item, remoteGroupKey: group.key, order: index });
         }
         for (const group of localGroups) {
-            if (!search && selectedLocal?.groupId !== group.groupId) continue;
             for (const [index, favorite] of (localItems[group.groupId] || []).entries()) result.push({ key: `local:${group.groupId}:${favorite.objectId}`, source: "local", objectId: favorite.objectId, item: favorite.item, groupId: group.groupId, order: index });
         }
+        return result;
+    }, [friendsById, kind, localGroups, localItems, records, remoteById, remoteGroupViews]);
+
+    const entries = useMemo(() => {
         const query = search.trim().toLocaleLowerCase();
-        return result.filter((entry) => !query || `${itemName(entry.item)} ${itemSearchDetail(entry.item)} ${entry.objectId}`.toLocaleLowerCase().includes(query)).toSorted((left, right) => (sortByDate ? left.order - right.order : itemName(left.item).localeCompare(itemName(right.item))));
-    }, [friendsById, kind, localGroups, localItems, records, remoteById, remoteGroupViews, search, selectedLocal, selectedRemote, sortByDate]);
+        return allEntries
+            .filter((entry) => (query ? `${itemName(entry.item)} ${itemSearchDetail(entry.item)} ${entry.objectId}`.toLocaleLowerCase().includes(query) : selectedRemote ? entry.remoteGroupKey === selectedRemote.key : selectedLocal ? entry.groupId === selectedLocal.groupId : false))
+            .toSorted((left, right) => (sortByDate ? left.order - right.order : itemName(left.item).localeCompare(itemName(right.item))));
+    }, [allEntries, search, selectedLocal, selectedRemote, sortByDate]);
 
     const activeTitle = search ? "Search" : selectedRemote ? selectedRemote.displayName : selectedLocal ? selectedLocal.name : "No Group Selected";
     const activeCount = search ? entries.length : selectedRemote ? `${selectedRemote.count}/${selectedRemote.capacity}` : selectedLocal?.count || 0;
@@ -358,7 +367,7 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
                         <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                         <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} className="h-9 w-full rounded-md border border-input bg-background pr-3 pl-9 text-xs" placeholder={`Search favorite ${kind}s`} />
                     </label>
-                    <details className="relative">
+                    <details ref={toolbarMenuRef} className="relative">
                         <summary className="inline-flex size-8 cursor-pointer list-none items-center justify-center rounded-full hover:bg-muted [&::-webkit-details-marker]:hidden" aria-label="Favorite card settings">
                             <Ellipsis className="size-4" />
                         </summary>
@@ -401,6 +410,27 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
                                     className="mt-2 w-full accent-primary"
                                 />
                             </label>
+                            <div className="my-3 border-t border-border" />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (toolbarMenuRef.current) toolbarMenuRef.current.open = false;
+                                    setImportOpen(true);
+                                }}
+                                className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-xs hover:bg-muted"
+                            >
+                                <Upload className="size-4" /> Import
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (toolbarMenuRef.current) toolbarMenuRef.current.open = false;
+                                    setExportOpen(true);
+                                }}
+                                className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-xs hover:bg-muted"
+                            >
+                                <Download className="size-4" /> Export
+                            </button>
                         </div>
                     </details>
                 </div>
@@ -566,6 +596,8 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
             </div>
             {editingRemote ? <RemoteGroupDialog group={editingRemote} close={() => setEditingRemote(null)} saved={(group) => setRemoteGroups((current) => [...current.filter((item) => !(item.type === group.type && item.name === group.name)), group])} cleared={() => void load()} /> : null}
             {editingLocal ? <LocalGroupDialog group={editingLocal} close={() => setEditingLocal(null)} rename={(name) => mutateLocal({ method: "PATCH", body: { groupId: editingLocal.groupId, name } })} remove={() => mutateLocal({ method: "DELETE", body: { action: "group", groupId: editingLocal.groupId } })} /> : null}
+            {importOpen ? <FavoriteImportDialog kind={kind} remoteGroups={remoteGroupViews} localGroups={localGroups} close={() => setImportOpen(false)} complete={load} /> : null}
+            {exportOpen ? <FavoriteExportDialog kind={kind} currentEntries={entries} allEntries={allEntries} remoteGroups={remoteGroupViews} localGroups={localGroups} close={() => setExportOpen(false)} /> : null}
         </section>
     );
 }
@@ -703,10 +735,261 @@ function FavoriteCard({
     );
 }
 
-function DialogFrame({ title, close, children }: { title: string; close: () => void; children: React.ReactNode }) {
+type ImportCandidate = { id: string; item?: FavoriteItem; error?: string };
+type ExportField = "Group" | "ID" | "Name" | "Source" | "Status/Author";
+
+function FavoriteImportDialog({ kind, remoteGroups, localGroups, close, complete }: { kind: FavoriteKind; remoteGroups: FavoriteGroupView[]; localGroups: LocalGroup[]; close: () => void; complete: () => Promise<void> }) {
+    const [input, setInput] = useState("");
+    const [candidates, setCandidates] = useState<ImportCandidate[]>([]);
+    const [destination, setDestination] = useState("");
+    const [processing, setProcessing] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [result, setResult] = useState("");
+    const fileInput = useRef<HTMLInputElement>(null);
+    const controllerRef = useRef<AbortController | null>(null);
+
+    function parsedIds() {
+        return parseFavoriteIds(kind, input);
+    }
+
+    async function processList() {
+        controllerRef.current?.abort();
+        const controller = new AbortController();
+        controllerRef.current = controller;
+        const ids = parsedIds();
+        setCandidates([]);
+        setProgress(0);
+        setResult("");
+        setProcessing(true);
+        const next: ImportCandidate[] = [];
+        for (const [index, id] of ids.entries()) {
+            try {
+                next.push({ id, item: await resolveFavoriteItem(kind, id, controller.signal) });
+            } catch (error) {
+                if (error instanceof DOMException && error.name === "AbortError") break;
+                next.push({ id, error: error instanceof Error ? error.message : "The item could not be loaded." });
+            }
+            setCandidates([...next]);
+            setProgress(index + 1);
+        }
+        setProcessing(false);
+    }
+
+    async function importItems() {
+        const valid = candidates.filter((candidate) => candidate.item);
+        if (!destination || !valid.length) return;
+        controllerRef.current?.abort();
+        const controller = new AbortController();
+        controllerRef.current = controller;
+        setProcessing(true);
+        setProgress(0);
+        setResult("");
+        const failures: string[] = [];
+        for (const [index, candidate] of valid.entries()) {
+            try {
+                const remote = destination.startsWith("remote:") ? remoteGroups.find((group) => group.key === destination.slice(7)) : undefined;
+                const localId = destination.startsWith("local:") ? destination.slice(6) : undefined;
+                const response = remote
+                    ? await fetch("/api/favorites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: remote.type, favoriteId: candidate.id, tags: remote.name }), signal: controller.signal })
+                    : await fetch("/api/local-favorites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "add", kind, groupId: localId, objectId: candidate.id }), signal: controller.signal });
+                const body = (await response.json()) as { error?: string };
+                if (!response.ok) throw new Error(body.error || "The favorite could not be imported.");
+            } catch (error) {
+                if (error instanceof DOMException && error.name === "AbortError") break;
+                failures.push(`${candidate.id}: ${error instanceof Error ? error.message : "Import failed."}`);
+            }
+            setProgress(index + 1);
+        }
+        await complete();
+        setProcessing(false);
+        setResult(failures.length ? failures.join("\n") : `${valid.length} favorite${valid.length === 1 ? "" : "s"} imported.`);
+    }
+
+    const ids = parsedIds();
+    const validCount = candidates.filter((candidate) => candidate.item).length;
+    return (
+        <DialogFrame
+            title={`Import favorite ${kind}s`}
+            close={() => {
+                controllerRef.current?.abort();
+                close();
+            }}
+            wide
+        >
+            <p className="mt-3 text-xs text-muted-foreground">Paste a list containing VRChat {kind} IDs, or load a text/CSV file. The server validates each item through the allowlisted VRChat API before it can enter a local group.</p>
+            <textarea
+                value={input}
+                onChange={(event) => {
+                    setInput(event.target.value);
+                    setCandidates([]);
+                    setResult("");
+                }}
+                rows={6}
+                className="mt-3 w-full resize-y rounded-md border border-input bg-background p-2 font-mono text-xs"
+                placeholder={`${kind === "avatar" ? "avtr" : kind === "friend" ? "usr" : "wrld"}_...`}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                    ref={fileInput}
+                    type="file"
+                    accept=".txt,.csv,text/plain,text/csv"
+                    className="sr-only"
+                    onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void file.text().then(setInput);
+                    }}
+                />
+                <button type="button" onClick={() => fileInput.current?.click()} className="inline-flex h-8 items-center gap-2 rounded-md border border-input px-3 text-xs">
+                    <Upload className="size-4" /> Open file
+                </button>
+                {processing ? (
+                    <button type="button" onClick={() => controllerRef.current?.abort()} className="h-8 rounded-md bg-secondary px-3 text-xs">
+                        Cancel
+                    </button>
+                ) : (
+                    <button type="button" onClick={() => void processList()} disabled={!ids.length} className="h-8 rounded-md bg-primary px-3 text-xs text-primary-foreground disabled:opacity-40">
+                        Process list
+                    </button>
+                )}
+                {processing ? (
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                        {progress} / {candidates.length ? Math.max(candidates.length, ids.length) : ids.length}
+                    </span>
+                ) : null}
+            </div>
+            {candidates.length ? (
+                <div className="mt-4 max-h-52 overflow-auto rounded-md border border-border">
+                    <table className="w-full min-w-[520px] text-left text-xs">
+                        <thead className="sticky top-0 bg-muted">
+                            <tr>
+                                <th className="px-2 py-1.5">ID</th>
+                                <th className="px-2 py-1.5">Name</th>
+                                <th className="px-2 py-1.5">Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {candidates.map((candidate) => (
+                                <tr key={candidate.id} className="border-t border-border">
+                                    <td className="px-2 py-1.5 font-mono text-[10px]">{candidate.id}</td>
+                                    <td className="px-2 py-1.5">{candidate.item ? itemName(candidate.item) : "—"}</td>
+                                    <td className={`px-2 py-1.5 ${candidate.error ? "text-destructive" : "text-emerald-400"}`}>{candidate.error || "Ready"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : null}
+            {candidates.length ? (
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select value={destination} onChange={(event) => setDestination(event.target.value)} className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-xs" aria-label="Import destination">
+                        <option value="">Select destination group</option>
+                        <optgroup label="VRChat Favorites">
+                            {remoteGroups.map((group) => (
+                                <option key={group.key} value={`remote:${group.key}`} disabled={group.count >= group.capacity}>
+                                    {group.displayName} ({group.count}/{group.capacity})
+                                </option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Local Favorites">
+                            {localGroups.map((group) => (
+                                <option key={group.groupId} value={`local:${group.groupId}`}>
+                                    {group.name} ({group.count})
+                                </option>
+                            ))}
+                        </optgroup>
+                    </select>
+                    <button type="button" onClick={() => void importItems()} disabled={processing || !destination || !validCount} className="h-9 rounded-md bg-primary px-4 text-xs text-primary-foreground disabled:opacity-40">
+                        Import {validCount}
+                    </button>
+                </div>
+            ) : null}
+            {result ? <pre className={`mt-3 max-h-32 overflow-auto whitespace-pre-wrap rounded-md p-2 text-xs ${result.includes("failed") || result.includes(":") ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-400"}`}>{result}</pre> : null}
+        </DialogFrame>
+    );
+}
+
+async function resolveFavoriteItem(kind: FavoriteKind, id: string, signal: AbortSignal): Promise<FavoriteItem> {
+    const endpoint = kind === "friend" ? `/api/users/${id}` : kind === "avatar" ? `/api/avatars/${id}` : `/api/worlds/${id}`;
+    const response = await fetch(endpoint, { cache: "no-store", signal });
+    const body = (await response.json()) as { avatar?: VrchatAvatar; error?: string; user?: VrchatUser; world?: VrchatWorld };
+    if (response.status === 401) window.location.assign("/login");
+    const item = body.user || body.avatar || body.world;
+    if (!response.ok || !item) throw new Error(body.error || "The item could not be loaded.");
+    return item;
+}
+
+function FavoriteExportDialog({ kind, currentEntries, allEntries, remoteGroups, localGroups, close }: { kind: FavoriteKind; currentEntries: DisplayEntry[]; allEntries: DisplayEntry[]; remoteGroups: FavoriteGroupView[]; localGroups: LocalGroup[]; close: () => void }) {
+    const [scope, setScope] = useState<"all" | "current">("current");
+    const [fields, setFields] = useState<ExportField[]>(["ID", "Name"]);
+    const source = scope === "all" ? allEntries : currentEntries;
+    const text = exportCsv(source, fields, remoteGroups, localGroups, kind);
+
+    function toggle(field: ExportField) {
+        setFields((current) => (current.includes(field) ? current.filter((value) => value !== field) : [...current, field]));
+    }
+
+    function download() {
+        const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `vrcx-favorite-${kind}s.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+    }
+
+    return (
+        <DialogFrame title={`Export favorite ${kind}s`} close={close} wide>
+            <div className="mt-4 flex flex-wrap gap-2">
+                {(["ID", "Name", "Status/Author", "Group", "Source"] as ExportField[]).map((field) => (
+                    <label key={field} className="inline-flex items-center gap-2 text-xs">
+                        <input type="checkbox" checked={fields.includes(field)} onChange={() => toggle(field)} className="accent-primary" />
+                        {field}
+                    </label>
+                ))}
+            </div>
+            <label className="mt-4 block text-xs">
+                Export scope
+                <select value={scope} onChange={(event) => setScope(event.target.value as "all" | "current")} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2">
+                    <option value="current">Current group or search ({currentEntries.length})</option>
+                    <option value="all">
+                        All {kind} favorites ({allEntries.length})
+                    </option>
+                </select>
+            </label>
+            <textarea readOnly value={text} rows={12} className="mt-4 w-full resize-y rounded-md border border-input bg-background p-2 font-mono text-[10px]" aria-label="Favorite CSV export" />
+            <div className="mt-3 flex justify-end gap-2">
+                <button type="button" onClick={() => void navigator.clipboard.writeText(text)} disabled={!text} className="h-9 rounded-md border border-input px-3 text-xs disabled:opacity-40">
+                    Copy
+                </button>
+                <button type="button" onClick={download} disabled={!text} className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-xs text-primary-foreground disabled:opacity-40">
+                    <Download className="size-4" /> Download CSV
+                </button>
+            </div>
+        </DialogFrame>
+    );
+}
+
+function exportCsv(entries: DisplayEntry[], fields: ExportField[], remoteGroups: FavoriteGroupView[], localGroups: LocalGroup[], kind: FavoriteKind) {
+    return formatFavoriteCsv(
+        fields,
+        entries.map((entry) => {
+            const values: Record<ExportField, string> = {
+                ID: entry.objectId,
+                Name: itemName(entry.item),
+                "Status/Author": kind === "friend" ? (entry.item as VrchatUser).statusDescription || "" : (entry.item as VrchatAvatar | VrchatWorld).authorName || "",
+                Group: entry.remoteGroupKey ? remoteGroups.find((group) => group.key === entry.remoteGroupKey)?.displayName || "" : localGroups.find((group) => group.groupId === entry.groupId)?.name || "",
+                Source: entry.source === "remote" ? "VRChat" : "Local",
+            };
+            return values;
+        }),
+    );
+}
+
+function DialogFrame({ title, close, children, wide = false }: { title: string; close: () => void; children: React.ReactNode; wide?: boolean }) {
     return (
         <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/65 p-3">
-            <div className="w-full max-w-sm rounded-lg border border-border bg-background p-4 shadow-2xl">
+            <div className={`max-h-[calc(100dvh-1.5rem)] w-full overflow-y-auto rounded-lg border border-border bg-background p-4 shadow-2xl ${wide ? "max-w-2xl" : "max-w-sm"}`}>
                 <header className="flex items-center gap-2">
                     <h2 className="text-sm font-semibold">{title}</h2>
                     <button type="button" onClick={close} className="ml-auto inline-flex size-8 items-center justify-center rounded-full hover:bg-muted" aria-label="Close">
