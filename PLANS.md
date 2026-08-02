@@ -81,7 +81,7 @@ Each milestone should be split into small vertical slices. A normal slice starts
 
 ### Milestone 0 — Reference Audit and Baseline
 
-Status: In progress
+Status: In progress — implementation complete; authenticated visual capture remains
 
 - [x] Establish repository-wide contribution and porting rules in `AGENTS.md`.
 - [x] Establish the initial roadmap and constraints in `PLANS.md`.
@@ -113,7 +113,7 @@ Exit criteria: a faithful VRCX shell renders at all baseline widths, shared prim
 
 Status: In progress
 
-- [ ] Confirm the VRChat API integration requirements and document upstream constraints before implementation.
+- [x] Confirm the VRChat API integration requirements and document the community-maintained, unsupported upstream constraint in `README.md`.
 - [x] Define a typed, allowlisted server-side VRChat service boundary; do not create a general-purpose proxy.
 - [x] Implement the minimum VRChat login/session, two-factor challenge, session validation, expiry recovery, and logout behavior required by the first supported feature.
 - [x] Store session material in secure, HTTP-only cookies or an equivalently protected server-side mechanism.
@@ -158,17 +158,17 @@ Exit criteria: every selected feature meets the global definition of done; exclu
 
 ### Milestone 5 — Hardening and Release Readiness
 
-Status: Not started
+Status: In progress
 
-- [ ] Audit all routes for secret exposure, unsafe forwarding, input validation, XSS, CSRF, and cache mistakes.
+- [x] Audit all routes for secret exposure, unsafe forwarding, input validation, XSS, CSRF, and cache mistakes; add a shared browser mutation origin guard.
 - [ ] Test upstream outages, slow responses, session expiry, rate limiting, and malformed data.
 - [ ] Test responsive layouts on representative touch and desktop browsers.
 - [ ] Audit keyboard navigation, focus management, labels, contrast, motion, and screen-reader landmarks.
-- [ ] Review performance for image sizing, request waterfalls, large lists, and unnecessary client-side JavaScript.
-- [ ] Confirm local-only controls and dead routes are absent.
-- [ ] Confirm VRCX attribution and third-party notices are complete.
+- [x] Review performance for image sizing, request waterfalls, large lists, and unnecessary client-side JavaScript; page large API collections sequentially and cap the SVG graph view.
+- [x] Confirm local-only controls and dead routes are absent.
+- [x] Confirm VRCX attribution and third-party notices are complete.
 - [x] Replace the starter README with deployment, configuration, security-boundary, and operator documentation.
-- [ ] Run the full lint, test, and production build suite from a clean checkout.
+- [x] Run `pnpm lint`, `pnpm test`, and `pnpm build`; smoke-test anonymous session, authenticated-route redirect, security headers, and cross-site mutation rejection.
 
 Exit criteria: the web port is documented, deployable on the intended trusted network, resilient to expected upstream failures, and passes release checks.
 
@@ -227,9 +227,27 @@ Rationale: A browser port must remain useful across common viewport and input ty
 
 Consequence: Responsive behavior is part of feature acceptance, not deferred polish.
 
-## Open Questions
+### 2026-08-02 — Poll Remote State for Browser Activity History
+
+Decision: Build Feed and Friend Log entries from periodic complete friend-list snapshots and persist them per VRChat user in browser storage.
+
+Rationale: VRCX normally combines remote pipeline events with its desktop database. Keeping VRChat cookies HTTP-only prevents a direct authenticated browser pipeline connection, while server-resident WebSocket state would make deployment substantially more complex.
+
+Consequence: The web feed records changes observed while the application is open, at refresh granularity, and intentionally contains no local game or Photon events.
+
+## Verification Evidence
+
+The 2026-08-02 release audit completed the following checks:
+
+- `pnpm test`: 5 files and 11 tests passed.
+- `pnpm lint`: Biome passed across the root port.
+- `pnpm build`: Next.js production compilation, TypeScript validation, and all 28 generated routes passed.
+- Production smoke test: `/login` returned 200 with security headers; `/` redirected anonymous users to `/login`; `/api/auth/session` returned an anonymous snapshot; a cross-site login POST returned 403.
+- Real authenticated VRChat mutation and visual comparison remain operator checks because no VRChat credentials are stored in or supplied to the repository test environment.
+
+## Resolved Release Choices
 
 - Browser baseline: current stable Chromium, Firefox, and Safari; deployment baseline: Node.js 20+ with pnpm 11+, preferably behind an HTTPS reverse proxy.
-- Is browser notification support useful enough to port independently of Electron notifications?
-- Which VRCX localization resources should be reused in the first release?
-- Where should the VRCX MIT attribution and third-party notices appear in the deployed application?
+- Browser notifications are not part of the initial port; the in-application notification center is the supported browser behavior.
+- The initial port ships English UI text. VRCX localization reuse can be added without changing the feature boundary.
+- VRCX attribution and the MIT notice are present in `README.md`, `THIRD_PARTY_NOTICES.md`, and the deployed `/about` screen.

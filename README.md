@@ -73,6 +73,8 @@ Place the server behind a private reverse proxy with HTTPS. Preserve the origina
 
 VRChat API behavior, availability, and rate limits remain upstream dependencies. Large Mutual Friends graphs can require many requests, so fetching starts only after an explicit user action and can be cancelled.
 
+The available API specification is community-maintained and states that third-party API use is not officially supported by VRChat. Endpoints can change without notice. The integration was checked against the [VRChat API specification](https://github.com/vrchatapi/specification) and the current VRCX request implementations, but operators should expect upstream compatibility maintenance.
+
 ## Browser and Responsive Support
 
 The supported baseline is the current stable versions of Chromium, Firefox, and Safari. Screens are designed for approximately 360, 768, 1280, and 1920 pixel widths. Wide data tables retain a mobile card layout or an intentional local horizontal scroller.

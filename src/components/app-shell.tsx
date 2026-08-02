@@ -23,7 +23,14 @@ const navigation = [
     { href: "/social/friend-log", label: "Friend Log", icon: "ri-file-history-line" },
     { href: "/charts/mutual", label: "Mutual Friends", icon: "ri-node-tree" },
     { href: "/social/moderation", label: "Moderation", icon: "ri-shield-user-line" },
+    { href: "/about", label: "About", icon: "ri-information-line" },
 ];
+
+function isNavigationActive(pathname: string, href: string) {
+    if (href === "/") return pathname === href;
+    if (href === "/favorite/friends") return pathname.startsWith("/favorite/");
+    return pathname === href;
+}
 
 export function AppShell({ user, children, aside }: { user: VrchatUser; children: React.ReactNode; aside?: React.ReactNode }) {
     const pathname = usePathname();
@@ -54,7 +61,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
 
     const image = friendImage(user);
     const navWidth = collapsed ? "md:w-12" : "md:w-60";
-    const currentTitle = navigation.find((item) => item.href === pathname)?.label || "VRCX Web";
+    const currentTitle = navigation.find((item) => isNavigationActive(pathname, item.href))?.label || "VRCX Web";
 
     return (
         <div className="flex h-dvh min-h-0 overflow-hidden bg-sidebar text-foreground">
@@ -73,7 +80,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                 <nav className="min-h-0 flex-1 overflow-y-auto p-2">
                     <ul className="space-y-1">
                         {navigation.map((item) => {
-                            const active = pathname === item.href;
+                            const active = isNavigationActive(pathname, item.href);
                             return (
                                 <li key={item.href}>
                                     <Link
@@ -129,7 +136,9 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                 </div>
                 <footer className="hidden h-5 shrink-0 items-center justify-between border-t border-sidebar-border px-2 text-[10px] text-muted-foreground md:flex">
                     <span>{user.displayName}</span>
-                    <span>Connected to VRChat API</span>
+                    <Link href="/about" className="hover:text-foreground">
+                        VRCX attribution and notices
+                    </Link>
                 </footer>
             </div>
         </div>
