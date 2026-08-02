@@ -32,6 +32,9 @@ export type AppSettingsDocument = {
     friendLocationCardSpacing: number;
     friendLocationShowSameInstance: boolean;
     friendLocationSegment: "active" | "favorite" | "offline" | "online" | "same-instance";
+    sidebarGroupByInstance: boolean;
+    sidebarCollapsedSections: Array<"active" | "favorite" | "me" | "offline" | "online">;
+    sidebarTab: "friends" | "groups";
     updatedAt: Date;
 };
 
@@ -86,7 +89,9 @@ export type GroupDocument = {
     ownerId: string;
     groupId: string;
     group: VrchatGroup;
-    source: "lookup" | "search" | "session";
+    source: "lookup" | "membership" | "search" | "session";
+    membershipActive?: boolean;
+    membershipObservedAt?: Date;
     observedAt: Date;
     updatedAt: Date;
 };

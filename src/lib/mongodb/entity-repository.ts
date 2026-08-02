@@ -29,6 +29,27 @@ export async function upsertCachedGroups(ownerId: string, groups: VrchatGroup[],
     );
 }
 
+export async function replaceGroupMemberships(ownerId: string, groups: VrchatGroup[], observedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).groups;
+    const groupIds = groups.map((group) => group.id);
+    if (groups.length) {
+        await collection.bulkWrite(
+            groups.map((group) => ({
+                updateOne: {
+                    filter: { _id: `${ownerId}:${group.id}` },
+                    update: {
+                        $set: { ownerId, groupId: group.id, group, source: "membership" as const, membershipActive: true, membershipObservedAt: observedAt, observedAt, updatedAt: observedAt },
+                    },
+                    upsert: true,
+                },
+            })),
+            { ordered: false },
+        );
+    }
+    await collection.updateMany({ ownerId, membershipActive: true, ...(groupIds.length ? { groupId: { $nin: groupIds } } : {}) }, { $set: { membershipActive: false, membershipObservedAt: observedAt, updatedAt: observedAt } });
+}
+
 export async function upsertCachedAvatars(ownerId: string, avatars: VrchatAvatar[], source: AvatarDocument["source"], observedAt = new Date()) {
     if (!avatars.length) return;
     await ensureMongoSchema();

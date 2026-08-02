@@ -204,7 +204,7 @@ class AlwaysOnMonitor {
             if (await applyPipelineFriendEvent(this.ownerId, envelope.data.type, content.data, now)) return;
         }
 
-        if (envelope.data.type.startsWith("friend-") || envelope.data.type === "notification-v2-update" || envelope.data.type === "user-update") {
+        if (envelope.data.type.startsWith("friend-") || envelope.data.type.startsWith("group-") || envelope.data.type === "notification-v2-update" || envelope.data.type === "user-update") {
             // Reconciliation applies the same typed projection path and
             // deduplicates results, while coalescing noisy Pipeline bursts.
             void this.reconcile();

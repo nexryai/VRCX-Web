@@ -16,6 +16,12 @@ const updateSchema = z
         friendLocationCardSpacing: z.number().min(0.25).max(1).optional(),
         friendLocationShowSameInstance: z.boolean().optional(),
         friendLocationSegment: z.enum(["active", "favorite", "offline", "online", "same-instance"]).optional(),
+        sidebarGroupByInstance: z.boolean().optional(),
+        sidebarCollapsedSections: z
+            .array(z.enum(["active", "favorite", "me", "offline", "online"]))
+            .max(5)
+            .optional(),
+        sidebarTab: z.enum(["friends", "groups"]).optional(),
     })
     .refine((value) => Object.values(value).some((item) => item !== undefined));
 
@@ -30,6 +36,9 @@ export async function GET() {
         friendLocationCardSpacing: settings?.friendLocationCardSpacing ?? 1,
         friendLocationShowSameInstance: settings?.friendLocationShowSameInstance ?? false,
         friendLocationSegment: settings?.friendLocationSegment ?? "online",
+        sidebarGroupByInstance: settings?.sidebarGroupByInstance ?? false,
+        sidebarCollapsedSections: settings?.sidebarCollapsedSections ?? [],
+        sidebarTab: settings?.sidebarTab ?? "friends",
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;

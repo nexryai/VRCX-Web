@@ -55,6 +55,9 @@ const migrations: Migration[] = [
                         friendLocationCardSpacing: 1,
                         friendLocationShowSameInstance: false,
                         friendLocationSegment: "online",
+                        sidebarGroupByInstance: false,
+                        sidebarCollapsedSections: [],
+                        sidebarTab: "friends",
                         updatedAt: now,
                     },
                 },
@@ -148,6 +151,25 @@ const migrations: Migration[] = [
         name: "add-reconciliation-lease-index",
         async apply(c) {
             await c.monitorState.createIndex({ reconciliationLeaseExpiresAt: 1 }, { name: "reconciliation_lease_expiry" });
+        },
+    },
+    {
+        version: 8,
+        name: "add-group-membership-index",
+        async apply(c) {
+            await c.groups.createIndex({ ownerId: 1, membershipActive: 1, "group.name": 1 }, { name: "owner_membership_name" });
+        },
+    },
+    {
+        version: 9,
+        name: "add-sidebar-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ sidebarGroupByInstance: { $exists: false } }, { $set: { sidebarGroupByInstance: false, updatedAt } }),
+                c.appSettings.updateMany({ sidebarCollapsedSections: { $exists: false } }, { $set: { sidebarCollapsedSections: [], updatedAt } }),
+                c.appSettings.updateMany({ sidebarTab: { $exists: false } }, { $set: { sidebarTab: "friends", updatedAt } }),
+            ]);
         },
     },
 ];

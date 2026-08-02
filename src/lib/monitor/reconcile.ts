@@ -6,13 +6,14 @@ import { diffFriendSnapshots, toFriendSnapshots } from "@/lib/activity-log";
 import { enrichGameSession, observeGameSession } from "@/lib/game-log/session-repository";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { type ActivityEventDocument, collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
+import { replaceGroupMemberships } from "@/lib/mongodb/entity-repository";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { replaceFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection } from "@/lib/mongodb/projection-repository";
 import { updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
 import { upsertCachedUser, upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
 import { requestVrchat, type VrchatCookies } from "@/lib/vrchat/client";
-import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
+import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatGroupSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
 import { acquireReconciliationLease, releaseReconciliationLease } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
 
@@ -111,6 +112,10 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ u
     currentCookies = locationMetadata.cookies;
     await enrichGameSession(user.id, location, { worldName: user.world?.name || locationMetadata.worldName, groupName: locationMetadata.groupName });
 
+    const groupsResponse = await requestVrchat<unknown>(`users/${user.id}/groups`, { cookies: currentCookies });
+    currentCookies = { ...currentCookies, ...groupsResponse.cookies };
+    const memberships = z.array(vrchatGroupSchema).parse(groupsResponse.data);
+
     const online = await fetchAllFriends(currentCookies, false);
     currentCookies = online.cookies;
     const offline = await fetchAllFriends(currentCookies, true);
@@ -145,6 +150,7 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ u
     await Promise.all([
         upsertCachedUser(user.id, user, "auth", observedAt),
         upsertCachedUsers(user.id, combined, "friends", observedAt),
+        replaceGroupMemberships(user.id, memberships, observedAt),
         replaceActiveNotifications(user.id, "legacy", legacyNotifications.notifications, observedAt),
         replaceActiveNotifications(user.id, "v2", v2Notifications.notifications, observedAt),
         replaceActiveNotifications(user.id, "hidden", hiddenNotifications.notifications, observedAt),
