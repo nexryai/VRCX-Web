@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { applyVrchatCookies, parseSessionPayload, readVrchatCookies } from "@/lib/vrchat/session";
 import type { TwoFactorMethod } from "@/lib/vrchat/types";
@@ -26,6 +27,7 @@ function normalizeCode(method: TwoFactorMethod, code: string) {
 }
 
 export async function POST(request: NextRequest) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const parsed = verificationSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
         return NextResponse.json({ error: "Enter a valid verification code." }, { status: 400 });

@@ -2,12 +2,14 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
 
 const favoriteIdSchema = z.string().regex(/^(avtr|usr|wrld)_[0-9a-f-]{36}$/i);
 
 export async function DELETE(request: NextRequest, context: RouteContext<"/api/favorites/[favoriteId]">) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const favoriteId = favoriteIdSchema.safeParse((await context.params).favoriteId);
     if (!favoriteId.success) return NextResponse.json({ error: "The favorite ID is invalid." }, { status: 400 });
 

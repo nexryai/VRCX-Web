@@ -90,7 +90,7 @@ Status: In progress
 - [x] Define destination root source paths for ported views, shared UI, domain state, upstream API code, and reused assets; never import production modules from `./VRCX/`.
 - [x] Identify initial reused code/assets and distribute the VRCX MIT notice in `THIRD_PARTY_NOTICES.md`.
 - [ ] Capture desktop visual references for the first supported screens.
-- [ ] Record the browser support policy and test viewport matrix.
+- [x] Record the browser support policy and test viewport matrix in `README.md` and the responsive baseline in `AGENTS.md`.
 
 Exit criteria: the first implementation slice has a documented VRCX reference, confirmed remote data path, scope boundary, and visual acceptance target.
 
@@ -167,7 +167,7 @@ Status: Not started
 - [ ] Review performance for image sizing, request waterfalls, large lists, and unnecessary client-side JavaScript.
 - [ ] Confirm local-only controls and dead routes are absent.
 - [ ] Confirm VRCX attribution and third-party notices are complete.
-- [ ] Replace the starter README with deployment, configuration, security-boundary, and operator documentation.
+- [x] Replace the starter README with deployment, configuration, security-boundary, and operator documentation.
 - [ ] Run the full lint, test, and production build suite from a clean checkout.
 
 Exit criteria: the web port is documented, deployable on the intended trusted network, resilient to expected upstream failures, and passes release checks.
@@ -229,7 +229,7 @@ Consequence: Responsive behavior is part of feature acceptance, not deferred pol
 
 ## Open Questions
 
-- Which browser versions and deployment runtime are required?
+- Browser baseline: current stable Chromium, Firefox, and Safari; deployment baseline: Node.js 20+ with pnpm 11+, preferably behind an HTTPS reverse proxy.
 - Is browser notification support useful enough to port independently of Electron notifications?
 - Which VRCX localization resources should be reused in the first release?
 - Where should the VRCX MIT attribution and third-party notices appear in the deployed application?

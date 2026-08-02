@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema, vrchatFavoriteGroupSchema, vrchatFavoriteLimitsSchema, vrchatFavoriteSchema, vrchatWorldSchema } from "@/lib/vrchat/types";
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const cookies = readVrchatCookies(request.cookies);
     if (!cookies.auth) return NextResponse.json({ error: "Sign in to update favorites." }, { status: 401 });
     const body = addSchema.safeParse(await request.json().catch(() => null));

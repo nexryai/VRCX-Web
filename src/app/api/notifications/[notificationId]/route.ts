@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
 
@@ -13,6 +14,7 @@ const actionSchema = z.union([
 ]);
 
 export async function POST(request: NextRequest, context: RouteContext<"/api/notifications/[notificationId]">) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const notificationId = notificationIdSchema.safeParse((await context.params).notificationId);
     const body = actionSchema.safeParse(await request.json().catch(() => null));
     if (!notificationId.success || !body.success) {

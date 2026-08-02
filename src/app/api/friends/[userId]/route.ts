@@ -2,12 +2,14 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
 
 const userIdSchema = z.string().regex(/^usr_[0-9a-f-]{36}$/i);
 
 export async function DELETE(request: NextRequest, context: RouteContext<"/api/friends/[userId]">) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const userId = userIdSchema.safeParse((await context.params).userId);
     if (!userId.success) {
         return NextResponse.json({ error: "The VRChat user ID is invalid." }, { status: 400 });

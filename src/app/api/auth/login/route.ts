@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { createBasicAuthorization, requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { applyVrchatCookies, clearVrchatCookies, parseSessionPayload } from "@/lib/vrchat/session";
 
@@ -18,6 +19,7 @@ function errorResponse(error: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const parsed = loginSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
         return NextResponse.json({ error: "Enter a valid username and password." }, { status: 400 });

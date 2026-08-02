@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema } from "@/lib/vrchat/types";
@@ -16,6 +17,7 @@ const updateSchema = z
     .refine((body) => Object.values(body).some((value) => value !== undefined));
 
 export async function PATCH(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]">) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const avatarId = avatarIdSchema.safeParse((await context.params).avatarId);
     const body = updateSchema.safeParse(await request.json().catch(() => null));
     if (!avatarId.success || !body.success) return NextResponse.json({ error: "The avatar update is invalid." }, { status: 400 });
@@ -35,6 +37,7 @@ export async function PATCH(request: NextRequest, context: RouteContext<"/api/av
 }
 
 export async function DELETE(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]">) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const avatarId = avatarIdSchema.safeParse((await context.params).avatarId);
     if (!avatarId.success) return NextResponse.json({ error: "The avatar ID is invalid." }, { status: 400 });
 
