@@ -69,8 +69,8 @@ Status: In progress
 - [x] Establish the initial roadmap and constraints in `PLANS.md`.
 - [x] Map the top-level VRCX routes, default navigation, views, API modules, service boundaries, style tokens, icons, and English localization resources.
 - [x] Create a feature inventory with `Web-compatible`, `Adaptable`, or `Local-only` decisions and evidence paths into `VRCX/`.
-- [ ] Define destination root source paths for ported views, shared UI, domain state, upstream API code, and reused assets; never import production modules from `./VRCX/`.
-- [ ] Identify code/assets intended for reuse and define where the VRCX MIT notice will be distributed.
+- [x] Define destination root source paths for ported views, shared UI, domain state, upstream API code, and reused assets; never import production modules from `./VRCX/`.
+- [x] Identify initial reused code/assets and distribute the VRCX MIT notice in `THIRD_PARTY_NOTICES.md`.
 - [ ] Capture desktop visual references for the first supported screens.
 - [ ] Record the browser support policy and test viewport matrix.
 
@@ -78,45 +78,45 @@ Exit criteria: the first implementation slice has a documented VRCX reference, c
 
 ### Milestone 1 — Web Foundation and VRCX Shell
 
-Status: Not started
+Status: In progress
 
-- [ ] Replace starter metadata, fonts, colors, and global styles with VRCX-derived equivalents.
-- [ ] Define shared tokens for color, typography, spacing, elevation, radii, z-index, motion, and responsive breakpoints.
-- [ ] Build the responsive application shell, navigation, header, content region, overlays, and global feedback states.
-- [ ] Preserve VRCX's desktop navigation at wide sizes and introduce a compact drawer or equivalent at narrow sizes.
+- [x] Replace starter metadata, fonts, colors, and global styles with initial VRCX-derived equivalents.
+- [x] Define the initial shared tokens for color, typography, spacing, radii, motion, and responsive breakpoints.
+- [x] Build the first responsive application shell, navigation, header, content region, mobile overlay, and feedback states.
+- [x] Preserve VRCX's desktop navigation at wide sizes and introduce a compact drawer at narrow sizes.
 - [ ] Add core reusable primitives needed by the first feature: buttons, inputs, tabs, list/table patterns, menus, dialogs, tooltips, skeletons, empty states, and errors.
-- [ ] Establish typed environment configuration and server-only boundaries.
-- [ ] Add unit/component/end-to-end test infrastructure appropriate to the selected slices.
+- [x] Establish typed server-only boundaries and documented environment configuration.
+- [x] Add unit test infrastructure for root web-port code without collecting tests from the reference checkout.
 - [ ] Add automated checks for accidental horizontal page overflow and key navigation accessibility where practical.
 
 Exit criteria: a faithful VRCX shell renders at all baseline widths, shared primitives cover the first feature, and lint/build/tests pass.
 
 ### Milestone 2 — VRChat Remote Session and API Boundary
 
-Status: Not started
+Status: In progress
 
 - [ ] Confirm the VRChat API integration requirements and document upstream constraints before implementation.
-- [ ] Define a typed, allowlisted server-side VRChat service boundary; do not create a general-purpose proxy.
-- [ ] Implement the minimum VRChat login/session, two-factor challenge, session validation, expiry recovery, and logout behavior required by supported features.
-- [ ] Store session material in secure, HTTP-only cookies or an equivalently protected server-side mechanism.
-- [ ] Prevent credentials, cookies, tokens, and sensitive response fields from entering logs, error pages, analytics, or client-readable state.
-- [ ] Implement normalized errors for offline/upstream failure, invalid session, forbidden action, rate limiting, and unexpected responses.
-- [ ] Add boundary validation, request timeouts, conservative retries, and tests for security-sensitive routes.
-- [ ] Document that this session flow is VRChat integration, not a separate VRCX Web authentication system.
+- [x] Define a typed, allowlisted server-side VRChat service boundary; do not create a general-purpose proxy.
+- [x] Implement the minimum VRChat login/session, two-factor challenge, session validation, expiry recovery, and logout behavior required by the first supported feature.
+- [x] Store session material in secure, HTTP-only cookies or an equivalently protected server-side mechanism.
+- [x] Prevent credentials, cookies, tokens, and sensitive response fields from entering logs, error pages, analytics, or client-readable state.
+- [x] Implement normalized errors for offline/upstream failure, invalid session, forbidden action, rate limiting, and unexpected responses.
+- [ ] Complete boundary validation, retry policy, route-level security tests, and CSRF review as more upstream routes are added.
+- [x] Document that this session flow is VRChat integration, not a separate VRCX Web authentication system.
 
 Exit criteria: a user can establish and terminate the required VRChat session, failure states are recoverable, and no custom application identity system exists.
 
 ### Milestone 3 — First Complete Remote Workflow
 
-Status: Not started
+Status: In progress — Friends Locations selected
 
 Select the first workflow after the inventory. Prefer a frequently used, clearly remote-backed workflow such as friend browsing and user details.
 
-- [ ] Port the selected navigation entry and overview screen.
-- [ ] Port detail, search/filter, refresh, and supported actions for the selected workflow.
-- [ ] Match VRCX's desktop layout and interaction states using shared primitives.
-- [ ] Design narrow-screen reflow without removing core data or actions.
-- [ ] Implement loading, empty, partial-data, error, rate-limit, and expired-session states.
+- [x] Port the Friends Locations navigation entry and overview screen.
+- [ ] Port friend details and supported remote actions; search/filter and refresh are complete.
+- [x] Match the core VRCX friend-card, desktop shell, and sidebar layout using shared primitives.
+- [x] Design narrow-screen reflow without removing core friend data.
+- [x] Implement initial loading, empty, error, rate-limit, and expired-session states.
 - [ ] Add service, component, and high-value flow tests.
 - [ ] Compare at all baseline widths and document intentional differences from VRCX.
 

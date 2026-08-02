@@ -7,7 +7,7 @@ import { extractVrchatCookies, serializeVrchatCookies, type VrchatCookies } from
 const VRCHAT_API_BASE = "https://api.vrchat.cloud/api/1/";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const allowedEndpoints = new Set(["config", "auth/user", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"]);
+const allowedEndpoints = new Set(["config", "auth/user", "auth/user/friends", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"]);
 
 const errorPayloadSchema = z
     .object({
@@ -24,6 +24,7 @@ type VrchatRequestOptions = {
     method?: "GET" | "POST" | "PUT" | "DELETE";
     authorization?: string;
     cookies?: VrchatCookies;
+    query?: Record<string, boolean | number | string | undefined>;
     body?: unknown;
 };
 
@@ -87,6 +88,13 @@ function upstreamError(payload: unknown, status: number) {
 export async function requestVrchat<T>(endpoint: string, options: VrchatRequestOptions = {}): Promise<VrchatResponse<T>> {
     assertAllowedEndpoint(endpoint);
 
+    const url = new URL(endpoint, VRCHAT_API_BASE);
+    for (const [name, value] of Object.entries(options.query || {})) {
+        if (value !== undefined) {
+            url.searchParams.set(name, String(value));
+        }
+    }
+
     const headers = new Headers({
         Accept: "application/json",
         "User-Agent": process.env.VRCHAT_USER_AGENT?.trim() || "VRCX-Web/0.1.0",
@@ -106,7 +114,7 @@ export async function requestVrchat<T>(endpoint: string, options: VrchatRequestO
 
     let response: Response;
     try {
-        response = await fetch(new URL(endpoint, VRCHAT_API_BASE), {
+        response = await fetch(url, {
             method: options.method || "GET",
             headers,
             body: options.body === undefined ? undefined : JSON.stringify(options.body),

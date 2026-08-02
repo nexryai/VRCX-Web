@@ -9,6 +9,15 @@ export const vrchatUserSchema = z
         profilePicOverride: z.string().optional(),
         currentAvatarImageUrl: z.string().optional(),
         currentAvatarThumbnailImageUrl: z.string().optional(),
+        travelingToLocation: z.string().optional(),
+        world: z
+            .object({
+                id: z.string().optional(),
+                name: z.string().optional(),
+                thumbnailImageUrl: z.string().optional(),
+            })
+            .passthrough()
+            .optional(),
         status: z.string().optional(),
         statusDescription: z.string().optional(),
         state: z.string().optional(),
