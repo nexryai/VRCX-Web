@@ -75,7 +75,8 @@ Collection names are provisional until each VRCX storage path is traced, but the
 | `game_sessions` | API-observed location sessions for the active account, including bounded/current state and observation provenance | Unique deterministic session key; start/end, location, and current-session indexes; at most one open session |
 | `activity_events` | Feed, Friend Log, presence, status, location, avatar, bio, and relationship history | Unique idempotency key; subject/time and type/time indexes |
 | `notifications` | Legacy and V2 notification state and history | Unique upstream notification ID; created/seen indexes |
-| `favorites` | VRChat and VRCX-local favorite group membership | Unique owner/type/group/object tuple |
+| `favorites`, `favorite_groups` | Current and retained VRChat favorite records plus remote group metadata | Unique owner/record and owner/group keys |
+| `local_favorite_groups`, `local_favorites` | MongoDB-native VRCX local groups and cached user/world/avatar membership snapshots | Unique owner/kind/normalized-name and owner/group/object keys |
 | `memos`, `avatar_tags` | User/world/avatar memos and avatar tagging | Unique target or target/tag keys |
 | `moderations` | Remotely visible moderation snapshots/history | Unique subject/type key; updated index |
 | `mutual_graph` | Mutual-friend nodes, edges, opt-outs, and fetch metadata | Unique edge and friend metadata keys |

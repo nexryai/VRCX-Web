@@ -25,7 +25,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
         expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({ notificationFilters: [], notificationTablePageSize: 20 });
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner"]);
         expect(sessionIndexes).toBe(true);
@@ -92,6 +92,21 @@ describe("MongoDB application repositories", () => {
         const retained = await (await getMongoDatabase()).collection("notifications").find({ ownerId }).toArray();
         expect(retained).toHaveLength(2);
         expect(retained.find((document) => document.notificationId === "not_first")?.active).toBe(false);
+    });
+
+    test("keeps VRCX-local favorite groups owner scoped in MongoDB", async () => {
+        const { addLocalFavorite, createLocalFavoriteGroup, listLocalFavoriteGroups, listLocalFavorites, renameLocalFavoriteGroup } = await import("./local-favorites-repository");
+        const { upsertCachedWorlds } = await import("./entity-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000041";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000042";
+        const world = { id: "wrld_00000000-0000-0000-0000-000000000043", name: "Local Favorite World" };
+        await upsertCachedWorlds(ownerId, [world], "lookup");
+        const group = await createLocalFavoriteGroup(ownerId, "world", "Weekend");
+        expect((await addLocalFavorite(ownerId, group.groupId, "world", world.id)).status).toBe("ok");
+        expect(await addLocalFavorite(otherOwnerId, group.groupId, "world", world.id)).toEqual({ status: "group-not-found" });
+        expect(await renameLocalFavoriteGroup(ownerId, group.groupId, "Weekends")).toMatchObject({ name: "Weekends", normalizedName: "weekends" });
+        expect(await listLocalFavoriteGroups(ownerId, "world")).toEqual([expect.objectContaining({ groupId: group.groupId, count: 1 })]);
+        expect(await listLocalFavorites(ownerId, group.groupId)).toMatchObject({ items: [expect.objectContaining({ objectId: world.id, item: world })] });
     });
 
     test("projects remotely observed friend-request notifications into Friend Log once", async () => {

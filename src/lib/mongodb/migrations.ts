@@ -209,6 +209,18 @@ const migrations: Migration[] = [
             await Promise.all([c.appSettings.updateMany({ notificationFilters: { $exists: false } }, { $set: { notificationFilters: [], updatedAt } }), c.appSettings.updateMany({ notificationTablePageSize: { $exists: false } }, { $set: { notificationTablePageSize: 20, updatedAt } })]);
         },
     },
+    {
+        version: 14,
+        name: "add-local-favorite-groups",
+        async apply(c) {
+            await Promise.all([
+                c.localFavoriteGroups.createIndex({ ownerId: 1, kind: 1, normalizedName: 1 }, { unique: true, name: "owner_kind_name_unique" }),
+                c.localFavoriteGroups.createIndex({ ownerId: 1, kind: 1, createdAt: 1 }, { name: "owner_kind_created" }),
+                c.localFavorites.createIndex({ ownerId: 1, groupId: 1, objectId: 1 }, { unique: true, name: "owner_group_object_unique" }),
+                c.localFavorites.createIndex({ ownerId: 1, groupId: 1, updatedAt: -1 }, { name: "owner_group_updated" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

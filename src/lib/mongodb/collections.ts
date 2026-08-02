@@ -191,6 +191,30 @@ export type FavoriteGroupDocument = {
     updatedAt: Date;
 };
 
+export type LocalFavoriteKind = "avatar" | "friend" | "world";
+
+export type LocalFavoriteGroupDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    kind: LocalFavoriteKind;
+    name: string;
+    normalizedName: string;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
+export type LocalFavoriteDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    kind: LocalFavoriteKind;
+    objectId: string;
+    item: VrchatAvatar | VrchatUser | VrchatWorld;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
 export type ModerationDocument = {
     _id: string;
     ownerId: string;
@@ -222,6 +246,8 @@ export type Collections = {
     notifications: Collection<NotificationDocument>;
     favorites: Collection<FavoriteDocument>;
     favoriteGroups: Collection<FavoriteGroupDocument>;
+    localFavoriteGroups: Collection<LocalFavoriteGroupDocument>;
+    localFavorites: Collection<LocalFavoriteDocument>;
     moderations: Collection<ModerationDocument>;
     schemaMigrations: Collection<SchemaMigrationDocument>;
     mutualGraph: Collection<MutualGraphDocument>;
@@ -242,6 +268,8 @@ export function collections(db: Db): Collections {
         notifications: db.collection<NotificationDocument>("notifications"),
         favorites: db.collection<FavoriteDocument>("favorites"),
         favoriteGroups: db.collection<FavoriteGroupDocument>("favorite_groups"),
+        localFavoriteGroups: db.collection<LocalFavoriteGroupDocument>("local_favorite_groups"),
+        localFavorites: db.collection<LocalFavoriteDocument>("local_favorites"),
         moderations: db.collection<ModerationDocument>("moderations"),
         schemaMigrations: db.collection<SchemaMigrationDocument>("schema_migrations"),
         mutualGraph: db.collection<MutualGraphDocument>("mutual_graph"),
