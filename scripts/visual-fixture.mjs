@@ -83,7 +83,44 @@ const friends = [
         location: "offline",
     },
 ];
-const currentUser = { id: ownerId, displayName: "Visual Operator", state: "online", status: "online", statusDescription: "VRCX browser port", location: "wrld_00000000-0000-0000-0000-000000000010:12345", world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" } };
+const ownedAvatars = [
+    {
+        id: "avtr_00000000-0000-0000-0000-000000000061",
+        name: "Browser Dance Avatar",
+        description: "Responsive avatar fixture",
+        releaseStatus: "public",
+        version: 12,
+        created_at: new Date(now.getTime() - 180 * 86_400_000).toISOString(),
+        updated_at: new Date(now.getTime() - 2 * 86_400_000).toISOString(),
+        unityPackages: [
+            { platform: "standalonewindows", performanceRating: "Good" },
+            { platform: "android", performanceRating: "Medium" },
+        ],
+    },
+    {
+        id: "avtr_00000000-0000-0000-0000-000000000062",
+        name: "Private Builder Avatar",
+        description: "Private test avatar",
+        releaseStatus: "private",
+        version: 4,
+        created_at: new Date(now.getTime() - 90 * 86_400_000).toISOString(),
+        updated_at: new Date(now.getTime() - 8 * 86_400_000).toISOString(),
+        unityPackages: [
+            { platform: "standalonewindows", performanceRating: "Excellent" },
+            { platform: "ios", performanceRating: "Poor" },
+        ],
+    },
+];
+const currentUser = {
+    id: ownerId,
+    displayName: "Visual Operator",
+    state: "online",
+    status: "online",
+    statusDescription: "VRCX browser port",
+    currentAvatar: ownedAvatars[0].id,
+    location: "wrld_00000000-0000-0000-0000-000000000010:12345",
+    world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" },
+};
 const favoriteWorld = { id: "wrld_00000000-0000-0000-0000-000000000051", name: "Favorite Moonlit World", authorName: "Favorite World Author", occupants: 24 };
 const favoriteAvatar = { id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" };
 
@@ -94,6 +131,9 @@ await database.collection("app_settings").insertOne({
     theme: "dark",
     navigationCollapsed: false,
     myAvatarsView: "grid",
+    myAvatarsCardScale: 0.6,
+    myAvatarsCardSpacing: 1,
+    myAvatarsTablePageSize: 20,
     friendLocationCardScale: 1,
     friendLocationCardSpacing: 1,
     friendLocationShowSameInstance: true,
@@ -132,6 +172,11 @@ await database.collection("favorite_groups").insertMany([
 ]);
 await database.collection("worlds").insertOne({ _id: `${ownerId}:${favoriteWorld.id}`, ownerId, worldId: favoriteWorld.id, world: favoriteWorld, source: "favorite", observedAt: now, updatedAt: now });
 await database.collection("avatars").insertOne({ _id: `${ownerId}:${favoriteAvatar.id}`, ownerId, avatarId: favoriteAvatar.id, avatar: favoriteAvatar, source: "favorite", observedAt: now, updatedAt: now });
+await database.collection("avatars").insertMany(ownedAvatars.map((avatar) => ({ _id: `${ownerId}:${avatar.id}`, ownerId, avatarId: avatar.id, avatar, source: "owned", observedAt: now, updatedAt: now })));
+await database.collection("avatar_tags").insertMany([
+    { _id: `${ownerId}:${ownedAvatars[0].id}:dance`, ownerId, avatarId: ownedAvatars[0].id, tag: "Dance", normalizedTag: "dance", color: "#3b82f6", createdAt: now, updatedAt: now },
+    { _id: `${ownerId}:${ownedAvatars[1].id}:fallback`, ownerId, avatarId: ownedAvatars[1].id, tag: "Fallback", normalizedTag: "fallback", color: "#22c55e", createdAt: now, updatedAt: now },
+]);
 const localFriendGroupId = "lfg_00000000-0000-0000-0000-000000000053";
 await database.collection("local_favorite_groups").insertOne({ _id: `${ownerId}:${localFriendGroupId}`, ownerId, groupId: localFriendGroupId, kind: "friend", name: "Event Crew", normalizedName: "event crew", createdAt: now, updatedAt: now });
 await database.collection("local_favorites").insertOne({ _id: `${ownerId}:${localFriendGroupId}:${friends[1].id}`, ownerId, groupId: localFriendGroupId, kind: "friend", objectId: friends[1].id, item: friends[1], createdAt: now, updatedAt: now });

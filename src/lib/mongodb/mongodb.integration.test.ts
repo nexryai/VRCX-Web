@@ -25,10 +25,13 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
         expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
+            myAvatarsCardScale: 0.6,
+            myAvatarsCardSpacing: 1,
+            myAvatarsTablePageSize: 20,
             favoriteSortByDate: false,
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
             favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
@@ -115,6 +118,21 @@ describe("MongoDB application repositories", () => {
         expect(await renameLocalFavoriteGroup(ownerId, group.groupId, "Weekends")).toMatchObject({ name: "Weekends", normalizedName: "weekends" });
         expect(await listLocalFavoriteGroups(ownerId, "world")).toEqual([expect.objectContaining({ groupId: group.groupId, count: 1 })]);
         expect(await listLocalFavorites(ownerId, group.groupId)).toMatchObject({ items: [expect.objectContaining({ objectId: world.id, item: world })] });
+    });
+
+    test("replaces owner-scoped avatar tags in MongoDB", async () => {
+        const { listAvatarTags, replaceAvatarTags } = await import("./avatar-tags-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000045";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000046";
+        const avatarId = "avtr_00000000-0000-0000-0000-000000000047";
+        await replaceAvatarTags(ownerId, avatarId, [
+            { tag: "Dancer", color: null },
+            { tag: "Green", color: "#22c55e" },
+        ]);
+        await replaceAvatarTags(otherOwnerId, avatarId, [{ tag: "Private", color: null }]);
+        expect(await replaceAvatarTags(ownerId, avatarId, [{ tag: "Dancer", color: "#3b82f6" }])).toEqual([{ tag: "Dancer", color: "#3b82f6" }]);
+        expect(await listAvatarTags(ownerId)).toEqual({ [avatarId]: [{ tag: "Dancer", color: "#3b82f6" }] });
+        expect(await listAvatarTags(otherOwnerId)).toEqual({ [avatarId]: [{ tag: "Private", color: null }] });
     });
 
     test("projects remotely observed friend-request notifications into Friend Log once", async () => {

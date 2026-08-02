@@ -227,6 +227,12 @@ At desktop widths the fixed group pane and dense responsive card grid closely tr
 
 The complete dense table scrolls within its pane on narrow screens rather than being redesigned as mobile cards or dropping columns. Avatar moderation remains part of avatar/user detail workflows rather than this player-moderation table, matching VRCX's visible screen. Photon moderation events and current-instance player state remain excluded because they depend on the local game process and logs.
 
+## My Avatars Scope
+
+`VRCX/src/views/MyAvatars/MyAvatars.vue`, `components/MyAvatarCard.vue`, `columns.jsx`, `ManageTagsDialog.vue`, and `composables/useAvatarCardGrid.js` define the official-API-backed owned-avatar screen. The web port retains VRCX's Grid/Table switch, filter popover, visibility/platform/local-tag filters, search, card scale and spacing controls, responsive dense card grid, active-avatar highlight, click-to-wear confirmation, compact operation menus, tag management, refresh, sortable wide table, and pagination. View mode, grid metrics, table page size, and VRCX-local colored avatar tags are stored in MongoDB. Owned avatar responses are also cached owner-scoped in MongoDB before they reach the browser.
+
+Wear, make public/private, rename, change description, and impostor creation use narrowly scoped VRChat routes. Until the maintained avatar dialog is ported, View Details, content-tag editing, and style/author-tag editing open the safe VRChat avatar page and remain interaction differences. Browser upload and 4:3 crop are platform-eligible, but the multi-stage signed avatar-image upload is still outstanding and must be implemented through a fixed-purpose server boundary before the Change Image command is exposed. VRCX Time Spent is intentionally omitted because it comes from local game logs; no synthetic duration is shown. The table preserves all other remotely available source columns and scrolls within its pane on narrow screens.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -281,7 +287,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, all three Favorites states, and Moderation at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, all three Favorites states, Moderation, and My Avatars at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.

@@ -20,6 +20,7 @@ const captures = [
     { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
+    { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
 ];
 
 const searchFixture = [
@@ -46,6 +47,7 @@ for (const width of [360, 768, 1280, 1920]) {
         // minimal CI containers while keeping each screenshot deterministic.
         const browser = await chromium.launch(executablePath ? { executablePath } : undefined);
         const page = await browser.newPage({ viewport: { width, height: 800 }, deviceScaleFactor: 1 });
+        page.setDefaultNavigationTimeout(60_000);
         if (capture.searchQuery) {
             await page.route("**/api/search/config", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ worldRows: [{ index: 0, name: "Featured", sortHeading: "featured" }] }) }));
             await page.route("**/api/search?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ type: "users", results: searchFixture, offset: 0, pageSize: 10 }) }));
@@ -61,6 +63,43 @@ for (const width of [360, 768, 1280, 1920]) {
                         : [{ id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" }];
                 await page.route(`**/api/favorites?section=items&type=${capture.favoriteKind}`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) }));
             }
+        }
+        if (capture.avatars) {
+            await page.route("**/api/avatars?offset=*", (route) => {
+                const offset = Number(new URL(route.request().url()).searchParams.get("offset") || 0);
+                const avatars =
+                    offset === 0
+                        ? [
+                              {
+                                  id: "avtr_00000000-0000-0000-0000-000000000061",
+                                  name: "Browser Dance Avatar",
+                                  description: "Responsive avatar fixture",
+                                  releaseStatus: "public",
+                                  version: 12,
+                                  created_at: "2026-02-03T12:00:00.000Z",
+                                  updated_at: "2026-07-31T12:00:00.000Z",
+                                  unityPackages: [
+                                      { platform: "standalonewindows", performanceRating: "Good" },
+                                      { platform: "android", performanceRating: "Medium" },
+                                  ],
+                              },
+                              {
+                                  id: "avtr_00000000-0000-0000-0000-000000000062",
+                                  name: "Private Builder Avatar",
+                                  description: "Private test avatar",
+                                  releaseStatus: "private",
+                                  version: 4,
+                                  created_at: "2026-05-04T12:00:00.000Z",
+                                  updated_at: "2026-07-25T12:00:00.000Z",
+                                  unityPackages: [
+                                      { platform: "standalonewindows", performanceRating: "Excellent" },
+                                      { platform: "ios", performanceRating: "Poor" },
+                                  ],
+                              },
+                          ]
+                        : [];
+                return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ avatars }) });
+            });
         }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
         if (capture.clickText) {

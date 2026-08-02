@@ -241,6 +241,20 @@ const migrations: Migration[] = [
             await Promise.all([c.appSettings.updateMany({ moderationFilters: { $exists: false } }, { $set: { moderationFilters: [], updatedAt } }), c.appSettings.updateMany({ moderationTablePageSize: { $exists: false } }, { $set: { moderationTablePageSize: 20, updatedAt } })]);
         },
     },
+    {
+        version: 17,
+        name: "add-avatar-tags-and-layout-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.avatarTags.createIndex({ ownerId: 1, avatarId: 1, normalizedTag: 1 }, { unique: true, name: "owner_avatar_tag_unique" }),
+                c.avatarTags.createIndex({ ownerId: 1, normalizedTag: 1 }, { name: "owner_tag_lookup" }),
+                c.appSettings.updateMany({ myAvatarsCardScale: { $exists: false } }, { $set: { myAvatarsCardScale: 0.6, updatedAt } }),
+                c.appSettings.updateMany({ myAvatarsCardSpacing: { $exists: false } }, { $set: { myAvatarsCardSpacing: 1, updatedAt } }),
+                c.appSettings.updateMany({ myAvatarsTablePageSize: { $exists: false } }, { $set: { myAvatarsTablePageSize: 20, updatedAt } }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

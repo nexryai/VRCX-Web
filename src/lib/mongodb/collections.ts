@@ -28,6 +28,9 @@ export type AppSettingsDocument = {
     theme: "dark" | "light";
     navigationCollapsed: boolean;
     myAvatarsView: "grid" | "table";
+    myAvatarsCardScale: number;
+    myAvatarsCardSpacing: number;
+    myAvatarsTablePageSize: 20 | 50 | 100;
     friendLocationCardScale: number;
     friendLocationCardSpacing: number;
     friendLocationShowSameInstance: boolean;
@@ -116,6 +119,17 @@ export type AvatarDocument = {
     avatar: VrchatAvatar;
     source: "favorite" | "lookup" | "owned" | "search";
     observedAt: Date;
+    updatedAt: Date;
+};
+
+export type AvatarTagDocument = {
+    _id: string;
+    ownerId: string;
+    avatarId: string;
+    tag: string;
+    normalizedTag: string;
+    color: string | null;
+    createdAt: Date;
     updatedAt: Date;
 };
 
@@ -245,6 +259,7 @@ export type Collections = {
     worlds: Collection<WorldDocument>;
     groups: Collection<GroupDocument>;
     avatars: Collection<AvatarDocument>;
+    avatarTags: Collection<AvatarTagDocument>;
     friendSnapshots: Collection<FriendSnapshotDocument>;
     activityEvents: Collection<ActivityEventDocument>;
     gameSessions: Collection<GameSessionDocument>;
@@ -267,6 +282,7 @@ export function collections(db: Db): Collections {
         worlds: db.collection<WorldDocument>("worlds"),
         groups: db.collection<GroupDocument>("groups"),
         avatars: db.collection<AvatarDocument>("avatars"),
+        avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),
         friendSnapshots: db.collection<FriendSnapshotDocument>("friend_snapshots"),
         activityEvents: db.collection<ActivityEventDocument>("activity_events"),
         gameSessions: db.collection<GameSessionDocument>("game_sessions"),
