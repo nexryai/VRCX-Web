@@ -242,6 +242,14 @@ Mutual fetching is a server-owned, rate-limited VRChat API job rather than a bro
 
 The Sigma/Graphology/Louvain worker rendering pipeline is translated to a browser-safe React/SVG renderer so the root build does not depend on the reference checkout. It preserves the visible graph vocabulary and deterministic force layout, but very large-graph performance and community placement must still be compared against the running VRCX reference before visual parity is considered complete. Full fetches are intentionally operator-triggered, as in VRCX, because scanning every friend consumes rate-limited API calls; once triggered, they no longer depend on an open page.
 
+## Settings Scope
+
+`VRCX/src/views/Settings/Settings.vue`, `components/SettingsGroup.vue`, `components/SettingsItem.vue`, `components/Tabs/SystemTab.vue`, and `components/Tabs/InterfaceTab.vue` define the settings page hierarchy and dense card rows. The web port exposes the working System and Interface categories, VRCX-style underlined tabs and groups, application/version/legal links, theme, navigation collapse, favorite ordering, and the current per-workflow table page sizes. Changes write through the validated singleton MongoDB settings boundary and update the live shell where applicable.
+
+Settings export produces a versioned JSON download containing only validated browser-safe application preferences. Import validates the exact format and rejects unknown or server-owned fields before replacing those preferences in MongoDB. VRChat cookies, active identity state, MongoDB configuration, monitor leases, histories, caches, and secrets are never included. Local favorite group and avatar-tag import/export remain separate workflow work and are not mislabeled as part of this preferences backup.
+
+VRCX's Windows startup, tray, GPU, updater, local proxy, VR, OpenVR, media/filesystem, local TTS condition, Discord/game-process integration, registry, and similar controls are absent instead of disabled because their behavior depends on the desktop or local VRChat. Eligible notification delivery and richer social preferences will be added only with their working browser/server behavior; empty tabs are not shown. The earlier Manage-menu link to the About placeholder has been replaced by the maintained `/settings` route, while the complete copied license remains available from its System legal section.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -296,7 +304,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, all three Favorites states, Moderation, My Avatars, and Mutual Friends at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, all three Favorites states, Moderation, My Avatars, Mutual Friends, and Settings states at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.
@@ -447,3 +455,5 @@ The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 
 The 2026-08-02 monitor-failover increment passed `pnpm test` (8 files, 26 tests), `pnpm lint` (109 files), and `pnpm build` (21 generated pages). Automated coverage now proves that a monitor with no browser connected closes its Pipeline socket when it loses the MongoDB lease, then performs a new HTTP baseline before reconnecting after lease reacquisition. A live authenticated process-restart soak remains an operator acceptance item.
 
 The 2026-08-02 Mutual Friends increment passed `pnpm test` (9 files, 33 tests), `pnpm lint` (120 files), and `pnpm build` (24 generated pages). The populated graph passed deterministic captures at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow; the narrow settings sheet also passed an interaction smoke check. Live authenticated API scanning, very-large-graph comparison, and a forced process-termination recovery soak remain operator acceptance items.
+
+The 2026-08-02 Settings increment passed `pnpm test` (10 files, 36 tests), `pnpm lint` (125 files), and `pnpm build` (25 generated pages). System and Interface states passed deterministic captures at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. A fixture-backed export/import round trip returned a versioned attachment and restored validated MongoDB preferences; unknown and server-owned fields have automated rejection coverage.

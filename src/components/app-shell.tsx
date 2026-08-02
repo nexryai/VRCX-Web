@@ -58,6 +58,8 @@ function isActive(pathname: string, href: string) {
 }
 
 function navigationTitle(pathname: string) {
+    if (pathname === "/settings") return "Settings";
+    if (pathname === "/about") return "About";
     for (const entry of navigation) {
         if (isItem(entry) && isActive(pathname, entry.href)) return entry.label;
         if (!isItem(entry)) {
@@ -85,6 +87,15 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
             .then((settings) => setCollapsed(settings.navigationCollapsed === true))
             .catch(() => undefined);
         return () => controller.abort();
+    }, []);
+
+    useEffect(() => {
+        function applySettings(event: Event) {
+            const detail = (event as CustomEvent<{ navigationCollapsed?: boolean }>).detail;
+            if (typeof detail?.navigationCollapsed === "boolean") setCollapsed(detail.navigationCollapsed);
+        }
+        window.addEventListener("vrcx:settings", applySettings);
+        return () => window.removeEventListener("vrcx:settings", applySettings);
     }, []);
 
     function toggleCollapsed() {
@@ -213,7 +224,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                     <span>Theme</span>
                                     <ThemeToggle className="size-8 rounded-md" />
                                 </div>
-                                <Link href="/about" className="flex h-8 items-center rounded px-2 hover:bg-accent">
+                                <Link href="/settings" onClick={() => setManageOpen(false)} className="flex h-8 items-center rounded px-2 hover:bg-accent">
                                     Settings and about
                                 </Link>
                                 <div className="my-1 border-t border-border" />

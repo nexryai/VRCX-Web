@@ -1,0 +1,27 @@
+import { describe, expect, it } from "vitest";
+
+import { appSettingsBackupSchema, appSettingsUpdateSchema, serializeAppSettings } from "./app-settings";
+
+describe("application settings boundary", () => {
+    it("serializes complete browser-safe defaults", () => {
+        expect(serializeAppSettings()).toMatchObject({
+            theme: "dark",
+            navigationCollapsed: false,
+            favoriteSortByDate: false,
+            activityTablePageSize: 20,
+            mutualGraphLayoutIterations: 800,
+            mutualGraphExcludedFriendIds: [],
+        });
+    });
+
+    it("rejects unknown and server-owned fields", () => {
+        expect(appSettingsUpdateSchema.safeParse({ theme: "light", activeUserId: "usr_00000000-0000-0000-0000-000000000001" }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ theme: "light", encryptedCookies: "secret" }).success).toBe(false);
+    });
+
+    it("accepts only the versioned settings backup format", () => {
+        const valid = { format: "vrcx-web-settings", version: 1, exportedAt: "2026-08-02T12:00:00.000Z", settings: serializeAppSettings({ theme: "light" }) };
+        expect(appSettingsBackupSchema.safeParse(valid).success).toBe(true);
+        expect(appSettingsBackupSchema.safeParse({ ...valid, version: 2 }).success).toBe(false);
+    });
+});

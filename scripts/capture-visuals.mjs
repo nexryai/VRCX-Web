@@ -22,6 +22,8 @@ const captures = [
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
     { name: "mutual-friends", path: "/charts/mutual", readyText: "Aoi Sample" },
+    { name: "settings", path: "/settings", readyText: "Application data" },
+    { name: "settings-interface", path: "/settings", readyText: "Sort favorites by", clickText: "Interface" },
 ];
 
 const searchFixture = [
