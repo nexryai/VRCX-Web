@@ -46,6 +46,8 @@ export type AppSettingsDocument = {
     favoriteSortByDate: boolean;
     favoriteCardScale: Record<"avatar" | "friend" | "world", number>;
     favoriteCardSpacing: Record<"avatar" | "friend" | "world", number>;
+    moderationFilters: string[];
+    moderationTablePageSize: 20 | 50 | 100;
     updatedAt: Date;
 };
 

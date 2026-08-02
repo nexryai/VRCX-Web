@@ -39,6 +39,8 @@ const updateSchema = z
         favoriteSortByDate: z.boolean().optional(),
         favoriteCardScale: z.object({ avatar: z.number().min(0.6).max(1), friend: z.number().min(0.6).max(1), world: z.number().min(0.6).max(1) }).optional(),
         favoriteCardSpacing: z.object({ avatar: z.number().min(0.5).max(1.5), friend: z.number().min(0.5).max(1.5), world: z.number().min(0.5).max(1.5) }).optional(),
+        moderationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
+        moderationTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
     })
     .refine((value) => Object.values(value).some((item) => item !== undefined));
 
@@ -67,6 +69,8 @@ export async function GET() {
         favoriteSortByDate: settings?.favoriteSortByDate ?? false,
         favoriteCardScale: settings?.favoriteCardScale ?? { avatar: 1, friend: 1, world: 1 },
         favoriteCardSpacing: settings?.favoriteCardSpacing ?? { avatar: 1, friend: 1, world: 1 },
+        moderationFilters: settings?.moderationFilters ?? [],
+        moderationTablePageSize: settings?.moderationTablePageSize ?? 20,
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;

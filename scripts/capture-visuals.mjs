@@ -19,6 +19,7 @@ const captures = [
     { name: "favorite-friends", path: "/favorite/friends", readyText: "Building a new world", favoriteKind: "friend" },
     { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
+    { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
 ];
 
 const searchFixture = [

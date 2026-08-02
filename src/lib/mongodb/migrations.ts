@@ -233,6 +233,14 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 16,
+        name: "add-moderation-table-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([c.appSettings.updateMany({ moderationFilters: { $exists: false } }, { $set: { moderationFilters: [], updatedAt } }), c.appSettings.updateMany({ moderationTablePageSize: { $exists: false } }, { $set: { moderationTablePageSize: 20, updatedAt } })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

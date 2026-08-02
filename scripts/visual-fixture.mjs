@@ -112,6 +112,8 @@ await database.collection("app_settings").insertOne({
     favoriteSortByDate: false,
     favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
     favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
+    moderationFilters: [],
+    moderationTablePageSize: 20,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
@@ -133,6 +135,11 @@ await database.collection("avatars").insertOne({ _id: `${ownerId}:${favoriteAvat
 const localFriendGroupId = "lfg_00000000-0000-0000-0000-000000000053";
 await database.collection("local_favorite_groups").insertOne({ _id: `${ownerId}:${localFriendGroupId}`, ownerId, groupId: localFriendGroupId, kind: "friend", name: "Event Crew", normalizedName: "event crew", createdAt: now, updatedAt: now });
 await database.collection("local_favorites").insertOne({ _id: `${ownerId}:${localFriendGroupId}:${friends[1].id}`, ownerId, groupId: localFriendGroupId, kind: "friend", objectId: friends[1].id, item: friends[1], createdAt: now, updatedAt: now });
+const visualModerations = [
+    { id: "pmod_visual_block", type: "block", sourceUserId: ownerId, sourceDisplayName: currentUser.displayName, targetUserId: friends[1].id, targetDisplayName: "Moderated Cobalt User", created: new Date(now.getTime() - 22 * 60_000).toISOString() },
+    { id: "pmod_visual_mute", type: "mute", sourceUserId: ownerId, sourceDisplayName: currentUser.displayName, targetUserId: friends[3].id, targetDisplayName: friends[3].displayName, created: new Date(now.getTime() - 75 * 60_000).toISOString() },
+];
+await database.collection("moderations").insertMany(visualModerations.map((moderation) => ({ _id: `${ownerId}:${moderation.targetUserId}:${moderation.type}`, ownerId, targetUserId: moderation.targetUserId, moderationType: moderation.type, moderation, active: true, observedAt: now, updatedAt: now })));
 await database.collection("groups").insertOne({
     _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020`,
     ownerId,

@@ -221,6 +221,12 @@ The Avatar tab is intentionally absent. VRCX searches avatars only through an op
 
 At desktop widths the fixed group pane and dense responsive card grid closely translate VRCX. At narrow widths the group pane becomes a select with adjacent manage and local-group creation controls so no workflow depends on hover or disappears. Friend cards open the maintained user dialog. World and avatar cards currently use allowlisted VRChat web detail links until maintained root detail dialogs are ported; this remains an interaction difference. Browser file upload/download is eligible, but VRCX local-group import and export are still outstanding and must be added before Favorites is parity-complete. VRCX avatar history is excluded because it reads the desktop application's local avatar history database. Local-game request, invite, launch, and join actions remain absent.
 
+## Moderation Scope
+
+`VRCX/src/views/Moderation/Moderation.vue`, `views/Moderation/columns.jsx`, `stores/moderation.js`, `coordinators/moderationCoordinator.js`, `api/playerModeration.js`, and `shared/constants/moderation.js` define the player-moderation table. The port keeps VRCX's multi-type filter, display-name search, newest-first sortable Date, Type, Source, Target, and Action columns, user-dialog links, pagination, linked page size, refresh, confirmation, and Shift-click confirmation bypass. Filters and page size are stored in the singleton MongoDB settings document. Active player moderations are read from the MongoDB projection continuously repaired by the server monitor; manual refresh invokes that same reconciliation boundary instead of creating a second browser-owned polling path. Removing a moderation updates VRChat first and deactivates the MongoDB projection only after upstream success.
+
+The complete dense table scrolls within its pane on narrow screens rather than being redesigned as mobile cards or dropping columns. Avatar moderation remains part of avatar/user detail workflows rather than this player-moderation table, matching VRCX's visible screen. Photon moderation events and current-instance player state remain excluded because they depend on the local game process and logs.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -275,7 +281,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, and all three Favorites states at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, all three Favorites states, and Moderation at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.
