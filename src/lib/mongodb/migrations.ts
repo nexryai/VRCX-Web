@@ -185,6 +185,14 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 11,
+        name: "add-friend-list-table-preference",
+        async apply(c) {
+            const updatedAt = new Date();
+            await c.appSettings.updateMany({ friendListTablePageSize: { $exists: false } }, { $set: { friendListTablePageSize: 20, updatedAt } });
+        },
+    },
 ];
 
 async function applyMigrations() {

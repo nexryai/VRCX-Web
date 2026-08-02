@@ -32,6 +32,7 @@ const updateSchema = z
             .max(5)
             .optional(),
         activityTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
+        friendListTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
     })
     .refine((value) => Object.values(value).some((item) => item !== undefined));
 
@@ -53,6 +54,7 @@ export async function GET() {
         feedFavoritesOnly: settings?.feedFavoritesOnly ?? false,
         friendLogFilters: settings?.friendLogFilters ?? [],
         activityTablePageSize: settings?.activityTablePageSize ?? 20,
+        friendListTablePageSize: settings?.friendListTablePageSize ?? 20,
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;

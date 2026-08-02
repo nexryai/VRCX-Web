@@ -12,6 +12,7 @@ type FriendsContextValue = {
     loading: boolean;
     error: string;
     refresh: () => Promise<void>;
+    reload: () => Promise<void>;
     openUser: (userId: string) => void;
     removeFriend: (userId: string) => void;
 };
@@ -58,6 +59,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
     const refresh = useCallback(() => load(true), [load]);
+    const reload = useCallback(() => load(false), [load]);
 
     const openUser = useCallback((userId: string) => setSelectedUserId(userId), []);
     const closeUser = useCallback(() => setSelectedUserId(""), []);
@@ -77,7 +79,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         };
     }, [load]);
 
-    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, openUser, removeFriend }), [friends, allFriends, loading, error, refresh, openUser, removeFriend]);
+    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, reload, openUser, removeFriend }), [friends, allFriends, loading, error, refresh, reload, openUser, removeFriend]);
     return (
         <FriendsContext.Provider value={value}>
             {children}

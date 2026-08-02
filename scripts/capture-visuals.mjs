@@ -11,6 +11,7 @@ const captures = [
     { name: "friends-locations", path: "/", readyText: "Aoi Sample" },
     { name: "feed", path: "/feed", readyText: "Moved to wrld_00000000-0000-0000-0000-000000000010:12345" },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
+    { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
     { name: "game-log", path: "/game-log", readyText: "Midnight Rooftop" },
 ];
 

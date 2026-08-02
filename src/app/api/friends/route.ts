@@ -29,7 +29,12 @@ export async function GET(request: NextRequest) {
         .skip(query.data.offset)
         .limit(query.data.n)
         .toArray();
-    const response = NextResponse.json({ friends: documents.map((document) => document.user) });
+    const c = collections(await getMongoDatabase());
+    const cachedProfiles = documents.length ? await c.users.find({ ownerId: stored.activeUserId, userId: { $in: documents.map((document) => document.friendId) } }).toArray() : [];
+    const profilesById = new Map(cachedProfiles.map((document) => [document.userId, document.user]));
+    // Friend-list snapshots carry the freshest presence fields, while explicit
+    // profile lookups contribute richer remote fields such as date_joined.
+    const response = NextResponse.json({ friends: documents.map((document) => ({ ...profilesById.get(document.friendId), ...document.user })) });
     response.headers.set("Cache-Control", "private, no-store");
     return response;
 }

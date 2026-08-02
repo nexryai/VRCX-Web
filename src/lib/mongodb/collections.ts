@@ -39,6 +39,7 @@ export type AppSettingsDocument = {
     feedFavoritesOnly: boolean;
     friendLogFilters: Array<"Friend" | "Unfriend" | "FriendRequest" | "DisplayName" | "TrustLevel">;
     activityTablePageSize: 20 | 50 | 100;
+    friendListTablePageSize: 20 | 50 | 100;
     updatedAt: Date;
 };
 

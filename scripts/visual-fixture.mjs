@@ -26,10 +26,62 @@ await client.connect();
 const database = client.db(databaseName);
 const now = new Date();
 const friends = [
-    { id: "usr_00000000-0000-0000-0000-000000000002", displayName: "Aoi Sample", state: "online", status: "join me", statusDescription: "Building a new world", location: "wrld_00000000-0000-0000-0000-000000000010:12345", world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" } },
-    { id: "usr_00000000-0000-0000-0000-000000000003", displayName: "Cobalt Friend", state: "online", status: "ask me", statusDescription: "Come say hello", location: "wrld_00000000-0000-0000-0000-000000000010:12345", world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" } },
-    { id: "usr_00000000-0000-0000-0000-000000000004", displayName: "Mikan Active", state: "active", status: "active", statusDescription: "Browsing VRChat", location: "offline" },
-    { id: "usr_00000000-0000-0000-0000-000000000005", displayName: "Nora Offline", state: "offline", status: "offline", statusDescription: "See you later", location: "offline" },
+    {
+        id: "usr_00000000-0000-0000-0000-000000000002",
+        displayName: "Aoi Sample",
+        username: "aoi_sample",
+        state: "online",
+        status: "join me",
+        statusDescription: "Building a new world",
+        bio: "World creator and explorer",
+        bioLinks: ["https://example.com/aoi"],
+        tags: ["system_trust_trusted", "language_eng", "language_jpn"],
+        date_joined: "2021-04-12",
+        last_activity: new Date(now.getTime() - 5 * 60_000).toISOString(),
+        last_login: new Date(now.getTime() - 3 * 60 * 60_000).toISOString(),
+        location: "wrld_00000000-0000-0000-0000-000000000010:12345",
+        world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" },
+    },
+    {
+        id: "usr_00000000-0000-0000-0000-000000000003",
+        displayName: "Cobalt Friend",
+        username: "cobalt_friend",
+        state: "online",
+        status: "ask me",
+        statusDescription: "Come say hello",
+        bio: "Avatar enthusiast",
+        tags: ["system_trust_known", "language_eng"],
+        date_joined: "2022-09-23",
+        last_activity: new Date(now.getTime() - 18 * 60_000).toISOString(),
+        last_login: new Date(now.getTime() - 5 * 60 * 60_000).toISOString(),
+        location: "wrld_00000000-0000-0000-0000-000000000010:12345",
+        world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" },
+    },
+    {
+        id: "usr_00000000-0000-0000-0000-000000000004",
+        displayName: "Mikan Active",
+        username: "mikan_active",
+        state: "active",
+        status: "active",
+        statusDescription: "Browsing VRChat",
+        tags: ["system_trust_basic", "language_jpn"],
+        date_joined: "2024-01-08",
+        last_activity: new Date(now.getTime() - 34 * 60_000).toISOString(),
+        location: "offline",
+    },
+    {
+        id: "usr_00000000-0000-0000-0000-000000000005",
+        displayName: "Nora Offline",
+        username: "nora_offline",
+        state: "offline",
+        status: "offline",
+        statusDescription: "See you later",
+        tags: ["language_deu"],
+        date_joined: "2025-06-17",
+        last_activity: new Date(now.getTime() - 8 * 60 * 60_000).toISOString(),
+        last_login: new Date(now.getTime() - 8 * 60 * 60_000).toISOString(),
+        location: "offline",
+    },
 ];
 const currentUser = { id: ownerId, displayName: "Visual Operator", state: "online", status: "online", statusDescription: "VRCX browser port", location: "wrld_00000000-0000-0000-0000-000000000010:12345", world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" } };
 
@@ -51,6 +103,7 @@ await database.collection("app_settings").insertOne({
     feedFavoritesOnly: false,
     friendLogFilters: [],
     activityTablePageSize: 20,
+    friendListTablePageSize: 20,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
@@ -67,6 +120,17 @@ await database.collection("groups").insertOne({
     membershipActive: true,
     membershipObservedAt: now,
     observedAt: now,
+    updatedAt: now,
+});
+await database.collection("mutual_graph").insertOne({
+    _id: ownerId,
+    ownerId,
+    relationships: {
+        [friends[0].id]: [friends[1].id, friends[2].id],
+        [friends[1].id]: [friends[0].id],
+        [friends[2].id]: [friends[0].id],
+    },
+    optedOut: [friends[3].id],
     updatedAt: now,
 });
 await database.collection("activity_events").insertMany([

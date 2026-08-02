@@ -73,7 +73,7 @@ pnpm visual:fixture
 pnpm visual:capture
 ```
 
-The capture command writes ignored images under `.visual/` for Friends Locations, Feed, Friend Log, and Game Log at 360, 768, 1280, and 1920 pixels wide, and fails on page-level horizontal overflow. The fixture uses only synthetic records and disables the always-on monitor in development; production startup cannot use this bypass. These images make the current port reproducible but do not replace matched screenshots from the running VRCX reference application.
+The capture command writes ignored images under `.visual/` for Friends Locations, Feed, Friend Log, Friend List, and Game Log at 360, 768, 1280, and 1920 pixels wide, and fails on page-level horizontal overflow. The fixture uses only synthetic records and disables the always-on monitor in development; production startup cannot use this bypass. These images make the current port reproducible but do not replace matched screenshots from the running VRCX reference application.
 
 MongoDB migrations are versioned in `schema_migrations` and run automatically and idempotently when the application first accesses the database. `GET /api/health` is the deployment health probe; it returns HTTP 503 without exposing driver details when MongoDB is unavailable.
 

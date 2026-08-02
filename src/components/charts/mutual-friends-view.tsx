@@ -8,30 +8,10 @@ import { useCurrentUser } from "@/components/current-user-provider";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { useFriends } from "@/components/friends/friends-provider";
 import { buildMutualEdges, countMutualDegrees, type MutualGraphSnapshot } from "@/lib/mutual-graph";
+import { fetchAndPersistMutualGraph } from "@/lib/mutual-graph-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
 
 const VISUAL_NODE_LIMIT = 80;
-
-function delay(milliseconds: number) {
-    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
-
-async function fetchMutualPage(userId: string, offset: number, signal: AbortSignal) {
-    let lastError = "Mutual friends could not be loaded.";
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-        const response = await fetch(`/api/users/${userId}/mutuals?offset=${offset}`, { cache: "no-store", signal });
-        const payload = (await response.json()) as { error?: string; mutuals?: VrchatUser[] };
-        if (response.status === 401) {
-            window.location.assign("/login");
-            throw new Error("The VRChat session expired.");
-        }
-        if (response.ok && payload.mutuals) return payload.mutuals;
-        lastError = payload.error || lastError;
-        if (response.status !== 429) throw Object.assign(new Error(lastError), { status: response.status });
-        await delay(500 * 2 ** attempt);
-    }
-    throw new Error(lastError);
-}
 
 export function MutualFriendsView() {
     const currentUser = useCurrentUser();
@@ -72,35 +52,12 @@ export function MutualFriendsView() {
         setProcessed(0);
         setError("");
         setCacheNotice("");
-        const relationships: Record<string, string[]> = {};
-        const optedOut: string[] = [];
         try {
-            for (let index = 0; index < allFriends.length; index += 1) {
-                if (controller.signal.aborted) return;
-                const friend = allFriends[index];
-                const mutualIds: string[] = [];
-                try {
-                    for (let offset = 0; offset <= 5_000; offset += 100) {
-                        const page = await fetchMutualPage(friend.id, offset, controller.signal);
-                        mutualIds.push(...page.map((user) => user.id).filter((id) => id !== "usr_00000000-0000-0000-0000-000000000000"));
-                        if (page.length < 100) break;
-                        await delay(210);
-                    }
-                    relationships[friend.id] = Array.from(new Set(mutualIds));
-                } catch (friendError) {
-                    if (controller.signal.aborted) return;
-                    const status = friendError && typeof friendError === "object" && "status" in friendError ? friendError.status : undefined;
-                    if (status === 403 || status === 404) optedOut.push(friend.id);
-                    else throw friendError;
-                }
-                setProcessed(index + 1);
-                await delay(210);
-            }
-            const next = { relationships, optedOut, updatedAt: new Date().toISOString() };
-            setSnapshot(next);
-            const saveResponse = await fetch("/api/mutual-graph", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next), signal: controller.signal });
-            if (!saveResponse.ok) setCacheNotice("The graph is ready, but MongoDB could not persist the full snapshot.");
+            const result = await fetchAndPersistMutualGraph(allFriends, controller.signal, setProcessed);
+            setSnapshot(result.snapshot);
+            if (!result.persisted) setCacheNotice("The graph is ready, but MongoDB could not persist the full snapshot.");
         } catch (fetchError) {
+            if (fetchError && typeof fetchError === "object" && "status" in fetchError && fetchError.status === 401) window.location.assign("/login");
             if (!(fetchError instanceof DOMException && fetchError.name === "AbortError")) setError(fetchError instanceof Error ? fetchError.message : "The mutual graph could not be loaded.");
         } finally {
             setFetching(false);
