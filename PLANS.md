@@ -1,0 +1,207 @@
+# VRCX Web Port Plan
+
+## Purpose
+
+This document is the living implementation plan for a browser-based VRCX port. It should be updated as investigation resolves unknowns. The goal is to port the applicable source code from `./VRCX/` into a faithful, responsive web application for features that can operate without a locally installed or running VRChat client.
+
+## Product Constraints
+
+- `./VRCX/` is the read-only source checkout from which the root web application is ported. It is the primary implementation, visual, and behavioral reference.
+- The root web application must build and run independently; it must not import from or require the nested reference checkout at build time or runtime.
+- Make only the changes required by the browser platform, responsive layout, accessibility, and security.
+- Reuse VRCX code and assets when practical, while retaining required MIT license notices and recording provenance.
+- Exclude all features whose useful operation depends on local VRChat files, logs, processes, Steam, OpenVR, Electron, Windows APIs, IPC, or other desktop-only integrations.
+- Support mobile, tablet, desktop, and wide desktop layouts.
+- Do not build a separate application account, authorization, or access-control system. Support only the VRChat session flow required for remote VRChat functionality.
+- Write documentation, code comments, and Git commit messages in English.
+- Deliver work in small, verified commits.
+
+## Definition of Done
+
+The initial web port is ready when:
+
+1. Supported VRCX workflows are inventoried and every candidate feature has an explicit portability decision.
+2. Users can establish and recover the VRChat API session needed by supported features without a separate VRCX Web account system.
+3. The implemented navigation, shell, shared components, and feature screens closely match VRCX at desktop widths.
+4. Every implemented workflow remains usable at 360, 768, 1280, and 1920 px viewport widths.
+5. Local-only features are absent from the production UI and do not leave broken routes or controls.
+6. Credentials and session material remain server-side or in appropriately protected cookies; sensitive data is not logged or bundled into the client.
+7. Loading, empty, failure, rate-limit, and expired-session states are handled consistently.
+8. Lint, production build, relevant automated tests, and manual responsive checks pass.
+9. Copied VRCX code and assets retain the notices required by the MIT license.
+10. The roadmap and decision log accurately describe the shipped behavior and known gaps.
+
+## Feature Eligibility Inventory
+
+This table begins as a hypothesis. Verify each item against the current VRCX source before implementation and replace `Investigate` with a recorded decision.
+
+| Area | Likely status | Web-port direction |
+| --- | --- | --- |
+| Friends, groups, worlds, avatars, notifications, and remote user data | Investigate | Port when backed by supported remote VRChat requests |
+| Search, favorites, lists, notes, and remote profile actions | Investigate | Port remote/browser-safe behavior and confirm data source for each action |
+| Local game logs and game event history | Excluded | Do not port file-watching or log-derived behavior |
+| Launching VRChat, joining through the local client, and process control | Excluded | Do not show local launch/process controls |
+| OpenVR, OSC, Steam, registry, window, tray, and desktop notifications tied to Electron | Excluded or adaptable | Exclude native integration; evaluate standard browser notifications only if independently useful |
+| Local database, backups, and filesystem import/export | Investigate | Use browser-safe download/upload only when the workflow remains useful; do not reproduce arbitrary filesystem access |
+| Application updater and Electron settings | Excluded | Use normal web deployment; omit updater UI |
+| VRChat API login, two-factor challenge, session refresh, and logout | Required dependency | Implement only what supported remote features require; do not create an additional app identity layer |
+
+## Delivery Strategy
+
+Each milestone should be split into small vertical slices. A normal slice starts by tracing the implementation in `./VRCX/`, then includes an eligibility decision, source-path notes, ported types/service logic, UI states, responsive behavior, verification, a plan update when needed, and a focused English commit.
+
+### Milestone 0 — Reference Audit and Baseline
+
+Status: In progress
+
+- [x] Establish repository-wide contribution and porting rules in `AGENTS.md`.
+- [x] Establish the initial roadmap and constraints in `PLANS.md`.
+- [ ] Map VRCX navigation, views, stores, services, shared components, style tokens, icons, and localization resources.
+- [ ] Create a feature inventory with `Web-compatible`, `Adaptable`, `Local-only`, or `Unclear` decisions and evidence paths into `VRCX/`.
+- [ ] Define destination root source paths for ported views, shared UI, domain state, upstream API code, and reused assets; never import production modules from `./VRCX/`.
+- [ ] Identify code/assets intended for reuse and define where the VRCX MIT notice will be distributed.
+- [ ] Capture desktop visual references for the first supported screens.
+- [ ] Record the browser support policy and test viewport matrix.
+
+Exit criteria: the first implementation slice has a documented VRCX reference, confirmed remote data path, scope boundary, and visual acceptance target.
+
+### Milestone 1 — Web Foundation and VRCX Shell
+
+Status: Not started
+
+- [ ] Replace starter metadata, fonts, colors, and global styles with VRCX-derived equivalents.
+- [ ] Define shared tokens for color, typography, spacing, elevation, radii, z-index, motion, and responsive breakpoints.
+- [ ] Build the responsive application shell, navigation, header, content region, overlays, and global feedback states.
+- [ ] Preserve VRCX's desktop navigation at wide sizes and introduce a compact drawer or equivalent at narrow sizes.
+- [ ] Add core reusable primitives needed by the first feature: buttons, inputs, tabs, list/table patterns, menus, dialogs, tooltips, skeletons, empty states, and errors.
+- [ ] Establish typed environment configuration and server-only boundaries.
+- [ ] Add unit/component/end-to-end test infrastructure appropriate to the selected slices.
+- [ ] Add automated checks for accidental horizontal page overflow and key navigation accessibility where practical.
+
+Exit criteria: a faithful VRCX shell renders at all baseline widths, shared primitives cover the first feature, and lint/build/tests pass.
+
+### Milestone 2 — VRChat Remote Session and API Boundary
+
+Status: Not started
+
+- [ ] Confirm the VRChat API integration requirements and document upstream constraints before implementation.
+- [ ] Define a typed, allowlisted server-side VRChat service boundary; do not create a general-purpose proxy.
+- [ ] Implement the minimum VRChat login/session, two-factor challenge, session validation, expiry recovery, and logout behavior required by supported features.
+- [ ] Store session material in secure, HTTP-only cookies or an equivalently protected server-side mechanism.
+- [ ] Prevent credentials, cookies, tokens, and sensitive response fields from entering logs, error pages, analytics, or client-readable state.
+- [ ] Implement normalized errors for offline/upstream failure, invalid session, forbidden action, rate limiting, and unexpected responses.
+- [ ] Add boundary validation, request timeouts, conservative retries, and tests for security-sensitive routes.
+- [ ] Document that this session flow is VRChat integration, not a separate VRCX Web authentication system.
+
+Exit criteria: a user can establish and terminate the required VRChat session, failure states are recoverable, and no custom application identity system exists.
+
+### Milestone 3 — First Complete Remote Workflow
+
+Status: Not started
+
+Select the first workflow after the inventory. Prefer a frequently used, clearly remote-backed workflow such as friend browsing and user details.
+
+- [ ] Port the selected navigation entry and overview screen.
+- [ ] Port detail, search/filter, refresh, and supported actions for the selected workflow.
+- [ ] Match VRCX's desktop layout and interaction states using shared primitives.
+- [ ] Design narrow-screen reflow without removing core data or actions.
+- [ ] Implement loading, empty, partial-data, error, rate-limit, and expired-session states.
+- [ ] Add service, component, and high-value flow tests.
+- [ ] Compare at all baseline widths and document intentional differences from VRCX.
+
+Exit criteria: one high-value workflow is usable end to end, visually faithful, responsive, tested, and independent of local VRChat.
+
+### Milestone 4 — Expand Supported Remote Features
+
+Status: Not started
+
+Port additional areas one vertical slice at a time, in an order chosen from the verified inventory. Candidate areas include friends, notifications, groups, worlds, favorites, avatars, and remote profile actions. For each slice:
+
+- [ ] Reconfirm feature eligibility and exclude local-only subfeatures.
+- [ ] Reuse or extend service types and shared UI instead of duplicating them.
+- [ ] Match all meaningful VRCX states and interactions.
+- [ ] Verify responsive behavior and keyboard/touch usability.
+- [ ] Add regression coverage for data mapping and key actions.
+- [ ] Update the feature inventory, differences, and decision log.
+- [ ] Commit each coherent slice separately with an English message.
+
+Exit criteria: every selected feature meets the global definition of done; excluded features remain absent.
+
+### Milestone 5 — Hardening and Release Readiness
+
+Status: Not started
+
+- [ ] Audit all routes for secret exposure, unsafe forwarding, input validation, XSS, CSRF, and cache mistakes.
+- [ ] Test upstream outages, slow responses, session expiry, rate limiting, and malformed data.
+- [ ] Test responsive layouts on representative touch and desktop browsers.
+- [ ] Audit keyboard navigation, focus management, labels, contrast, motion, and screen-reader landmarks.
+- [ ] Review performance for image sizing, request waterfalls, large lists, and unnecessary client-side JavaScript.
+- [ ] Confirm local-only controls and dead routes are absent.
+- [ ] Confirm VRCX attribution and third-party notices are complete.
+- [ ] Replace the starter README with deployment, configuration, security-boundary, and operator documentation.
+- [ ] Run the full lint, test, and production build suite from a clean checkout.
+
+Exit criteria: the web port is documented, deployable on the intended trusted network, resilient to expected upstream failures, and passes release checks.
+
+## Cross-Cutting Acceptance Checklist
+
+Apply this checklist to every feature slice:
+
+- [ ] The VRCX reference files and behavior were inspected.
+- [ ] Relevant code was ported from `./VRCX/` into maintained root source paths rather than recreated without reference.
+- [ ] The plan entry or implementation records the relevant `./VRCX/` source paths and material adaptations.
+- [ ] The feature does not require local VRChat or desktop integration.
+- [ ] Any omitted VRCX behavior is documented and absent from the UI.
+- [ ] Desktop visuals closely match VRCX.
+- [ ] Mobile and tablet layouts are intentional and usable.
+- [ ] Keyboard, touch, focus, loading, empty, error, and disabled states work.
+- [ ] External data is typed and validated at its boundary.
+- [ ] Secrets and session data do not leak to client state or logs.
+- [ ] Relevant tests, `npm run lint`, and `npm run build` pass.
+- [ ] Non-obvious decisions have useful English comments.
+- [ ] Documentation and the feature inventory are current.
+- [ ] The change is committed as a small, focused commit with an English message.
+
+## Decision Log
+
+Use this section for decisions that affect future work. Add the date, decision, rationale, and consequences.
+
+### 2026-08-02 — Preserve VRCX as the Design Baseline
+
+Decision: Use the original VRCX UI and interaction model with minimal browser-specific adaptation.
+
+Rationale: Familiarity and parity are product requirements, not merely inspiration.
+
+Consequence: Proposed redesigns need a concrete browser, responsive, accessibility, or security justification.
+
+### 2026-08-02 — Exclude Local VRChat Dependencies
+
+Decision: Do not port functionality that needs a local VRChat installation, running process, local logs/files, or native OS integration.
+
+Rationale: Such behavior cannot work reliably as a browser application and is outside the requested product scope.
+
+Consequence: Related navigation and controls are omitted rather than disabled indefinitely.
+
+### 2026-08-02 — No Separate Application Authentication
+
+Decision: Do not build accounts, roles, or access control for VRCX Web. Implement only the VRChat session behavior required for supported remote features.
+
+Rationale: The application will run on a trusted network and does not need another identity layer.
+
+Consequence: Deployment documentation must clearly state the trusted-network assumption, while implementation still protects VRChat credentials and sessions.
+
+### 2026-08-02 — Responsive Adaptation Is Required
+
+Decision: Preserve the VRCX desktop experience while adding deliberate layouts for narrow screens.
+
+Rationale: A browser port must remain useful across common viewport and input types.
+
+Consequence: Responsive behavior is part of feature acceptance, not deferred polish.
+
+## Open Questions
+
+- Which remote-backed VRCX workflow should be the first vertical slice after the audit?
+- Which browser versions and deployment runtime are required?
+- Is browser notification support useful enough to port independently of Electron notifications?
+- Which VRCX localization resources should be reused in the first release?
+- Where should the VRCX MIT attribution and third-party notices appear in the deployed application?
