@@ -71,7 +71,7 @@ The initial source audit below records the production scope. A feature marked `A
 | Moderation | Implemented for player moderations | Add avatar moderation visibility and actions to avatar details |
 | Notifications | Implemented | Browser-safe legacy and V2 list, filtering, read/hide, friend approval, and V2 response actions are ported; actions that need the running VRChat client or its current instance are intentionally omitted |
 | My Avatars | Implemented for remote management | Responsive grid/table browsing, filters, selection, metadata/visibility editing, impostor queueing, and deletion are ported; image/gallery upload and browser-local tags remain |
-| Feed and Friend Log | Not started | Define web persistence for remote events |
+| Feed and Friend Log | Implemented for remotely observable friend changes | Browser persistence records relationship, presence, location, status, avatar, bio, and display-name changes seen by periodic API refreshes; local game/Photon events are intentionally absent |
 | Dashboard and Mutual Friends chart | Not started | Start after their supported source data is available |
 
 ## Delivery Strategy

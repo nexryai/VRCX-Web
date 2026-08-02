@@ -7,7 +7,6 @@ import { ImageIcon, Loader2, RefreshCw, Search, Star, Trash2 } from "lucide-reac
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { useFriends } from "@/components/friends/friends-provider";
-import { fetchAllFriends } from "@/lib/friends-client";
 import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatFavoriteLimits, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type FavoriteKind = "avatar" | "friend" | "world";
@@ -122,8 +121,7 @@ function buildGroups(kind: FavoriteKind, records: VrchatFavorite[], remoteGroups
 }
 
 export function FavoriteView({ kind }: { kind: FavoriteKind }) {
-    const { friends: onlineFriends, openUser } = useFriends();
-    const [offlineFriends, setOfflineFriends] = useState<VrchatUser[]>([]);
+    const { allFriends, openUser } = useFriends();
     const [records, setRecords] = useState<VrchatFavorite[]>([]);
     const [remoteGroups, setRemoteGroups] = useState<VrchatFavoriteGroup[]>([]);
     const [limits, setLimits] = useState<VrchatFavoriteLimits>();
@@ -149,24 +147,18 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
         setLoading(true);
         setError("");
         try {
-            const promises: [Promise<VrchatFavorite[]>, Promise<VrchatFavoriteGroup[]>, Promise<{ limits?: VrchatFavoriteLimits }>, Promise<VrchatUser[]>?] = [
-                fetchAllFavoriteRecords(controller.signal),
-                fetchAllFavoriteGroups(controller.signal),
-                fetchFavoritePayload<{ limits?: VrchatFavoriteLimits }>("/api/favorites?section=limits", controller.signal),
-            ];
-            if (kind === "friend") promises.push(fetchAllFriends(true, controller.signal));
-            const [nextRecords, nextGroups, limitPayload, nextOfflineFriends] = await Promise.all(promises);
+            const promises = [fetchAllFavoriteRecords(controller.signal), fetchAllFavoriteGroups(controller.signal), fetchFavoritePayload<{ limits?: VrchatFavoriteLimits }>("/api/favorites?section=limits", controller.signal)] as const;
+            const [nextRecords, nextGroups, limitPayload] = await Promise.all(promises);
             setRecords(nextRecords);
             setRemoteGroups(nextGroups);
             setLimits(limitPayload.limits);
-            if (nextOfflineFriends) setOfflineFriends(nextOfflineFriends);
         } catch (loadError) {
             if (loadError instanceof DOMException && loadError.name === "AbortError") return;
             setError(loadError instanceof Error ? loadError.message : "Favorites could not be loaded.");
         } finally {
             if (!controller.signal.aborted) setLoading(false);
         }
-    }, [kind]);
+    }, []);
 
     useEffect(() => {
         void loadSummary();
@@ -200,21 +192,20 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
     }, [kind, activeGroupKey, activeGroupName]);
 
     const groupRecords = useMemo(() => records.filter((record) => selectedGroup && record.type === selectedGroup.type && record.tags[0] === selectedGroup.name), [records, selectedGroup]);
-    const allFriends = useMemo(() => {
-        const byId = new Map(onlineFriends.map((friend) => [friend.id, friend]));
-        for (const friend of offlineFriends) if (!byId.has(friend.id)) byId.set(friend.id, friend);
+    const friendsById = useMemo(() => {
+        const byId = new Map(allFriends.map((friend) => [friend.id, friend]));
         return byId;
-    }, [onlineFriends, offlineFriends]);
+    }, [allFriends]);
     const visibleItems = useMemo(() => {
         const query = search.trim().toLocaleLowerCase();
         if (kind === "friend") {
             return groupRecords
-                .map((record) => allFriends.get(record.favoriteId) || ({ id: record.favoriteId, displayName: record.favoriteId } as VrchatUser))
+                .map((record) => friendsById.get(record.favoriteId) || ({ id: record.favoriteId, displayName: record.favoriteId } as VrchatUser))
                 .filter((friend) => !query || `${friend.displayName} ${friend.id}`.toLocaleLowerCase().includes(query))
                 .toSorted((a, b) => a.displayName.localeCompare(b.displayName));
         }
         return items.filter((item) => !query || `${item.name} ${item.authorName || ""} ${item.id}`.toLocaleLowerCase().includes(query)).toSorted((a, b) => a.name.localeCompare(b.name));
-    }, [allFriends, groupRecords, items, kind, search]);
+    }, [friendsById, groupRecords, items, kind, search]);
 
     async function removeFavorite(favoriteId: string) {
         setUpdatingId(favoriteId);

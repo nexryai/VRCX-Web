@@ -16,8 +16,10 @@ const navigation = [
     { href: "/favorite/friends", label: "Favorites", icon: "ri-star-line" },
     { href: "/avatars", label: "My Avatars", icon: "ri-user-smile-line" },
     { href: "/notification", label: "Notifications", icon: "ri-notification-2-line" },
+    { href: "/feed", label: "Feed", icon: "ri-rss-line" },
     { href: "/search", label: "Search", icon: "ri-search-line" },
     { href: "/social/friend-list", label: "Friend List", icon: "ri-booklet-line" },
+    { href: "/social/friend-log", label: "Friend Log", icon: "ri-file-history-line" },
     { href: "/social/moderation", label: "Moderation", icon: "ri-shield-user-line" },
 ];
 

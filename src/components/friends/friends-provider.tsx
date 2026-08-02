@@ -2,12 +2,15 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { captureFriendActivity } from "@/lib/activity-log";
 import { fetchAllFriends } from "@/lib/friends-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
+import { useCurrentUser } from "../current-user-provider";
 import { UserDialog } from "./user-dialog";
 
 type FriendsContextValue = {
     friends: VrchatUser[];
+    allFriends: VrchatUser[];
     loading: boolean;
     error: string;
     refresh: () => Promise<void>;
@@ -18,7 +21,9 @@ type FriendsContextValue = {
 const FriendsContext = createContext<FriendsContextValue | null>(null);
 
 export function FriendsProvider({ children }: { children: React.ReactNode }) {
+    const currentUser = useCurrentUser();
     const [friends, setFriends] = useState<VrchatUser[]>([]);
+    const [allFriends, setAllFriends] = useState<VrchatUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selectedUserId, setSelectedUserId] = useState("");
@@ -32,26 +37,37 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         setError("");
 
         try {
-            const result = await fetchAllFriends(false, nextController.signal);
-            setFriends(result);
+            const [online, offline] = await Promise.all([fetchAllFriends(false, nextController.signal), fetchAllFriends(true, nextController.signal)]);
+            const onlineIds = new Set(online.map((friend) => friend.id));
+            const combined = [...online, ...offline.filter((friend) => !onlineIds.has(friend.id))];
+            setFriends(online);
+            setAllFriends(combined);
+            captureFriendActivity(currentUser.id, combined, online);
         } catch (refreshError) {
             if (refreshError instanceof DOMException && refreshError.name === "AbortError") return;
             setError(refreshError instanceof Error ? refreshError.message : "The friend list could not be loaded.");
         } finally {
             if (!nextController.signal.aborted) setLoading(false);
         }
-    }, []);
+    }, [currentUser.id]);
 
     const openUser = useCallback((userId: string) => setSelectedUserId(userId), []);
     const closeUser = useCallback(() => setSelectedUserId(""), []);
-    const removeFriend = useCallback((userId: string) => setFriends((current) => current.filter((friend) => friend.id !== userId)), []);
+    const removeFriend = useCallback((userId: string) => {
+        setFriends((current) => current.filter((friend) => friend.id !== userId));
+        setAllFriends((current) => current.filter((friend) => friend.id !== userId));
+    }, []);
 
     useEffect(() => {
         void refresh();
-        return () => controllerRef.current?.abort();
+        const interval = window.setInterval(() => void refresh(), 120_000);
+        return () => {
+            window.clearInterval(interval);
+            controllerRef.current?.abort();
+        };
     }, [refresh]);
 
-    const value = useMemo(() => ({ friends, loading, error, refresh, openUser, removeFriend }), [friends, loading, error, refresh, openUser, removeFriend]);
+    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, openUser, removeFriend }), [friends, allFriends, loading, error, refresh, openUser, removeFriend]);
     return (
         <FriendsContext.Provider value={value}>
             {children}

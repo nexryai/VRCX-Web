@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Loader2, RefreshCw, Search, Users } from "lucide-react";
 
 import { locationLabel } from "@/lib/friends";
-import { fetchAllFriends } from "@/lib/friends-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
@@ -21,41 +20,10 @@ function formatLastActive(friend: VrchatUser) {
 }
 
 export function FriendListView() {
-    const { friends: onlineFriends, loading: onlineLoading, error: onlineError, refresh: refreshOnline, openUser } = useFriends();
-    const [offlineFriends, setOfflineFriends] = useState<VrchatUser[]>([]);
-    const [offlineLoading, setOfflineLoading] = useState(true);
-    const [offlineError, setOfflineError] = useState("");
+    const { friends: onlineFriends, allFriends: friends, loading, error, refresh, openUser } = useFriends();
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
     const [sortKey, setSortKey] = useState<SortKey>("name");
-    const controllerRef = useRef<AbortController | null>(null);
-
-    const loadOffline = useCallback(async () => {
-        controllerRef.current?.abort();
-        const controller = new AbortController();
-        controllerRef.current = controller;
-        setOfflineLoading(true);
-        setOfflineError("");
-        try {
-            setOfflineFriends(await fetchAllFriends(true, controller.signal));
-        } catch (loadError) {
-            if (loadError instanceof DOMException && loadError.name === "AbortError") return;
-            setOfflineError(loadError instanceof Error ? loadError.message : "Offline friends could not be loaded.");
-        } finally {
-            if (!controller.signal.aborted) setOfflineLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        void loadOffline();
-        return () => controllerRef.current?.abort();
-    }, [loadOffline]);
-
-    const friends = useMemo(() => {
-        const onlineIds = new Set(onlineFriends.map((friend) => friend.id));
-        return [...onlineFriends, ...offlineFriends.filter((friend) => !onlineIds.has(friend.id))];
-    }, [onlineFriends, offlineFriends]);
-
     const filteredFriends = useMemo(() => {
         const onlineIds = new Set(onlineFriends.map((friend) => friend.id));
         const query = search.trim().toLocaleLowerCase();
@@ -79,11 +47,8 @@ export function FriendListView() {
             });
     }, [friends, onlineFriends, search, statusFilter, sortKey]);
 
-    const loading = onlineLoading || offlineLoading;
-    const error = onlineError || offlineError;
-
     async function refreshAll() {
-        await Promise.all([refreshOnline(), loadOffline()]);
+        await refresh();
     }
 
     return (
