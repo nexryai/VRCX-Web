@@ -51,6 +51,10 @@ const migrations: Migration[] = [
                         theme: "dark",
                         navigationCollapsed: false,
                         myAvatarsView: "grid",
+                        friendLocationCardScale: 1,
+                        friendLocationCardSpacing: 1,
+                        friendLocationShowSameInstance: false,
+                        friendLocationSegment: "online",
                         updatedAt: now,
                     },
                 },
@@ -123,6 +127,19 @@ const migrations: Migration[] = [
                 c.favoriteGroups.createIndex({ ownerId: 1, active: 1, "group.type": 1 }, { name: "owner_active_type" }),
                 c.moderations.createIndex({ ownerId: 1, targetUserId: 1, moderationType: 1 }, { unique: true, name: "owner_target_type_unique" }),
                 c.moderations.createIndex({ ownerId: 1, active: 1, updatedAt: -1 }, { name: "owner_active_updated" }),
+            ]);
+        },
+    },
+    {
+        version: 6,
+        name: "add-friends-locations-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ friendLocationCardScale: { $exists: false } }, { $set: { friendLocationCardScale: 1, updatedAt } }),
+                c.appSettings.updateMany({ friendLocationCardSpacing: { $exists: false } }, { $set: { friendLocationCardSpacing: 1, updatedAt } }),
+                c.appSettings.updateMany({ friendLocationShowSameInstance: { $exists: false } }, { $set: { friendLocationShowSameInstance: false, updatedAt } }),
+                c.appSettings.updateMany({ friendLocationSegment: { $exists: false } }, { $set: { friendLocationSegment: "online", updatedAt } }),
             ]);
         },
     },

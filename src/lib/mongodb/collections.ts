@@ -28,6 +28,10 @@ export type AppSettingsDocument = {
     theme: "dark" | "light";
     navigationCollapsed: boolean;
     myAvatarsView: "grid" | "table";
+    friendLocationCardScale: number;
+    friendLocationCardSpacing: number;
+    friendLocationShowSameInstance: boolean;
+    friendLocationSegment: "active" | "favorite" | "offline" | "online" | "same-instance";
     updatedAt: Date;
 };
 
