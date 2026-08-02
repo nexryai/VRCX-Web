@@ -14,6 +14,7 @@ import { ThemeToggle } from "./theme-toggle";
 const navigation = [
     { href: "/", label: "Friends Locations", icon: "ri-user-location-line" },
     { href: "/favorite/friends", label: "Favorites", icon: "ri-star-line" },
+    { href: "/avatars", label: "My Avatars", icon: "ri-user-smile-line" },
     { href: "/notification", label: "Notifications", icon: "ri-notification-2-line" },
     { href: "/search", label: "Search", icon: "ri-search-line" },
     { href: "/social/friend-list", label: "Friend List", icon: "ri-booklet-line" },

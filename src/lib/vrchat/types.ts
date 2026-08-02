@@ -9,6 +9,7 @@ export const vrchatUserSchema = z
         profilePicOverride: z.string().optional(),
         currentAvatarImageUrl: z.string().optional(),
         currentAvatarThumbnailImageUrl: z.string().optional(),
+        currentAvatar: z.string().optional(),
         bio: z.string().optional(),
         bioLinks: z.array(z.string()).optional(),
         date_joined: z.string().optional(),
@@ -93,6 +94,17 @@ export const vrchatAvatarSchema = z
         updated_at: z.string().optional(),
         favoriteGroup: z.string().optional(),
         favoriteId: z.string().optional(),
+        version: z.number().optional(),
+        unityPackages: z
+            .array(
+                z
+                    .object({
+                        platform: z.string(),
+                        performanceRating: z.string().optional(),
+                    })
+                    .passthrough(),
+            )
+            .optional(),
         tags: z.array(z.string()).optional(),
     })
     .passthrough();

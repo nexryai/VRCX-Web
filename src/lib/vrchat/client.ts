@@ -28,7 +28,17 @@ const allowedEndpoints = [
     "auth/twofactorauth/emailotp/verify",
 ];
 const allowedEndpointSet = new Set(allowedEndpoints);
-const allowedEndpointPatterns = [/^users\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i, /^favorites\/(usr|wrld|avtr)_[0-9a-f-]{36}$/i, /^notifications\/not_[a-z0-9_-]+$/i, /^notifications\/not_[a-z0-9_-]+\/(respond|see)$/i];
+const allowedEndpointPatterns = [
+    /^avatars\/avtr_[0-9a-f-]{36}$/i,
+    /^avatars\/avtr_[0-9a-f-]{36}\/select$/i,
+    /^avatars\/avtr_[0-9a-f-]{36}\/impostor\/enqueue$/i,
+    /^users\/usr_[0-9a-f-]{36}$/i,
+    /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i,
+    /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i,
+    /^favorites\/(usr|wrld|avtr)_[0-9a-f-]{36}$/i,
+    /^notifications\/not_[a-z0-9_-]+$/i,
+    /^notifications\/not_[a-z0-9_-]+\/(respond|see)$/i,
+];
 
 const errorPayloadSchema = z
     .object({
