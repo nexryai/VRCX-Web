@@ -50,11 +50,13 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/not
         };
     }
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(endpoint, { method, cookies, body: requestBody });
         const response = NextResponse.json({ success: true });
-        await persistRotatedVrchatCookies(upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         await ensureMongoSchema();
         const settings = await collections(await getMongoDatabase()).appSettings.findOne({ _id: "singleton" });
         if (settings?.activeUserId) {
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/not
         const message = error instanceof VrchatApiError ? error.message : "The notification could not be updated.";
         const status = error instanceof VrchatApiError ? error.status : 502;
         const response = NextResponse.json({ error: message }, { status });
-        if (status === 401) await clearVrchatSession();
+        if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
         return response;
     }
 }

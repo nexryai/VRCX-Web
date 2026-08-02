@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const query = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!query.success) return NextResponse.json({ error: "The favorites query is invalid." }, { status: 400 });
 
+    let expectedAuthCookie: string | undefined;
     try {
         if (query.data.section === "records") {
             const ownerId = await requireActiveUserId();
@@ -56,9 +57,10 @@ export async function GET(request: NextRequest) {
             return favoriteDatabaseResponse({ groups: documents.map((document) => document.group) });
         }
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         if (query.data.section === "limits") {
             const upstream = await requestVrchat<unknown>("auth/user/favoritelimits", { cookies });
-            return await favoriteResponse({ limits: vrchatFavoriteLimitsSchema.parse(upstream.data) }, upstream.cookies);
+            return await favoriteResponse({ limits: vrchatFavoriteLimitsSchema.parse(upstream.data) }, upstream.cookies, cookies.auth);
         }
 
         const endpoint = query.data.type === "world" ? "worlds/favorites" : "avatars/favorites";
@@ -67,13 +69,13 @@ export async function GET(request: NextRequest) {
         if (query.data.type === "world") {
             const items = z.array(vrchatWorldSchema).parse(upstream.data);
             await upsertCachedWorlds(ownerId, items, "favorite");
-            return await favoriteResponse({ items }, upstream.cookies);
+            return await favoriteResponse({ items }, upstream.cookies, cookies.auth);
         }
         const items = z.array(vrchatAvatarSchema).parse(upstream.data);
         await upsertCachedAvatars(ownerId, items, "favorite");
-        return await favoriteResponse({ items }, upstream.cookies);
+        return await favoriteResponse({ items }, upstream.cookies, cookies.auth);
     } catch (error) {
-        return await favoriteError(error, "The VRChat favorites response was not valid.");
+        return await favoriteError(error, "The VRChat favorites response was not valid.", expectedAuthCookie);
     }
 }
 
@@ -82,14 +84,16 @@ export async function POST(request: NextRequest) {
     const body = addSchema.safeParse(await request.json().catch(() => null));
     if (!body.success) return NextResponse.json({ error: "The favorite request is invalid." }, { status: 400 });
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>("favorites", { method: "POST", cookies, body: body.data });
         const favorite = vrchatFavoriteSchema.parse(upstream.data);
         await upsertFavoriteProjection(await requireActiveUserId(), favorite);
-        return await favoriteResponse({ favorite }, upstream.cookies);
+        return await favoriteResponse({ favorite }, upstream.cookies, cookies.auth);
     } catch (error) {
-        return await favoriteError(error, "The favorite could not be added.");
+        return await favoriteError(error, "The favorite could not be added.", expectedAuthCookie);
     }
 }
 
@@ -99,17 +103,17 @@ function favoriteDatabaseResponse(payload: object) {
     return response;
 }
 
-async function favoriteResponse(payload: object, cookies: VrchatCookies) {
+async function favoriteResponse(payload: object, cookies: VrchatCookies, expectedAuthCookie?: string) {
     const response = NextResponse.json(payload);
-    await persistRotatedVrchatCookies(cookies);
+    await persistRotatedVrchatCookies(cookies, expectedAuthCookie);
     response.headers.set("Cache-Control", "private, no-store");
     return response;
 }
 
-async function favoriteError(error: unknown, fallback: string) {
+async function favoriteError(error: unknown, fallback: string, expectedAuthCookie?: string) {
     const message = error instanceof VrchatApiError ? error.message : fallback;
     const status = error instanceof VrchatApiError ? error.status : 502;
     const response = NextResponse.json({ error: message }, { status });
-    if (status === 401) await clearVrchatSession();
+    if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
     return response;
 }

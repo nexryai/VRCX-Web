@@ -26,10 +26,11 @@ export async function acquireMonitorLease(leaderId: string, now = new Date()): P
     return result?.leaderId === leaderId;
 }
 
-export async function updateMonitorHealth(update: { ownerId?: string; status?: "idle" | "starting" | "healthy" | "reconnecting" | "authentication-required" | "error"; pipelineConnected?: boolean; lastPipelineEventAt?: Date; lastReconciledAt?: Date; lastError?: string }): Promise<void> {
+export async function updateMonitorHealth(leaderId: string, update: { ownerId?: string; status?: "idle" | "starting" | "healthy" | "reconnecting" | "authentication-required" | "error"; pipelineConnected?: boolean; lastPipelineEventAt?: Date; lastReconciledAt?: Date; lastError?: string }): Promise<void> {
     await ensureMongoSchema();
-    const set = { ...update, updatedAt: new Date() };
-    await collections(await getMongoDatabase()).monitorState.updateOne({ _id: "singleton" }, { $set: set });
+    const now = new Date();
+    const set = { ...update, updatedAt: now };
+    await collections(await getMongoDatabase()).monitorState.updateOne({ _id: "singleton", leaderId, leaseExpiresAt: { $gt: now } }, { $set: set });
 }
 
 export async function acquireReconciliationLease(owner: string, now = new Date()): Promise<boolean> {

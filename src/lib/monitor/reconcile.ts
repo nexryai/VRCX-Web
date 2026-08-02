@@ -129,7 +129,7 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ u
     currentCookies = hiddenNotifications.cookies;
     const favoriteState = await fetchFavoriteState(currentCookies);
     currentCookies = favoriteState.cookies;
-    await updateStoredVrchatCookies(currentCookies);
+    await updateStoredVrchatCookies(currentCookies, { activeUserId: user.id, authCookie: cookies.auth });
 
     const remotelyPresentIds = new Set(online.users.map((friend) => friend.id));
     const combined = [...online.users, ...offline.users.filter((friend) => !remotelyPresentIds.has(friend.id))];

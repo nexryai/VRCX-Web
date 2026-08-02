@@ -17,18 +17,20 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/ava
 
     const endpoint = body.data.action === "select" ? `avatars/${avatarId.data}/select` : `avatars/${avatarId.data}/impostor/enqueue`;
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(endpoint, { method: body.data.action === "select" ? "PUT" : "POST", cookies });
         const response = NextResponse.json({ success: true });
-        await persistRotatedVrchatCookies(upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
         const message = error instanceof VrchatApiError ? error.message : "The avatar action could not be completed.";
         const status = error instanceof VrchatApiError ? error.status : 502;
         const response = NextResponse.json({ error: message }, { status });
-        if (status === 401) await clearVrchatSession();
+        if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
         return response;
     }
 }

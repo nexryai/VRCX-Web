@@ -16,20 +16,22 @@ export async function GET(_request: NextRequest, context: RouteContext<"/api/use
         return NextResponse.json({ error: "The VRChat user ID is invalid." }, { status: 400 });
     }
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(`users/${userId.data}`, { cookies });
         const user = vrchatUserSchema.parse(upstream.data);
         await upsertCachedUser(await requireActiveUserId(), user, "lookup");
         const response = NextResponse.json({ user });
-        await persistRotatedVrchatCookies(upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
         const message = error instanceof VrchatApiError ? error.message : "The VRChat user response was not valid.";
         const status = error instanceof VrchatApiError ? error.status : 502;
         const response = NextResponse.json({ error: message }, { status });
-        if (status === 401) await clearVrchatSession();
+        if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
         return response;
     }
 }

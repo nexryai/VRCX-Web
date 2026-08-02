@@ -24,17 +24,19 @@ export async function PATCH(request: NextRequest, context: RouteContext<"/api/av
     const body = updateSchema.safeParse(await request.json().catch(() => null));
     if (!avatarId.success || !body.success) return NextResponse.json({ error: "The avatar update is invalid." }, { status: 400 });
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "PUT", cookies, body: { id: avatarId.data, ...body.data } });
         const avatar = vrchatAvatarSchema.parse(upstream.data);
         await upsertCachedAvatars(await requireActiveUserId(), [avatar], "owned");
         const response = NextResponse.json({ avatar });
-        await persistRotatedVrchatCookies(upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
-        return await avatarMutationError(error, "The avatar could not be updated.");
+        return await avatarMutationError(error, "The avatar could not be updated.", expectedAuthCookie);
     }
 }
 
@@ -43,23 +45,25 @@ export async function DELETE(request: NextRequest, context: RouteContext<"/api/a
     const avatarId = avatarIdSchema.safeParse((await context.params).avatarId);
     if (!avatarId.success) return NextResponse.json({ error: "The avatar ID is invalid." }, { status: 400 });
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "DELETE", cookies });
         await removeCachedAvatar(await requireActiveUserId(), avatarId.data);
         const response = NextResponse.json({ success: true });
-        await persistRotatedVrchatCookies(upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
-        return await avatarMutationError(error, "The avatar could not be deleted.");
+        return await avatarMutationError(error, "The avatar could not be deleted.", expectedAuthCookie);
     }
 }
 
-async function avatarMutationError(error: unknown, fallback: string) {
+async function avatarMutationError(error: unknown, fallback: string, expectedAuthCookie?: string) {
     const message = error instanceof VrchatApiError ? error.message : fallback;
     const status = error instanceof VrchatApiError ? error.status : 502;
     const response = NextResponse.json({ error: message }, { status });
-    if (status === 401) await clearVrchatSession();
+    if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
     return response;
 }

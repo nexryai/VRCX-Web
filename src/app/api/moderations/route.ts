@@ -40,8 +40,10 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: "The moderation request is invalid." }, { status: 400 });
     }
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>("auth/user/unplayermoderate", {
             method: "PUT",
             cookies,
@@ -49,18 +51,18 @@ export async function DELETE(request: NextRequest) {
         });
         await deactivateModeration(await requireActiveUserId(), body.data.moderated, body.data.type);
         const response = NextResponse.json({ success: true });
-        await persistRotatedVrchatCookies(upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
-        return await moderationError(error, "The moderation could not be removed.");
+        return await moderationError(error, "The moderation could not be removed.", expectedAuthCookie);
     }
 }
 
-async function moderationError(error: unknown, fallback: string) {
+async function moderationError(error: unknown, fallback: string, expectedAuthCookie?: string) {
     const message = error instanceof VrchatApiError ? error.message : fallback;
     const status = error instanceof VrchatApiError ? error.status : 502;
     const response = NextResponse.json({ error: message }, { status });
-    if (status === 401) await clearVrchatSession();
+    if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
     return response;
 }

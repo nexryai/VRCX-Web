@@ -45,6 +45,19 @@ describe("MongoDB application repositories", () => {
         expect(await getCachedUser(otherOwnerId, ownerId)).toBeNull();
     });
 
+    test("rejects stale cookie rotation after an active-account replacement", async () => {
+        const { clearStoredVrchatSession, getStoredVrchatSession, saveAuthenticatedVrchatSession, updateStoredVrchatCookies } = await import("./session-repository");
+        const firstOwnerId = "usr_00000000-0000-0000-0000-000000000010";
+        const secondOwnerId = "usr_00000000-0000-0000-0000-000000000011";
+        await saveAuthenticatedVrchatSession({ auth: "first-auth" }, firstOwnerId);
+        await saveAuthenticatedVrchatSession({ auth: "second-auth" }, secondOwnerId);
+
+        expect(await updateStoredVrchatCookies({ twoFactorAuth: "stale-cookie" }, { activeUserId: firstOwnerId, authCookie: "first-auth" })).toBe(false);
+        expect(await clearStoredVrchatSession({ activeUserId: firstOwnerId, authCookie: "first-auth" })).toBe(false);
+        expect(await getStoredVrchatSession()).toMatchObject({ activeUserId: secondOwnerId, cookies: { auth: "second-auth" } });
+        expect((await getStoredVrchatSession())?.cookies.twoFactorAuth).toBeUndefined();
+    });
+
     test("serializes reconciliation across server processes", async () => {
         const { acquireReconciliationLease, releaseReconciliationLease } = await import("@/lib/monitor/lease");
         const now = new Date("2026-08-02T10:00:00.000Z");
@@ -53,6 +66,15 @@ describe("MongoDB application repositories", () => {
         await releaseReconciliationLease("worker-a");
         expect(await acquireReconciliationLease("worker-b", now)).toBe(true);
         await releaseReconciliationLease("worker-b");
+    });
+
+    test("allows monitor leadership only after the previous lease expires", async () => {
+        const { acquireMonitorLease } = await import("@/lib/monitor/lease");
+        const firstTick = new Date("2026-08-02T10:00:00.000Z");
+        expect(await acquireMonitorLease("monitor-a", firstTick)).toBe(true);
+        expect(await acquireMonitorLease("monitor-b", firstTick)).toBe(false);
+        expect(await acquireMonitorLease("monitor-b", new Date(firstTick.getTime() + 60_001))).toBe(true);
+        expect(await acquireMonitorLease("monitor-a", new Date(firstTick.getTime() + 60_002))).toBe(false);
     });
 
     test("keeps notification history while updating the active projection", async () => {

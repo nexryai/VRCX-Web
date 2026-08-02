@@ -120,22 +120,42 @@ export async function getStoredVrchatSession(): Promise<{ cookies: VrchatCookies
     };
 }
 
-export async function updateStoredVrchatCookies(cookies: VrchatCookies): Promise<void> {
-    const stored = await getStoredVrchatSession();
-    if (!stored) return;
-    const combined = { ...stored.cookies, ...cookies };
-    if (!combined.auth) return;
-    await collections(await getMongoDatabase()).vrchatSession.updateOne({ _id: "singleton" }, { $set: { encryptedCookies: encryptCookies(combined), updatedAt: new Date() } });
+export async function updateStoredVrchatCookies(cookies: VrchatCookies, expected: { activeUserId?: string; authCookie?: string } = {}): Promise<boolean> {
+    if (!Object.keys(cookies).length) return false;
+    await ensureMongoSchema();
+    const sessions = collections(await getMongoDatabase()).vrchatSession;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        const document = await sessions.findOne({ _id: "singleton" });
+        if (!document) return false;
+        const storedCookies = decryptCookies(document.encryptedCookies);
+        if (expected.activeUserId && document.activeUserId !== expected.activeUserId) return false;
+        if (expected.authCookie && storedCookies.auth !== expected.authCookie) return false;
+        const combined = { ...storedCookies, ...cookies };
+        if (!combined.auth) return false;
+        const result = await sessions.updateOne({ _id: "singleton", "encryptedCookies.ciphertext": document.encryptedCookies.ciphertext }, { $set: { encryptedCookies: encryptCookies(combined), updatedAt: new Date() } });
+        if (result.modifiedCount === 1) return true;
+        // A concurrent request rotated the same session. Read it again and
+        // merge without ever crossing an account replacement boundary.
+    }
+    return false;
 }
 
-export async function clearStoredVrchatSession(): Promise<void> {
+export async function clearStoredVrchatSession(expected: { activeUserId?: string; authCookie?: string } = {}): Promise<boolean> {
     await ensureMongoSchema();
     const c = collections(await getMongoDatabase());
+    const document = await c.vrchatSession.findOne({ _id: "singleton" });
+    if (!document) return false;
+    const storedCookies = decryptCookies(document.encryptedCookies);
+    if (expected.activeUserId && document.activeUserId !== expected.activeUserId) return false;
+    if (expected.authCookie && storedCookies.auth !== expected.authCookie) return false;
+    const deleted = await c.vrchatSession.deleteOne({ _id: "singleton", "encryptedCookies.ciphertext": document.encryptedCookies.ciphertext });
+    if (deleted.deletedCount !== 1) return false;
+
+    const activeIdentityFilter = document.activeUserId ? { _id: "singleton" as const, activeUserId: document.activeUserId } : { _id: "singleton" as const, updatedAt: { $lte: document.updatedAt } };
     await Promise.all([
-        c.vrchatSession.deleteOne({ _id: "singleton" }),
-        c.appSettings.updateOne({ _id: "singleton" }, { $unset: { activeUserId: "" }, $set: { updatedAt: new Date() } }),
+        c.appSettings.updateOne(activeIdentityFilter, { $unset: { activeUserId: "" }, $set: { updatedAt: new Date() } }),
         c.monitorState.updateOne(
-            { _id: "singleton" },
+            { _id: "singleton", ...(document.activeUserId ? { ownerId: document.activeUserId } : {}) },
             {
                 $set: {
                     status: "authentication-required",
@@ -146,4 +166,5 @@ export async function clearStoredVrchatSession(): Promise<void> {
             },
         ),
     ]);
+    return true;
 }

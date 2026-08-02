@@ -46,11 +46,15 @@ export async function persistAuthenticatedVrchatSession(cookies: VrchatCookies, 
     await saveAuthenticatedVrchatSession(cookies, userId);
 }
 
-export async function persistRotatedVrchatCookies(cookies: VrchatCookies): Promise<void> {
-    if (Object.keys(cookies).length) await updateStoredVrchatCookies(cookies);
+export async function persistRotatedVrchatCookies(cookies: VrchatCookies, expectedAuthCookie?: string): Promise<void> {
+    if (Object.keys(cookies).length) await updateStoredVrchatCookies(cookies, { authCookie: expectedAuthCookie });
 }
 
-export async function clearVrchatSession(): Promise<void> {
+export async function clearVrchatSession(expectedAuthCookie: string): Promise<void> {
+    await clearStoredVrchatSession({ authCookie: expectedAuthCookie });
+}
+
+export async function clearCurrentVrchatSession(): Promise<void> {
     await clearStoredVrchatSession();
 }
 
@@ -71,7 +75,7 @@ export async function fetchVrchatSession(): Promise<SessionSnapshot> {
     try {
         const response = await requestVrchat<unknown>("auth/user", { cookies: stored.cookies });
         const snapshot = parseSessionPayload(response.data);
-        await persistRotatedVrchatCookies(response.cookies);
+        await persistRotatedVrchatCookies(response.cookies, stored.cookies.auth);
         if (snapshot.status === "authenticated") {
             await persistAuthenticatedVrchatSession({ ...stored.cookies, ...response.cookies }, snapshot.user.id);
             await upsertCachedUser(snapshot.user.id, snapshot.user, "auth");
@@ -79,7 +83,7 @@ export async function fetchVrchatSession(): Promise<SessionSnapshot> {
         return snapshot;
     } catch (error) {
         if (error instanceof VrchatApiError && error.status === 401) {
-            await clearVrchatSession();
+            await clearVrchatSession(stored.cookies.auth);
             return { status: "anonymous" };
         }
         throw error;

@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         const currentUser = await requestVrchat<unknown>("auth/user", { cookies: combinedCookies });
         const snapshot = parseSessionPayload(currentUser.data);
         const rotatedCookies = { ...combinedCookies, ...currentUser.cookies };
-        await persistRotatedVrchatCookies(rotatedCookies);
+        await persistRotatedVrchatCookies(rotatedCookies, existingCookies.auth);
         if (snapshot.status === "authenticated") {
             await persistAuthenticatedVrchatSession(rotatedCookies, snapshot.user.id);
             await upsertCachedUser(snapshot.user.id, snapshot.user, "auth");

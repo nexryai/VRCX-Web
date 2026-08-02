@@ -24,8 +24,10 @@ export async function GET(request: NextRequest) {
     const { type, q, offset } = search.data;
     const query = type === "users" ? { n: 10, offset, search: q, customFields: "displayName", sort: "relevance" } : type === "worlds" ? { n: 10, offset, search: q, sort: "relevance", order: "descending", tag: "system_approved" } : { n: 10, offset, query: q };
 
+    let expectedAuthCookie: string | undefined;
     try {
         const cookies = await requireVrchatCookies();
+        expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(type, { cookies, query });
         const schema = type === "users" ? vrchatUserSchema : type === "worlds" ? vrchatWorldSchema : vrchatGroupSchema;
         const results = z.array(schema).parse(upstream.data);
@@ -34,14 +36,14 @@ export async function GET(request: NextRequest) {
         if (type === "worlds") await upsertCachedWorlds(ownerId, z.array(vrchatWorldSchema).parse(results), "search");
         if (type === "groups") await upsertCachedGroups(ownerId, z.array(vrchatGroupSchema).parse(results), "search");
         const response = NextResponse.json({ type, results, offset, pageSize: 10 });
-        await persistRotatedVrchatCookies(upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
         const message = error instanceof VrchatApiError ? error.message : "The VRChat search response was not valid.";
         const status = error instanceof VrchatApiError ? error.status : 502;
         const response = NextResponse.json({ error: message }, { status });
-        if (status === 401) await clearVrchatSession();
+        if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
         return response;
     }
 }
