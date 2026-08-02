@@ -16,6 +16,7 @@ const actionSchema = z.union([
     z.object({ action: z.enum(["hide", "see"]), source: z.literal("v2") }),
     z.object({ action: z.literal("respond"), source: z.literal("v2"), responseType: z.string().min(1).max(64), responseData: z.string().max(4_096).default("") }),
 ]);
+const deleteSchema = z.object({ source: z.enum(["hidden", "legacy", "v2"]) });
 
 export async function POST(request: NextRequest, context: RouteContext<"/api/notifications/[notificationId]">) {
     if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
@@ -71,4 +72,16 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/not
         if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
         return response;
     }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext<"/api/notifications/[notificationId]">) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
+    const notificationId = notificationIdSchema.safeParse((await context.params).notificationId);
+    const body = deleteSchema.safeParse(await request.json().catch(() => null));
+    if (!notificationId.success || !body.success) return NextResponse.json({ error: "The notification deletion request is invalid." }, { status: 400 });
+    await ensureMongoSchema();
+    const settings = await collections(await getMongoDatabase()).appSettings.findOne({ _id: "singleton" });
+    if (!settings?.activeUserId) return NextResponse.json({ error: "VRChat authentication is required." }, { status: 401 });
+    await collections(await getMongoDatabase()).notifications.deleteOne({ ownerId: settings.activeUserId, notificationId: notificationId.data, source: body.data.source });
+    return NextResponse.json({ success: true });
 }

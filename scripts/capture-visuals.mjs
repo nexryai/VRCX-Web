@@ -13,6 +13,7 @@ const captures = [
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
+    { name: "notifications", path: "/notification", readyText: "Group announcement, Community meetup starts in one hour." },
     { name: "game-log", path: "/game-log", readyText: "Midnight Rooftop" },
 ];
 

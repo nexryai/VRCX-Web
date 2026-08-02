@@ -198,6 +198,14 @@ Join Count and Time Together remain omitted because VRCX derives them from local
 
 Other-user Avatars remain absent because VRCX obtains them from its optional external avatar database rather than the VRChat API. Favorite Worlds and internal world/group detail navigation remain outstanding parity work; the current Groups and Worlds cards use safe VRChat web links until those maintained root dialogs exist. Activity cannot reproduce VRCX's local-log online-frequency precision and therefore must not imply uninterrupted presence between observations. Note display uses the remote VRChat field; editable Mongo memos remain part of the later memo repository slice.
 
+## Notifications Scope
+
+`VRCX/src/views/Notifications/Notification.vue` and `VRCX/src/views/Notifications/columns.jsx` are the authoritative sources for the notifications toolbar, multi-type filter, dense columns, sorting, pagination, and row actions. The web port combines active legacy, V2, and hidden notification projections maintained by the server monitor and renders VRCX's Date, Type, User, Group, Photo, Message, and Action columns. Type selections and table page size are stored in the singleton MongoDB settings document; search and sort direction remain transient view state.
+
+Legacy friend requests retain the remotely supported accept action. V2 notifications render only the response descriptors supplied by the API, including safe external links, and both upstream sources retain their supported hide action. Deleting a MongoDB notification-history row is deliberately separate from hiding an upstream notification and requires confirmation unless Shift is held, matching the relevant VRCX interaction. Hidden notifications expose only that local-history deletion action. Untrusted notification text is rendered as text, and external image and link schemes are allowlisted.
+
+Invite-request acceptance and Join actions are intentionally absent because VRCX fulfills them through the running local VRChat client and its current location. The server does not invent equivalent actions or claim it can join an instance through the remote API. V2 notifications never use the legacy friend-request accept endpoint even when an upstream type string resembles a friend request. At narrow widths the complete source table scrolls inside its content pane rather than dropping columns.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -252,7 +260,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, and Game Log states at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, and Game Log states at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.

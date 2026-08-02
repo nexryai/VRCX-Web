@@ -41,6 +41,8 @@ export type AppSettingsDocument = {
     activityTablePageSize: 20 | 50 | 100;
     friendListTablePageSize: 20 | 50 | 100;
     userDialogLastTab: "Info" | "Mutual" | "Groups" | "Worlds" | "Activity" | "JSON";
+    notificationFilters: string[];
+    notificationTablePageSize: 20 | 50 | 100;
     updatedAt: Date;
 };
 

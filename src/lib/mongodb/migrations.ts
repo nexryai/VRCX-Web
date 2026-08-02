@@ -201,6 +201,14 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ userDialogLastTab: { $exists: false } }, { $set: { userDialogLastTab: "Info", updatedAt } });
         },
     },
+    {
+        version: 13,
+        name: "add-notification-table-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([c.appSettings.updateMany({ notificationFilters: { $exists: false } }, { $set: { notificationFilters: [], updatedAt } }), c.appSettings.updateMany({ notificationTablePageSize: { $exists: false } }, { $set: { notificationTablePageSize: 20, updatedAt } })]);
+        },
+    },
 ];
 
 async function applyMigrations() {
