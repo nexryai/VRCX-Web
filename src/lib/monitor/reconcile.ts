@@ -12,7 +12,7 @@ import { replaceFavoriteGroupProjection, replaceFavoriteProjection, replaceModer
 import { updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
 import { upsertCachedUser, upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
-import { requestVrchat, type VrchatCookies } from "@/lib/vrchat/client";
+import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatGroupSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
 import { acquireReconciliationLease, releaseReconciliationLease } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
@@ -93,10 +93,13 @@ async function fetchFavoriteState(cookies: VrchatCookies): Promise<{ favorites: 
     return { favorites, groups, moderations: z.array(vrchatPlayerModerationSchema).parse(moderationResponse.data), cookies: currentCookies };
 }
 
-async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ user: VrchatUser; cookies: VrchatCookies }> {
+async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwnerId?: string): Promise<{ user: VrchatUser; cookies: VrchatCookies }> {
     await ensureMongoSchema();
     const currentResponse = await requestVrchat<unknown>("auth/user", { cookies });
     const user = vrchatUserSchema.parse(currentResponse.data);
+    if (expectedOwnerId && user.id !== expectedOwnerId) {
+        throw new VrchatApiError("The stored VRChat session no longer matches the active identity.", 401);
+    }
     let currentCookies = { ...cookies, ...currentResponse.cookies };
 
     const location = user.location || user.travelingToLocation;
@@ -203,10 +206,10 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ u
     return { user, cookies: currentCookies };
 }
 
-export async function reconcileRemoteState(cookies: VrchatCookies, runnerId = `reconcile:${process.pid}:${randomUUID()}`): Promise<{ user: VrchatUser; cookies: VrchatCookies } | null> {
+export async function reconcileRemoteState(cookies: VrchatCookies, runnerId = `reconcile:${process.pid}:${randomUUID()}`, expectedOwnerId?: string): Promise<{ user: VrchatUser; cookies: VrchatCookies } | null> {
     if (!(await acquireReconciliationLease(runnerId))) return null;
     try {
-        return await reconcileRemoteStateUnlocked(cookies);
+        return await reconcileRemoteStateUnlocked(cookies, expectedOwnerId);
     } finally {
         await releaseReconciliationLease(runnerId);
     }

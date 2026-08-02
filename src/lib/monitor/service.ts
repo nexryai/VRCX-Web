@@ -118,7 +118,7 @@ class AlwaysOnMonitor {
 
     private async performReconciliation(cookies: VrchatCookies, ownerId: string | undefined, generation: number) {
         try {
-            const result = await reconcileRemoteState(cookies, `${this.leaderId}:reconcile`);
+            const result = await reconcileRemoteState(cookies, `${this.leaderId}:reconcile`, ownerId);
             if (!result) return;
             if (!this.hasLeadership || generation !== this.pipelineGeneration || ownerId !== this.ownerId) return;
             this.cookies = result.cookies;
