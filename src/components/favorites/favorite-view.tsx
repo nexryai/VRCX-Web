@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ImageIcon, Loader2, RefreshCw, Search, Star, Trash2 } from "lucide-react";
+import { ImageIcon, Loader2, Pencil, RefreshCw, Search, Star, Trash2, X } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { useFriends } from "@/components/friends/friends-provider";
@@ -132,6 +132,8 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
     const [itemsLoading, setItemsLoading] = useState(false);
     const [error, setError] = useState("");
     const [updatingId, setUpdatingId] = useState("");
+    const [editingGroup, setEditingGroup] = useState<FavoriteGroupView | null>(null);
+    const [clearingGroup, setClearingGroup] = useState(false);
     const summaryController = useRef<AbortController | null>(null);
     const itemController = useRef<AbortController | null>(null);
 
@@ -249,6 +251,45 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
         }
     }
 
+    async function updateGroup(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!editingGroup) return;
+        const form = new FormData(event.currentTarget);
+        setError("");
+        try {
+            const response = await fetch(`/api/favorite-groups/${editingGroup.type}/${editingGroup.name}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ displayName: form.get("displayName"), visibility: form.get("visibility") }),
+            });
+            const payload = (await response.json()) as { error?: string; group?: VrchatFavoriteGroup };
+            if (!response.ok || !payload.group) throw new Error(payload.error || "The favorite group could not be updated.");
+            const updatedGroup = payload.group;
+            setRemoteGroups((current) => [...current.filter((group) => !(group.type === updatedGroup.type && group.name === updatedGroup.name)), updatedGroup]);
+            setEditingGroup(null);
+        } catch (actionError) {
+            setError(actionError instanceof Error ? actionError.message : "The favorite group could not be updated.");
+        }
+    }
+
+    async function clearGroup() {
+        if (!editingGroup) return;
+        setClearingGroup(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/favorite-groups/${editingGroup.type}/${editingGroup.name}`, { method: "DELETE" });
+            const payload = (await response.json()) as { error?: string };
+            if (!response.ok) throw new Error(payload.error || "The favorite group could not be cleared.");
+            setRecords((current) => current.filter((record) => !(record.type === editingGroup.type && record.tags[0] === editingGroup.name)));
+            setItems([]);
+            setEditingGroup(null);
+        } catch (actionError) {
+            setError(actionError instanceof Error ? actionError.message : "The favorite group could not be cleared.");
+        } finally {
+            setClearingGroup(false);
+        }
+    }
+
     return (
         <section className="flex h-full min-h-0 flex-col" aria-labelledby="favorites-heading">
             <div className="border-b border-border px-2 pt-2">
@@ -308,6 +349,12 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
                         <Star aria-hidden="true" className="size-4" />
                         {selectedGroup?.displayName || "Favorites"} · {visibleItems.length} items
                         {loading || itemsLoading ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin" /> : null}
+                        {selectedGroup ? (
+                            <button type="button" onClick={() => setEditingGroup(selectedGroup)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-md px-2 text-[10px] hover:bg-muted">
+                                <Pencil aria-hidden="true" className="size-3.5" />
+                                Manage group
+                            </button>
+                        ) : null}
                     </div>
                     {error ? <p className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
                     {!loading && !itemsLoading && !error && visibleItems.length === 0 ? <p className="py-20 text-center text-sm text-muted-foreground">This favorite group is empty.</p> : null}
@@ -321,7 +368,51 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
                     </div>
                 </div>
             </div>
+            {editingGroup ? <GroupDialog group={editingGroup} clearing={clearingGroup} onClose={() => setEditingGroup(null)} onSubmit={updateGroup} onClear={clearGroup} /> : null}
         </section>
+    );
+}
+
+function GroupDialog({ group, clearing, onClose, onSubmit, onClear }: { group: FavoriteGroupView; clearing: boolean; onClose: () => void; onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>; onClear: () => Promise<void> }) {
+    return (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/65 p-3">
+            <form onSubmit={(event) => void onSubmit(event)} className="w-full max-w-sm rounded-xl border border-border bg-background p-4 shadow-2xl" aria-labelledby="favorite-group-title">
+                <header className="flex items-center gap-2">
+                    <h2 id="favorite-group-title" className="text-sm font-semibold">
+                        Manage favorite group
+                    </h2>
+                    <button type="button" onClick={onClose} className="ml-auto inline-flex size-8 items-center justify-center rounded-full hover:bg-muted" aria-label="Close">
+                        <X aria-hidden="true" className="size-4" />
+                    </button>
+                </header>
+                <label className="mt-4 block text-xs font-medium">
+                    Display name
+                    <input name="displayName" defaultValue={group.displayName} required maxLength={64} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" />
+                </label>
+                <label className="mt-3 block text-xs font-medium">
+                    Visibility
+                    <select name="visibility" defaultValue={group.visibility} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                        <option value="private">Private</option>
+                        <option value="friends">Friends</option>
+                        <option value="public">Public</option>
+                    </select>
+                </label>
+                <p className="mt-3 text-[10px] text-muted-foreground">
+                    {group.count} of {group.capacity} favorites
+                </p>
+                <div className="mt-4 flex items-center gap-2">
+                    <button type="button" onClick={() => void onClear()} disabled={clearing || group.count === 0} className="inline-flex h-9 items-center gap-1 rounded-md px-3 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40">
+                        {clearing ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Trash2 aria-hidden="true" className="size-4" />}Clear group
+                    </button>
+                    <button type="button" onClick={onClose} className="ml-auto h-9 rounded-md bg-secondary px-3 text-xs">
+                        Cancel
+                    </button>
+                    <button type="submit" disabled={clearing} className="h-9 rounded-md bg-primary px-3 text-xs text-primary-foreground">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
     );
 }
 

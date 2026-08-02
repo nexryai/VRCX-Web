@@ -37,6 +37,7 @@ const allowedEndpointPatterns = [
     /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i,
     /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i,
     /^favorites\/(usr|wrld|avtr)_[0-9a-f-]{36}$/i,
+    /^favorite\/group\/(avatar|friend|world|vrcPlusWorld)\/[a-z0-9_-]+\/usr_[0-9a-f-]{36}$/i,
     /^notifications\/not_[a-z0-9_-]+$/i,
     /^notifications\/not_[a-z0-9_-]+\/(respond|see)$/i,
 ];
