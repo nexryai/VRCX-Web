@@ -1,0 +1,141 @@
+import "server-only";
+
+import { z } from "zod";
+
+import { extractVrchatCookies, serializeVrchatCookies, type VrchatCookies } from "./protocol";
+
+const VRCHAT_API_BASE = "https://api.vrchat.cloud/api/1/";
+const REQUEST_TIMEOUT_MS = 15_000;
+
+const allowedEndpoints = new Set(["config", "auth/user", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"]);
+
+const errorPayloadSchema = z
+    .object({
+        error: z
+            .object({
+                message: z.string().optional(),
+                status_code: z.number().optional(),
+            })
+            .optional(),
+    })
+    .passthrough();
+
+type VrchatRequestOptions = {
+    method?: "GET" | "POST" | "PUT" | "DELETE";
+    authorization?: string;
+    cookies?: VrchatCookies;
+    body?: unknown;
+};
+
+type VrchatResponse<T> = {
+    data: T;
+    cookies: VrchatCookies;
+};
+
+export class VrchatApiError extends Error {
+    readonly status: number;
+    readonly upstreamCode?: number;
+
+    constructor(message: string, status: number, upstreamCode?: number) {
+        super(message);
+        this.name = "VrchatApiError";
+        this.status = status;
+        this.upstreamCode = upstreamCode;
+    }
+}
+
+function assertAllowedEndpoint(endpoint: string) {
+    if (!allowedEndpoints.has(endpoint)) {
+        throw new Error(`VRChat endpoint is not allowlisted: ${endpoint}`);
+    }
+}
+
+function parseJson(text: string): unknown {
+    if (!text) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch {
+        throw new VrchatApiError("VRChat returned an invalid response.", 502);
+    }
+}
+
+function upstreamError(payload: unknown, status: number) {
+    const parsed = errorPayloadSchema.safeParse(payload);
+    const upstreamMessage = parsed.success ? parsed.data.error?.message?.replace(/^"|"$/g, "") : undefined;
+
+    if (status === 401) {
+        return new VrchatApiError(upstreamMessage || "VRChat rejected the credentials or session.", 401, parsed.success ? parsed.data.error?.status_code : undefined);
+    }
+    if (status === 403) {
+        return new VrchatApiError(upstreamMessage || "VRChat refused this request.", 403, parsed.success ? parsed.data.error?.status_code : undefined);
+    }
+    if (status === 429) {
+        return new VrchatApiError("VRChat rate limited this request. Please wait and try again.", 429, parsed.success ? parsed.data.error?.status_code : undefined);
+    }
+
+    return new VrchatApiError(upstreamMessage || "VRChat could not complete this request.", status >= 500 ? 502 : status, parsed.success ? parsed.data.error?.status_code : undefined);
+}
+
+/**
+ * Executes an allowlisted request against the official VRChat API. This is the
+ * server-side replacement for VRCX's native WebApi bridge; credentials and
+ * upstream cookies must never cross into client-readable state.
+ */
+export async function requestVrchat<T>(endpoint: string, options: VrchatRequestOptions = {}): Promise<VrchatResponse<T>> {
+    assertAllowedEndpoint(endpoint);
+
+    const headers = new Headers({
+        Accept: "application/json",
+        "User-Agent": process.env.VRCHAT_USER_AGENT?.trim() || "VRCX-Web/0.1.0",
+    });
+    if (options.authorization) {
+        headers.set("Authorization", options.authorization);
+    }
+    if (options.cookies) {
+        const cookieHeader = serializeVrchatCookies(options.cookies);
+        if (cookieHeader) {
+            headers.set("Cookie", cookieHeader);
+        }
+    }
+    if (options.body !== undefined) {
+        headers.set("Content-Type", "application/json;charset=utf-8");
+    }
+
+    let response: Response;
+    try {
+        response = await fetch(new URL(endpoint, VRCHAT_API_BASE), {
+            method: options.method || "GET",
+            headers,
+            body: options.body === undefined ? undefined : JSON.stringify(options.body),
+            cache: "no-store",
+            redirect: "error",
+            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+    } catch (error) {
+        if (error instanceof Error && error.name === "TimeoutError") {
+            throw new VrchatApiError("VRChat did not respond in time.", 504);
+        }
+        throw new VrchatApiError("VRChat is currently unreachable.", 502);
+    }
+
+    const data = parseJson(await response.text());
+    if (!response.ok) {
+        throw upstreamError(data, response.status);
+    }
+
+    return {
+        data: data as T,
+        cookies: extractVrchatCookies(response.headers),
+    };
+}
+
+export function createBasicAuthorization(username: string, password: string) {
+    // VRCX URI-encodes both fields before applying HTTP Basic authentication.
+    const encodedCredentials = `${encodeURIComponent(username)}:${encodeURIComponent(password)}`;
+    return `Basic ${Buffer.from(encodedCredentials, "utf8").toString("base64")}`;
+}
+
+export type { VrchatCookies } from "./protocol";
