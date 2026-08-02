@@ -14,6 +14,7 @@ The accepted direction is now:
 
 - keep excluding behavior that truly requires a locally installed or running VRChat client;
 - recover as much VRCX behavior as possible from continuous server-side VRChat HTTP and realtime API observation;
+- include Game Log as a remote-derived feature, limited to VRCX's session presentation and every session field the APIs can support;
 - store all durable application data in MongoDB rather than browser storage or SQLite;
 - support exactly one operator and one active VRChat identity;
 - reproduce VRCX's UI instead of retaining the current root prototype's differing web design.
@@ -71,6 +72,7 @@ Collection names are provisional until each VRCX storage path is traced, but the
 | `users` | Cached current user, friends, and remotely observed user profiles | Unique VRChat user ID; freshness index |
 | `worlds`, `groups`, `avatars` | Remote object caches used by VRCX workflows | Unique upstream ID; freshness/updated indexes |
 | `friend_snapshots` | Current authoritative remote-observable friend state | Unique friend ID for the single active identity |
+| `game_sessions` | API-observed location sessions for the active account, including bounded/current state and observation provenance | Unique deterministic session key; start/end, location, and current-session indexes; at most one open session |
 | `activity_events` | Feed, Friend Log, presence, status, location, avatar, bio, and relationship history | Unique idempotency key; subject/time and type/time indexes |
 | `notifications` | Legacy and V2 notification state and history | Unique upstream notification ID; created/seen indexes |
 | `favorites` | VRChat and VRCX-local favorite group membership | Unique owner/type/group/object tuple |
@@ -85,7 +87,7 @@ Detailed schemas, retention, and VRCX SQLite/JSON mappings must be added before 
 
 The port is ready when:
 
-1. Every VRCX area has a documented `Remote-compatible`, `Server-derived`, `Browser-adaptable`, or `Local-VRChat-only` decision supported by source paths.
+1. Every VRCX area has a documented `Remote-compatible`, `Server-derived`, `Browser-adaptable`, `Local-VRChat-only`, `Product-excluded`, or `Unclear` decision supported by source paths.
 2. The server can establish, persist securely, validate, recover, and replace the one active VRChat session without a separate application identity system.
 3. The monitor stays healthy without an open browser, reconnects after failures, reconciles missed state, respects rate limits, and never processes the same upstream fact twice.
 4. VRCX-equivalent durable data is stored in MongoDB with validated schemas, indexes, migrations, retention, backup, and restore guidance.
@@ -114,13 +116,14 @@ This inventory replaces the old browser-only scope. `Server-derived` means the f
 | Notifications and invite responses | Remote-compatible | Ingest Pipeline plus HTTP reconciliation; port remote actions; exclude join actions requiring the running game |
 | Moderation | Remote-compatible | Port remotely supported player/avatar moderation display and actions |
 | My Avatars | Browser-adaptable | Port remote management and browser upload/crop workflows; persist tags/memos/cache metadata in MongoDB |
-| Dashboard | Server-derived | Reproduce all widgets whose inputs exist in remote state or MongoDB history |
+| Dashboard | Product-excluded | Do not port it; remove the existing prototype route and navigation entry rather than rebuilding VRCX dashboard widgets |
 | Mutual Friends chart | Server-derived | Store graph, opt-outs, cursors, and rate-limited fetch jobs in MongoDB |
 | Instance Activity and Hot Worlds charts | Server-derived, fidelity investigation required | Determine whether continuously observed remote friend locations can truthfully reproduce each metric; label or omit fields needing local instance occupancy |
 | Previous instances for users/worlds/groups | Server-derived | Build from remotely observed locations with explicit observation-source semantics |
+| Game Log — sessions view only | Server-derived | Port the VRCX session list from remote observations of the active account's location, including world/group metadata, observed start/end and duration, current state, search, date filtering, collapse, and incremental loading; omit table mode and unavailable local-log event controls |
 | Browser notifications | Browser-adaptable | Optional browser delivery may mirror eligible VRCX notifications after permission is granted |
 | Application preferences and import/export | Browser-adaptable | Store authoritative preferences in MongoDB; use explicit browser downloads/uploads for import/export |
-| Game Log details from local VRChat logs | Local-VRChat-only | Exclude raw join/leave, portal, video, resource, and local event records unavailable through remote APIs |
+| Game Log flat table and local event details | Local-VRChat-only | Do not expose table mode; exclude raw player join/leave, portal, video, resource, external, and local event records unavailable through remote APIs |
 | Player List and Photon data | Local-VRChat-only | Exclude current-instance Photon/player tracking that requires the running game |
 | Gallery and screenshot metadata | Local-VRChat-only | Exclude local screenshot watching and filesystem metadata tooling |
 | VR overlay, OpenVR, Steam, registry, process, launch/attach, IPC, window, tray, Electron updater | Local-VRChat-only | Exclude navigation, controls, and settings |
@@ -137,7 +140,43 @@ Known rework required:
 - Re-audit session persistence for restart-safe, encrypted single-user monitoring.
 - Replace the current custom web shell and screen styling with components and values ported directly from VRCX.
 - Reassess each previous exclusion under the `Server-derived` classification.
+- Add a MongoDB-backed Game Log route that exposes only the VRCX session view and removes the session/table switch.
+- Remove the prototype Dashboard route and navigation entry; Dashboard is not a parity target.
 - Remove claims that features are complete until matched-state screenshots and interactions prove VRCX parity.
+
+## Game Log Session Scope
+
+Game Log is an eligible, required feature with a deliberately narrow presentation contract.
+
+### Authoritative VRCX Sources
+
+- `VRCX/src/views/GameLog/GameLog.vue` for the sessions-mode container.
+- `VRCX/src/views/GameLog/components/GameLogSessions.vue` for the toolbar, filtering, loading, empty, and infinite-scroll behavior.
+- `VRCX/src/views/GameLog/components/GameLogSessionsSegment.vue` and `GameLogSessionsEvent.vue` for session headers and eligible nested content.
+- `VRCX/src/views/GameLog/sessions/buildGameLogSessions.js` for segment construction behavior that remains applicable to remote observations.
+- `VRCX/src/stores/gameLog/index.js` and `VRCX/src/services/database/gameLog.js` for session state, filtering, pagination, and query semantics to translate into server services and MongoDB repositories.
+
+Direct reuse or close TypeScript/React translation of these MIT-licensed sources is preferred when it produces the closest result. Generic replacement cards or a redesigned timeline do not satisfy the requirement.
+
+### Included Remote-Derived Data
+
+- Location/instance identifier observed for the active account.
+- Resolved world name and group metadata available from approved APIs.
+- Observed session start, end, and duration, including a current/open session state.
+- Upstream, Pipeline, reconciliation, and ingestion timestamps needed to distinguish exact facts from bounded observations.
+- Search, bounded date-range filtering, collapse/expand, newest-first incremental loading, skeleton, empty, stale, reconnect, and authentication-required states.
+
+The monitor opens or transitions a session when the active account's remotely visible location changes. It closes or marks a session bounded when the account becomes offline/private/unobservable, the location changes, or reconciliation proves the prior state ended. Because the API may not expose the exact local game launch or exit instant, records retain precision/provenance and the UI must not overstate it.
+
+### Explicitly Excluded Data and UI
+
+- Flat Game Log table mode and the sessions/table toggle.
+- Local-log player join/leave events and member counts.
+- Portal spawn, video play, string/image/resource load, arbitrary event, and external-log rows.
+- Local game-running state, Photon occupancy, and any claim that an API-observed session exactly equals a local VRChat process lifetime.
+- Filters, counters, actions, and nested rows that would be nonfunctional without those excluded event types.
+
+Apart from these explicit omissions, the page must reproduce VRCX session mode's component structure, sizes, spacing, typography, colors, borders, sticky behavior, icons, badges, interactions, and all meaningful states at matched viewports.
 
 ## Delivery Plan
 
@@ -150,6 +189,7 @@ Status: In progress
 - [ ] Capture the running VRCX shell and key states at fixed desktop content viewport sizes.
 - [ ] Create a difference register mapping every current root route to its VRCX source and visible deviations.
 - [ ] Confirm remote observation feasibility for all formerly local-derived charts and histories.
+- [ ] Capture populated, current, historical, filtered, loading, and empty Game Log session reference states.
 - [ ] Record exact exclusions without removing remotely derivable behavior.
 
 Exit criteria: the scope inventory, visual fixtures, persistence map, and remote-source map are sufficient to prevent guesswork.
@@ -176,6 +216,7 @@ Status: Planned
 - [ ] Add reconnect backoff, post-gap reconciliation, session-expiry recovery, and coordinated rate limiting.
 - [ ] Add MongoDB-backed singleton leader leasing for multi-process safety.
 - [ ] Implement idempotent event writes, current-state projections, cursors, and derived-event provenance.
+- [ ] Implement active-account location session opening, transition, bounded closing, and restart/gap reconciliation in `game_sessions`.
 - [ ] Expose monitor health and stream/reconciliation timestamps to the UI.
 - [ ] Prove monitoring and restart recovery with no browser connected.
 
@@ -201,12 +242,12 @@ Status: Planned
 Port one complete VRCX workflow at a time in this order unless dependency discovery changes it:
 
 1. Friends Locations, sidebar, and status surfaces.
-2. Feed, Friend Log, and remotely observed previous locations.
+2. Feed, Friend Log, remotely observed previous locations, and Game Log session view.
 3. User dialogs, Friend List, search, and relationship actions.
 4. Notifications and responses.
 5. Favorites, memos, tags, and organization.
 6. Moderation and My Avatars.
-7. Dashboard, mutual graph, and eligible server-derived charts.
+7. Mutual graph and eligible server-derived charts, excluding Dashboard.
 8. Remaining remote-backed dialogs, settings, import/export, and tools.
 
 For every slice:
@@ -243,6 +284,7 @@ Exit criteria: the application is suitable for continuous single-user private de
 - [ ] Ingestion and actions are idempotent, recoverable, and rate-limit aware.
 - [ ] The feature works after server restart and without a browser open when monitoring is involved.
 - [ ] Local-VRChat-only behavior is excluded without dead controls.
+- [ ] Game Log contains only the faithful session presentation and never fabricates local-log events or exact process-lifetime boundaries.
 - [ ] Desktop screenshots and interaction states match VRCX at the same content viewport.
 - [ ] Narrow layouts remain usable and recognizably VRCX.
 - [ ] Keyboard, touch, focus, loading, empty, error, disabled, unread, and stale states work.
@@ -292,7 +334,23 @@ Decision: Do not require a local VRChat installation, process, logs, files, or d
 
 Rationale: The server should reproduce VRCX as closely as possible through VRChat APIs, not by coupling deployment to the game workstation.
 
-Consequence: Raw Game Log, Photon Player List, Gallery, OpenVR, Steam/process, OSC, IPC, registry, Electron window/tray, and similar functionality remain omitted. Remote-derived substitutes must disclose their observation limits.
+Consequence: Game Log session mode is required from remote location observations, while its flat table and local-only event rows remain omitted. Photon Player List, Gallery, OpenVR, Steam/process, OSC, IPC, registry, Electron window/tray, and similar functionality also remain omitted. Remote-derived data must disclose its observation limits.
+
+### 2026-08-02 — Implement Game Log Only as Remote-Derived Sessions
+
+Decision: Include Game Log in production navigation and reproduce VRCX's sessions UI, but do not implement its flat table mode. Populate every session fact available through remote VRChat APIs and MongoDB history.
+
+Rationale: Continuous API monitoring can produce useful VRCX-style location sessions without requiring the local game, but it cannot truthfully reproduce the raw local-log event stream.
+
+Consequence: The page reuses or closely translates the VRCX session components and interactions. It shows observed location/world/group, bounded timing, duration/current state, search, date filtering, and incremental history. The table switch, player join/leave, portal, video, resource, external, and arbitrary local event UI are absent.
+
+### 2026-08-02 — Exclude Dashboard
+
+Decision: Do not port the VRCX Dashboard, including remotely reproducible widgets.
+
+Rationale: Dashboard is outside the requested product scope.
+
+Consequence: Remove the existing prototype Dashboard route and navigation entry during implementation. Its widgets do not need parity work and must not be shown as placeholders elsewhere.
 
 ### 2026-08-02 — Keep the Deployment Private Without Custom Application Auth
 

@@ -12,7 +12,7 @@ This file applies to the entire repository except the nested `./VRCX/` reference
 
 1. Reproduce VRCX instead of redesigning it.
    - Match VRCX's information architecture, navigation, terminology, localization, colors, typography, icons, spacing, sizing, borders, shadows, density, component states, dialogs, tables, and interaction patterns.
-   - Port from the corresponding VRCX implementation and reuse suitable MIT-licensed styles and assets with required notices.
+   - Port from the corresponding VRCX implementation. Directly reuse or closely translate suitable MIT-licensed VRCX component logic, styles, localization, and assets whenever that improves fidelity, with required notices and provenance.
    - Existing root UI is provisional wherever it differs from VRCX. Do not preserve a root-web convention merely because it already exists.
    - Browser-required differences must be as small as possible and recorded in `PLANS.md`. Convenience, framework defaults, and conventional website styling are not valid reasons for divergence.
 2. Use a continuously running server-side VRChat monitor.
@@ -32,6 +32,8 @@ This file applies to the entire repository except the nested `./VRCX/` reference
    - Do not port features whose useful operation requires the VRChat process, local VRChat files or logs, Steam, OpenVR, OSC tied to the local client, Windows APIs, registry access, named pipes, Electron window/tray behavior, or arbitrary local filesystem access.
    - Omit excluded features and controls rather than displaying permanent placeholders.
    - A feature is eligible when its behavior can be derived from remote APIs, server-side history, MongoDB data, or ordinary browser capabilities without a local VRChat client.
+   - Game Log is a required exception at the feature level: port its VRCX session presentation for every session fact that can be observed through remote VRChat APIs. Exclude only the individual event types and table mode that require local game logs.
+   - Dashboard is excluded by product decision even where individual widgets could be remotely derived. Do not port it, list it in production navigation, or preserve the existing prototype route as a shipped feature.
 6. Target VRCX visual parity at desktop sizes.
    - The reference desktop layout is the primary acceptance target. Match VRCX at equivalent content viewport sizes before adding narrow-screen adaptations.
    - Responsive changes must preserve VRCX's hierarchy and styling. They must not turn the product into a visually different mobile website.
@@ -53,7 +55,7 @@ Before porting a feature, inspect its complete VRCX path through views, componen
 For each feature:
 
 1. Identify the exact VRCX views, components, styles, stores, coordinators, API calls, realtime events, persisted tables or settings, assets, and localization strings involved.
-2. Classify each behavior as `Remote-compatible`, `Server-derived`, `Browser-adaptable`, `Local-VRChat-only`, or `Unclear` using the eligibility gate below.
+2. Classify each behavior as `Remote-compatible`, `Server-derived`, `Browser-adaptable`, `Local-VRChat-only`, `Product-excluded`, or `Unclear` using the eligibility gate below.
 3. Define the MongoDB collections, indexes, retention behavior, and idempotency keys needed to replace the relevant VRCX SQLite, JSON, or browser-persisted data.
 4. Define how the always-on monitor obtains and reconciles the data. Prefer realtime events for prompt changes and scheduled HTTP snapshots for correctness.
 5. Port the eligible behavior into maintained root source paths. Translate Vue/Pinia components and state into faithful React/TypeScript equivalents; reuse styles, constants, strings, pure utilities, icons, and assets where practical.
@@ -71,6 +73,7 @@ Do not import production modules directly from `./VRCX/`. The root application m
 | Server-derived | VRCX derives the behavior from observations that the always-on server can reproduce from remote events, periodic snapshots, and MongoDB history | Port the derived behavior and document its observation limits |
 | Browser-adaptable | The workflow can use standard browser capabilities without requiring the local VRChat client | Port it with the smallest necessary browser adaptation |
 | Local-VRChat-only | It requires a locally installed/running VRChat client, local game logs/files, or native desktop/VR integration and has no useful remote equivalent | Exclude it from production navigation and settings |
+| Product-excluded | The user has explicitly removed the feature from product scope even if it is technically feasible | Do not port it; remove existing prototype routes and controls |
 | Unclear | The remote source or parity path is not verified | Investigate VRCX and the upstream interface before coding |
 
 A local dependency in VRCX does not by itself exclude a feature if the same user-visible result can be derived remotely. Conversely, do not fabricate precision that the remote APIs cannot provide; document the difference and omit controls that cannot work truthfully.
@@ -87,6 +90,18 @@ A local dependency in VRCX does not by itself exclude a feature if the same user
 - Expose monitor health, last successful realtime event, last reconciliation, rate-limit state, and authentication-required state to the VRCX-equivalent status UI.
 - Coordinate the monitor as a singleton. Multiple Next.js workers must not create competing streams or duplicate scheduled jobs; use a MongoDB lease or an equivalent documented mechanism.
 - Keep rate-limit handling centralized and ensure background reconciliation cannot starve interactive requests.
+- Track the active account's remotely visible location as a sequence of observed game sessions. Open, transition, and close MongoDB session records idempotently as API state changes, retaining observation timestamps and provenance instead of claiming unavailable local-client precision.
+
+## Game Log Session Rules
+
+- Implement Game Log as a first-class navigation destination, but implement only VRCX's session view. Do not implement or expose the flat table view or the sessions/table view-mode toggle.
+- Use `VRCX/src/views/GameLog/components/GameLogSessions.vue`, `GameLogSessionsSegment.vue`, `GameLogSessionsEvent.vue`, `VRCX/src/views/GameLog/sessions/buildGameLogSessions.js`, and their shared components/styles as the primary UI and behavior sources. Reuse or closely translate that code where practical.
+- Represent every session field available from remote APIs: observed location/instance, world and group metadata, observed start and end, duration when bounded, current-session state, and source/freshness metadata needed for truthful recovery.
+- Preserve the VRCX session list structure, sticky collapsible headers, location rendering, badges, search, date-range filtering, incremental loading, loading skeleton, empty state, and other controls that have real remote-backed behavior.
+- Do not render controls or counters backed only by unavailable local-log events. In particular, do not fabricate player join/leave, portal spawn, video play, resource load, arbitrary local event, or external-log entries.
+- Treat session boundaries as observations. Reconcile them after monitor restart or Pipeline gaps, distinguish exact upstream timestamps from poll-derived bounds, and never present an inferred time as exact.
+- Persist sessions and their synchronization metadata in MongoDB. Session construction, reconciliation, querying, filtering, pagination, and retention must work without a connected browser.
+- Compare the finished page directly with VRCX in session mode at matched viewport sizes. Apart from removing the table switch and unavailable local-event controls, styling and interaction differences require documentation and correction.
 
 ## MongoDB Rules
 
@@ -152,6 +167,7 @@ Prioritize automated tests for:
 - realtime event ingestion, reconnect reconciliation, deduplication, and monitor lease ownership;
 - MongoDB repositories, indexes, migrations, retention, and state transitions;
 - server restart recovery and operation with no browser connected;
+- remote Game Log session boundary derivation, gap reconciliation, current-session recovery, filtering, and pagination;
 - high-value VRCX workflows and visual regression states;
 - responsive navigation and keyboard/touch interactions;
 - security-sensitive routes and secret handling.
