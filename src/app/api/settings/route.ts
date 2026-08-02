@@ -22,6 +22,16 @@ const updateSchema = z
             .max(5)
             .optional(),
         sidebarTab: z.enum(["friends", "groups"]).optional(),
+        feedFilters: z
+            .array(z.enum(["GPS", "Online", "Offline", "Status", "Avatar", "Bio"]))
+            .max(6)
+            .optional(),
+        feedFavoritesOnly: z.boolean().optional(),
+        friendLogFilters: z
+            .array(z.enum(["Friend", "Unfriend", "FriendRequest", "DisplayName", "TrustLevel"]))
+            .max(5)
+            .optional(),
+        activityTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
     })
     .refine((value) => Object.values(value).some((item) => item !== undefined));
 
@@ -39,6 +49,10 @@ export async function GET() {
         sidebarGroupByInstance: settings?.sidebarGroupByInstance ?? false,
         sidebarCollapsedSections: settings?.sidebarCollapsedSections ?? [],
         sidebarTab: settings?.sidebarTab ?? "friends",
+        feedFilters: settings?.feedFilters ?? [],
+        feedFavoritesOnly: settings?.feedFavoritesOnly ?? false,
+        friendLogFilters: settings?.friendLogFilters ?? [],
+        activityTablePageSize: settings?.activityTablePageSize ?? 20,
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;

@@ -1,6 +1,6 @@
 import type { VrchatUser } from "./vrchat/types";
 
-export type ActivityType = "Avatar" | "Bio" | "DisplayName" | "Friend" | "GPS" | "Offline" | "Online" | "Status" | "Unfriend";
+export type ActivityType = "Avatar" | "Bio" | "DisplayName" | "Friend" | "FriendRequest" | "GPS" | "Offline" | "Online" | "Status" | "TrustLevel" | "Unfriend";
 
 export type FriendActivity = {
     id: string;
@@ -20,7 +20,17 @@ export type FriendSnapshot = {
     location: string;
     avatar: string;
     bio: string;
+    trustLevel: string;
 };
+
+/** Ported from VRCX/src/shared/utils/userTransforms.js. */
+export function trustLevelFromTags(tags: string[] = []) {
+    if (tags.includes("system_trust_veteran")) return "Trusted User";
+    if (tags.includes("system_trust_trusted")) return "Known User";
+    if (tags.includes("system_trust_known")) return "User";
+    if (tags.includes("system_trust_basic")) return "New User";
+    return "Visitor";
+}
 
 export function toFriendSnapshots(allFriends: VrchatUser[], onlineIds: Set<string>): FriendSnapshot[] {
     return allFriends.map((friend) => ({
@@ -31,6 +41,7 @@ export function toFriendSnapshots(allFriends: VrchatUser[], onlineIds: Set<strin
         location: friend.location || friend.travelingToLocation || "",
         avatar: friend.currentAvatarThumbnailImageUrl || friend.currentAvatarImageUrl || "",
         bio: friend.bio || "",
+        trustLevel: trustLevelFromTags(friend.tags),
     }));
 }
 
@@ -49,11 +60,12 @@ export function diffFriendSnapshots(previous: FriendSnapshot[], current: FriendS
             continue;
         }
         if (old.displayName !== friend.displayName) add("DisplayName", friend, old.displayName, friend.displayName);
-        if (old.online !== friend.online) add(friend.online ? "Online" : "Offline", friend);
+        if (old.online !== friend.online) add(friend.online ? "Online" : "Offline", friend, old.location, friend.location);
         if (old.online && friend.online && old.location !== friend.location) add("GPS", friend, old.location, friend.location);
         if (old.status !== friend.status) add("Status", friend, old.status, friend.status);
         if (old.avatar !== friend.avatar) add("Avatar", friend, old.avatar, friend.avatar);
         if (old.bio !== friend.bio) add("Bio", friend, old.bio, friend.bio);
+        if (old.trustLevel !== friend.trustLevel) add("TrustLevel", friend, old.trustLevel, friend.trustLevel);
     }
     for (const friend of previous) {
         if (!after.has(friend.id)) add("Unfriend", friend);

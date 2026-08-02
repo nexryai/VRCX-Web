@@ -172,6 +172,19 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 10,
+        name: "add-activity-table-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ feedFilters: { $exists: false } }, { $set: { feedFilters: [], updatedAt } }),
+                c.appSettings.updateMany({ feedFavoritesOnly: { $exists: false } }, { $set: { feedFavoritesOnly: false, updatedAt } }),
+                c.appSettings.updateMany({ friendLogFilters: { $exists: false } }, { $set: { friendLogFilters: [], updatedAt } }),
+                c.appSettings.updateMany({ activityTablePageSize: { $exists: false } }, { $set: { activityTablePageSize: 20, updatedAt } }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

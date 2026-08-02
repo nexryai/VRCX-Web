@@ -2,7 +2,7 @@ import { MongoClient } from "mongodb";
 import { MongoMemoryServer } from "mongodb-memory-server";
 
 import { spawn } from "node:child_process";
-import { createCipheriv, randomBytes } from "node:crypto";
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 
 const port = process.env.VRCX_VISUAL_PORT || "3210";
 const databaseName = "vrcx_visual";
@@ -14,6 +14,10 @@ function encryptedCookies(cookies) {
     const cipher = createCipheriv("aes-256-gcm", encryptionKey, iv);
     const ciphertext = Buffer.concat([cipher.update(JSON.stringify(cookies), "utf8"), cipher.final()]);
     return { algorithm: "aes-256-gcm", iv: iv.toString("base64"), tag: cipher.getAuthTag().toString("base64"), ciphertext: ciphertext.toString("base64") };
+}
+
+function activityId(value) {
+    return createHash("sha256").update(value).digest("hex");
 }
 
 const mongo = await MongoMemoryServer.create();
@@ -43,6 +47,10 @@ await database.collection("app_settings").insertOne({
     sidebarGroupByInstance: false,
     sidebarCollapsedSections: [],
     sidebarTab: "friends",
+    feedFilters: [],
+    feedFavoritesOnly: false,
+    friendLogFilters: [],
+    activityTablePageSize: 20,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
@@ -61,6 +69,78 @@ await database.collection("groups").insertOne({
     observedAt: now,
     updatedAt: now,
 });
+await database.collection("activity_events").insertMany([
+    {
+        _id: activityId("visual-gps"),
+        ownerId,
+        type: "GPS",
+        subjectUserId: friends[0].id,
+        displayName: friends[0].displayName,
+        previous: "wrld_00000000-0000-0000-0000-000000000011:54321",
+        current: friends[0].location,
+        occurredAt: new Date(now.getTime() - 5 * 60_000),
+        observedAt: now,
+        provenance: "pipeline",
+    },
+    {
+        _id: activityId("visual-status"),
+        ownerId,
+        type: "Status",
+        subjectUserId: friends[1].id,
+        displayName: friends[1].displayName,
+        previous: "active\nWorking on an avatar",
+        current: "ask me\nCome say hello",
+        occurredAt: new Date(now.getTime() - 18 * 60_000),
+        observedAt: now,
+        provenance: "reconciliation",
+    },
+    {
+        _id: activityId("visual-online"),
+        ownerId,
+        type: "Online",
+        subjectUserId: friends[2].id,
+        displayName: friends[2].displayName,
+        previous: "offline",
+        current: "active",
+        occurredAt: new Date(now.getTime() - 34 * 60_000),
+        observedAt: now,
+        provenance: "pipeline",
+    },
+    {
+        _id: activityId("visual-display-name"),
+        ownerId,
+        type: "DisplayName",
+        subjectUserId: friends[1].id,
+        displayName: friends[1].displayName,
+        previous: "Cobalt User",
+        current: friends[1].displayName,
+        occurredAt: new Date(now.getTime() - 55 * 60_000),
+        observedAt: now,
+        provenance: "reconciliation",
+    },
+    {
+        _id: activityId("visual-trust"),
+        ownerId,
+        type: "TrustLevel",
+        subjectUserId: friends[0].id,
+        displayName: friends[0].displayName,
+        previous: "User",
+        current: "Known User",
+        occurredAt: new Date(now.getTime() - 70 * 60_000),
+        observedAt: now,
+        provenance: "reconciliation",
+    },
+    {
+        _id: activityId("visual-unfriend"),
+        ownerId,
+        type: "Unfriend",
+        subjectUserId: "usr_00000000-0000-0000-0000-000000000099",
+        displayName: "Former Friend",
+        occurredAt: new Date(now.getTime() - 90 * 60_000),
+        observedAt: now,
+        provenance: "pipeline",
+    },
+]);
 await database.collection("game_sessions").insertMany([
     {
         _id: "session-current",

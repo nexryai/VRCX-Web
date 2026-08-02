@@ -178,6 +178,14 @@ The monitor opens or transitions a session when the active account's remotely vi
 
 Apart from these explicit omissions, the page must reproduce VRCX session mode's component structure, sizes, spacing, typography, colors, borders, sticky behavior, icons, badges, interactions, and all meaningful states at matched viewports.
 
+## Feed and Friend Log Scope
+
+The MongoDB-backed activity projection is split into the same two presentation surfaces as VRCX. `VRCX/src/views/Feed/Feed.vue`, `VRCX/src/views/Feed/columns.jsx`, and `VRCX/src/stores/feed.js` are the source for Feed filters, favorite-only behavior, dense columns, expandable detail rows, sorting, and pagination. `VRCX/src/views/FriendLog/FriendLog.vue`, `VRCX/src/views/FriendLog/columns.jsx`, and `VRCX/src/services/database/friendLogHistory.js` are the source for Friend Log type selection, user-change rendering, row deletion, and confirmation behavior.
+
+The server records only facts available through Pipeline events or HTTP reconciliation. Feed includes GPS, Online, Offline, Status, Avatar, and Bio changes. Friend Log includes Friend, Unfriend, FriendRequest, DisplayName, and TrustLevel changes. VRCX's `CancelFriendRequest` filter is intentionally omitted because the remote notification projection cannot distinguish cancellation from expiration or dismissal reliably. Avatar detail shows remotely observed image URLs but cannot reproduce historical avatar names or owners that were never supplied by the API. Online/offline duration is not shown unless both boundaries were actually observed. No value is fabricated to fill these gaps.
+
+VRCX-persisted type filters, favorite-only state, and page size are stored in the singleton MongoDB settings document. Search and the active date range remain transient view state. Feed keeps expandable rows and never exposes destructive history controls; Friend Log keeps row-level deletion with confirmation and Shift-click bypass. On narrow screens the dense source table remains horizontally scrollable inside its content pane so columns are retained rather than silently dropped.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -232,7 +240,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations and Game Log states at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, and Game Log states at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.
@@ -370,6 +378,6 @@ The 2026-08-02 documentation rebaseline passed `pnpm test` (5 files, 13 tests), 
 
 Authenticated VRChat behavior, long-running monitoring, restart recovery, MongoDB migrations, and matched-state VRCX screenshots remain required operator checks as those systems are implemented.
 
-The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 tests), `pnpm lint` (108 files), and `pnpm build` (21 generated pages). Friends Locations and Game Log were rendered from synthetic MongoDB projections at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. This found and fixed a status-clock hydration mismatch and narrow-layout clipping. Running-VRCX reference comparisons and authenticated operator smoke tests remain outstanding.
+The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 tests), `pnpm lint` (108 files), and `pnpm build` (21 generated pages). Friends Locations and Game Log were rendered from synthetic MongoDB projections at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. This found and fixed a status-clock hydration mismatch and narrow-layout clipping. The later Feed/Friend Log port extended the same fixture to those screens and again passed all four overflow checks. Running-VRCX reference comparisons and authenticated operator smoke tests remain outstanding.
 
 The 2026-08-02 monitor-failover increment passed `pnpm test` (8 files, 26 tests), `pnpm lint` (109 files), and `pnpm build` (21 generated pages). Automated coverage now proves that a monitor with no browser connected closes its Pipeline socket when it loses the MongoDB lease, then performs a new HTTP baseline before reconnecting after lease reacquisition. A live authenticated process-restart soak remains an operator acceptance item.

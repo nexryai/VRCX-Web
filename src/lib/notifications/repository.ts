@@ -1,14 +1,44 @@
 import "server-only";
 
 import { getMongoDatabase } from "@/lib/mongodb/client";
-import { collections } from "@/lib/mongodb/collections";
+import { type ActivityEventDocument, collections } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import type { VrchatNotification } from "@/lib/vrchat/types";
+
+import { createHash } from "node:crypto";
 
 export type NotificationSource = "hidden" | "legacy" | "v2";
 
 function documentId(ownerId: string, source: NotificationSource, notificationId: string) {
     return `${ownerId}:${source}:${notificationId}`;
+}
+
+function notificationDate(notification: VrchatNotification, fallback: Date) {
+    const value = notification.createdAt ?? notification.created_at;
+    if (typeof value === "number") {
+        const date = new Date(value < 1_000_000_000_000 ? value * 1_000 : value);
+        return Number.isNaN(date.getTime()) ? fallback : date;
+    }
+    if (value) {
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) return date;
+    }
+    return fallback;
+}
+
+async function recordFriendRequest(ownerId: string, notification: VrchatNotification, observedAt: Date, provenance: ActivityEventDocument["provenance"]) {
+    if (notification.type !== "friendRequest" || !notification.senderUserId) return;
+    const document: ActivityEventDocument = {
+        _id: createHash("sha256").update(`${ownerId}\u0000FriendRequest\u0000${notification.id}`).digest("hex"),
+        ownerId,
+        type: "FriendRequest",
+        subjectUserId: notification.senderUserId,
+        displayName: notification.senderUsername || notification.senderUserId,
+        occurredAt: notificationDate(notification, observedAt),
+        observedAt,
+        provenance,
+    };
+    await collections(await getMongoDatabase()).activityEvents.updateOne({ _id: document._id }, { $setOnInsert: document }, { upsert: true });
 }
 
 export async function replaceActiveNotifications(ownerId: string, source: NotificationSource, notifications: VrchatNotification[], observedAt: Date) {
@@ -40,6 +70,7 @@ export async function replaceActiveNotifications(ownerId: string, source: Notifi
             }),
             { ordered: false },
         );
+        await Promise.all(notifications.map((notification) => recordFriendRequest(ownerId, notification, observedAt, "reconciliation")));
     }
 
     // Retain notification history while removing records no longer present in
@@ -66,6 +97,7 @@ export async function upsertPipelineNotification(ownerId: string, source: Extrac
         },
         { upsert: true },
     );
+    await recordFriendRequest(ownerId, notification, observedAt, "pipeline");
 }
 
 export async function applyPipelineNotificationState(ownerId: string, notificationIds: string[], source: Extract<NotificationSource, "legacy" | "v2">, state: "hidden" | "seen", observedAt: Date) {

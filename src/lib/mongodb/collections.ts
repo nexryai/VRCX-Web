@@ -35,6 +35,10 @@ export type AppSettingsDocument = {
     sidebarGroupByInstance: boolean;
     sidebarCollapsedSections: Array<"active" | "favorite" | "me" | "offline" | "online">;
     sidebarTab: "friends" | "groups";
+    feedFilters: Array<"GPS" | "Online" | "Offline" | "Status" | "Avatar" | "Bio">;
+    feedFavoritesOnly: boolean;
+    friendLogFilters: Array<"Friend" | "Unfriend" | "FriendRequest" | "DisplayName" | "TrustLevel">;
+    activityTablePageSize: 20 | 50 | 100;
     updatedAt: Date;
 };
 
@@ -109,7 +113,7 @@ export type AvatarDocument = {
 export type ActivityEventDocument = {
     _id: string;
     ownerId: string;
-    type: "Avatar" | "Bio" | "DisplayName" | "Friend" | "GPS" | "Offline" | "Online" | "Status" | "Unfriend";
+    type: "Avatar" | "Bio" | "DisplayName" | "Friend" | "FriendRequest" | "GPS" | "Offline" | "Online" | "Status" | "TrustLevel" | "Unfriend";
     subjectUserId: string;
     displayName: string;
     previous?: string;

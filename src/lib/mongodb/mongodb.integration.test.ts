@@ -25,7 +25,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner"]);
         expect(sessionIndexes).toBe(true);
     });
@@ -91,6 +91,20 @@ describe("MongoDB application repositories", () => {
         const retained = await (await getMongoDatabase()).collection("notifications").find({ ownerId }).toArray();
         expect(retained).toHaveLength(2);
         expect(retained.find((document) => document.notificationId === "not_first")?.active).toBe(false);
+    });
+
+    test("projects remotely observed friend-request notifications into Friend Log once", async () => {
+        const { replaceActiveNotifications, upsertPipelineNotification } = await import("@/lib/notifications/repository");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000021";
+        const notification = { id: "not_friend_request", type: "friendRequest", senderUserId: "usr_00000000-0000-0000-0000-000000000022", senderUsername: "Request Sender", created_at: "2026-08-02T10:00:00.000Z" };
+
+        await upsertPipelineNotification(ownerId, "legacy", notification, new Date("2026-08-02T10:00:01.000Z"));
+        await replaceActiveNotifications(ownerId, "legacy", [notification], new Date("2026-08-02T10:01:00.000Z"));
+
+        const activity = await (await getMongoDatabase()).collection("activity_events").find({ ownerId, type: "FriendRequest" }).toArray();
+        expect(activity).toHaveLength(1);
+        expect(activity[0]).toMatchObject({ subjectUserId: notification.senderUserId, displayName: "Request Sender", occurredAt: new Date(notification.created_at) });
     });
 
     test("transitions observed Game Log sessions with bounded timestamps", async () => {
