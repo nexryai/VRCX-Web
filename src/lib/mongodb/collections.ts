@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Collection, Db } from "mongodb";
 
-import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
     algorithm: "aes-256-gcm";
@@ -113,6 +113,28 @@ export type GroupDocument = {
     source: "lookup" | "membership" | "search" | "session";
     membershipActive?: boolean;
     membershipObservedAt?: Date;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type GroupPostDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    postId: string;
+    post: VrchatGroupPost;
+    active: boolean;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type GroupMemberDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    userId: string;
+    member: VrchatGroupMember;
+    active: boolean;
     observedAt: Date;
     updatedAt: Date;
 };
@@ -271,6 +293,8 @@ export type Collections = {
     users: Collection<UserDocument>;
     worlds: Collection<WorldDocument>;
     groups: Collection<GroupDocument>;
+    groupPosts: Collection<GroupPostDocument>;
+    groupMembers: Collection<GroupMemberDocument>;
     avatars: Collection<AvatarDocument>;
     avatarTags: Collection<AvatarTagDocument>;
     friendSnapshots: Collection<FriendSnapshotDocument>;
@@ -294,6 +318,8 @@ export function collections(db: Db): Collections {
         users: db.collection<UserDocument>("users"),
         worlds: db.collection<WorldDocument>("worlds"),
         groups: db.collection<GroupDocument>("groups"),
+        groupPosts: db.collection<GroupPostDocument>("group_posts"),
+        groupMembers: db.collection<GroupMemberDocument>("group_members"),
         avatars: db.collection<AvatarDocument>("avatars"),
         avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),
         friendSnapshots: db.collection<FriendSnapshotDocument>("friend_snapshots"),

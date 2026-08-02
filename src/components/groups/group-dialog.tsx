@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Clipboard, ExternalLink, ImageIcon, Loader2, RefreshCw, ShieldCheck, Users, X } from "lucide-react";
+import { Clipboard, ExternalLink, ImageIcon, Loader2, RefreshCw, Search, ShieldCheck, Users, X } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { locationLabel } from "@/lib/friends";
-import type { VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatGroup, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
-type GroupTab = "Info" | "JSON";
+type GroupTab = "Info" | "Posts" | "Members" | "JSON";
 
 export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: string; friends: VrchatUser[]; openUser: (userId: string) => void; onClose: () => void }) {
     const [group, setGroup] = useState<VrchatGroup | null>(null);
@@ -17,6 +17,13 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [copied, setCopied] = useState(false);
+    const [posts, setPosts] = useState<VrchatGroupPost[]>([]);
+    const [members, setMembers] = useState<VrchatGroupMember[]>([]);
+    const [hasMoreMembers, setHasMoreMembers] = useState(false);
+    const [tabLoading, setTabLoading] = useState(false);
+    const [postsLoaded, setPostsLoaded] = useState(false);
+    const [membersLoaded, setMembersLoaded] = useState(false);
+    const [search, setSearch] = useState("");
     const closeButton = useRef<HTMLButtonElement>(null);
 
     const load = useCallback(
@@ -45,13 +52,55 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         [groupId],
     );
 
+    const loadPosts = useCallback(
+        async (refresh = false) => {
+            setTabLoading(true);
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/posts${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; posts?: VrchatGroupPost[] };
+                if (!response.ok) throw new Error(payload.error || "Group posts could not be loaded.");
+                setPosts(payload.posts || []);
+                setPostsLoaded(true);
+            } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : "Group posts could not be loaded.");
+            } finally {
+                setTabLoading(false);
+            }
+        },
+        [groupId],
+    );
+
+    const loadMembers = useCallback(
+        async (offset = 0, refresh = false) => {
+            setTabLoading(true);
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/members?offset=${offset}${refresh ? "&refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; members?: VrchatGroupMember[]; hasMore?: boolean };
+                if (!response.ok) throw new Error(payload.error || "Group members could not be loaded.");
+                setMembers((current) => (offset ? Array.from(new Map([...current, ...(payload.members || [])].map((member) => [member.userId, member])).values()) : payload.members || []));
+                setHasMoreMembers(payload.hasMore === true);
+                setMembersLoaded(true);
+            } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : "Group members could not be loaded.");
+            } finally {
+                setTabLoading(false);
+            }
+        },
+        [groupId],
+    );
+
     useEffect(() => {
         setGroup(null);
         setOwnerName("");
         setTab("Info");
-        void load();
+        setPosts([]);
+        setMembers([]);
+        setPostsLoaded(false);
+        setMembersLoaded(false);
+        setSearch("");
+        void Promise.all([load(), loadPosts()]);
         closeButton.current?.focus();
-    }, [load]);
+    }, [load, loadPosts]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
@@ -126,14 +175,34 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                         </header>
                         {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                         <div className="mt-3 flex shrink-0 overflow-x-auto border-b border-border" role="tablist" aria-label="Group details">
-                            {(["Info", "JSON"] as GroupTab[]).map((item) => (
-                                <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={`h-10 flex-1 shrink-0 border-b-2 px-4 text-xs ${tab === item ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+                            {(["Info", "Posts", "Members", "JSON"] as GroupTab[]).map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={tab === item}
+                                    onClick={() => {
+                                        setTab(item);
+                                        setSearch("");
+                                        setError("");
+                                        if (item === "Posts" && !postsLoaded) void loadPosts();
+                                        if (item === "Members" && !membersLoaded) void loadMembers();
+                                    }}
+                                    className={`h-10 flex-1 shrink-0 border-b-2 px-4 text-xs ${tab === item ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                                >
                                     {item}
                                 </button>
                             ))}
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-card p-3">
-                            {tab === "Info" ? <GroupInfo group={group} friends={groupFriends} openUser={openUser} copy={copy} /> : null}
+                            {tabLoading && tab !== "Info" ? (
+                                <div className="flex min-h-48 items-center justify-center">
+                                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                                </div>
+                            ) : null}
+                            {!tabLoading && tab === "Info" ? <GroupInfo group={group} friends={groupFriends} announcement={posts[0]} openUser={openUser} copy={copy} /> : null}
+                            {!tabLoading && tab === "Posts" ? <GroupPosts posts={posts} search={search} setSearch={setSearch} refresh={() => void loadPosts(true)} openUser={openUser} /> : null}
+                            {!tabLoading && tab === "Members" ? <GroupMembers group={group} members={members} search={search} setSearch={setSearch} refresh={() => void loadMembers(0, true)} loadMore={() => void loadMembers(members.length, true)} hasMore={hasMoreMembers} openUser={openUser} /> : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(group, null, 2)}</pre> : null}
                         </div>
                     </>
@@ -143,7 +212,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     );
 }
 
-function GroupInfo({ group, friends, openUser, copy }: { group: VrchatGroup; friends: VrchatUser[]; openUser: (userId: string) => void; copy: (value: string) => Promise<void> }) {
+function GroupInfo({ group, friends, announcement, openUser, copy }: { group: VrchatGroup; friends: VrchatUser[]; announcement?: VrchatGroupPost; openUser: (userId: string) => void; copy: (value: string) => Promise<void> }) {
     const instances = Array.from(new Set(friends.map((friend) => friend.location).filter((location): location is string => Boolean(location))));
     return (
         <div>
@@ -175,6 +244,7 @@ function GroupInfo({ group, friends, openUser, copy }: { group: VrchatGroup; fri
                 </section>
             ) : null}
             <div className="mt-3 flex flex-wrap items-start px-1">
+                <FullInfo label="Announcement" value={announcement ? `${announcement.title}${announcement.text ? `\n${announcement.text}` : ""}` : "—"} />
                 <FullInfo label="Rules" value={group.rules || "—"} />
                 <Info label="Members" value={`${number(group.memberCount)} (${number(group.onlineMemberCount)})`} icon={<Users className="size-3.5" />} />
                 <Info label="Created" value={date(group.createdAt)} />
@@ -197,6 +267,89 @@ function GroupInfo({ group, friends, openUser, copy }: { group: VrchatGroup; fri
             ) : null}
         </div>
     );
+}
+
+function GroupPosts({ posts, search, setSearch, refresh, openUser }: { posts: VrchatGroupPost[]; search: string; setSearch: (value: string) => void; refresh: () => void; openUser: (userId: string) => void }) {
+    const query = search.trim().toLocaleLowerCase();
+    const visible = posts.filter((post) => !query || `${post.title} ${post.text}`.toLocaleLowerCase().includes(query));
+    return (
+        <div>
+            <TabToolbar count={posts.length} value={search} setValue={setSearch} refresh={refresh} placeholder="Search posts" />
+            <div className="space-y-1">
+                {visible.map((post) => (
+                    <article key={post.id} className="rounded-lg p-2 text-[13px] hover:bg-background">
+                        <p className="font-medium">{post.title || "Untitled post"}</p>
+                        <div className="mt-1 flex items-start gap-2">
+                            {post.imageUrl ? <img src={post.imageUrl} alt="" className="size-[60px] shrink-0 rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" /> : null}
+                            <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs">{post.text || "—"}</p>
+                        </div>
+                        <div className="mt-1 flex flex-wrap justify-end gap-2 text-[10px] text-muted-foreground">
+                            {post.authorId ? (
+                                <button type="button" onClick={() => openUser(post.authorId || "")} className="hover:text-foreground">
+                                    {post.authorId}
+                                </button>
+                            ) : null}
+                            <span>{dateTime(post.updatedAt || post.createdAt)}</span>
+                        </div>
+                    </article>
+                ))}
+            </div>
+            {!visible.length ? <EmptyState>No group posts.</EmptyState> : null}
+        </div>
+    );
+}
+
+function GroupMembers({ group, members, search, setSearch, refresh, loadMore, hasMore, openUser }: { group: VrchatGroup; members: VrchatGroupMember[]; search: string; setSearch: (value: string) => void; refresh: () => void; loadMore: () => void; hasMore: boolean; openUser: (userId: string) => void }) {
+    const query = search.trim().toLocaleLowerCase();
+    const roleNames = new Map((group.roles || []).map((role) => [role.id, role.name]));
+    const visible = members.filter((member) => !query || `${member.user?.displayName || member.userId} ${member.roleIds.map((id) => roleNames.get(id) || id).join(" ")}`.toLocaleLowerCase().includes(query));
+    return (
+        <div>
+            <TabToolbar count={members.length} total={group.memberCount} value={search} setValue={setSearch} refresh={refresh} placeholder="Search loaded members" />
+            <div className="flex flex-wrap items-start">
+                {visible.map((member) => {
+                    const user = member.user || { id: member.userId, displayName: member.userId };
+                    return (
+                        <button key={member.userId} type="button" onClick={() => openUser(member.userId)} className="flex w-[167px] items-center gap-2.5 rounded p-1.5 text-left text-[13px] hover:bg-muted">
+                            <FriendAvatar friend={user} size="sm" />
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">{user.displayName}</span>
+                                <span className="block truncate text-[10px] text-muted-foreground">{member.roleIds.map((id) => roleNames.get(id) || id).join(", ") || date(member.joinedAt)}</span>
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+            {!visible.length ? <EmptyState>No group members available.</EmptyState> : null}
+            {hasMore && !search ? (
+                <button type="button" onClick={loadMore} className="mt-2 h-9 w-full rounded-md border border-input text-xs hover:bg-muted">
+                    Load more members
+                </button>
+            ) : null}
+        </div>
+    );
+}
+
+function TabToolbar({ count, total, value, setValue, refresh, placeholder }: { count: number; total?: number; value: string; setValue: (value: string) => void; refresh: () => void; placeholder: string }) {
+    return (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={refresh} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-muted" aria-label="Refresh">
+                <RefreshCw className="size-4" />
+            </button>
+            <span className="text-xs text-muted-foreground">
+                {count}
+                {total !== undefined ? ` / ${total}` : ""}
+            </span>
+            <label className="relative min-w-44 flex-1">
+                <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} className="h-8 w-full rounded-md border border-input bg-transparent pr-3 pl-8 text-xs outline-none focus:border-ring" />
+            </label>
+        </div>
+    );
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+    return <div className="flex min-h-40 items-center justify-center text-xs text-muted-foreground">{children}</div>;
 }
 
 function Badge({ children, icon }: { children: React.ReactNode; icon?: React.ReactNode }) {
@@ -263,4 +416,10 @@ function date(value?: string) {
     if (!value) return "—";
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(parsed);
+}
+
+function dateTime(value?: string) {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }

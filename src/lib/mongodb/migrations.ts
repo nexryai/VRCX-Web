@@ -276,6 +276,18 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 20,
+        name: "add-group-dialog-cache-indexes",
+        async apply(c) {
+            await Promise.all([
+                c.groupPosts.createIndex({ ownerId: 1, groupId: 1, postId: 1 }, { unique: true, name: "owner_group_post_unique" }),
+                c.groupPosts.createIndex({ ownerId: 1, groupId: 1, active: 1, "post.updatedAt": -1 }, { name: "owner_group_active_updated" }),
+                c.groupMembers.createIndex({ ownerId: 1, groupId: 1, userId: 1 }, { unique: true, name: "owner_group_user_unique" }),
+                c.groupMembers.createIndex({ ownerId: 1, groupId: 1, active: 1, "member.joinedAt": -1 }, { name: "owner_group_active_joined" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

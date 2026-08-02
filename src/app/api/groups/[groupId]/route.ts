@@ -17,7 +17,10 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/grou
     const ownerId = await requireActiveUserId();
     if (!refresh) {
         const cached = await getCachedGroup(ownerId, groupId.data);
-        if (cached) return groupResponse({ group: cached });
+        // Membership and search projections can be intentionally compact. A
+        // dialog needs the owner and role list before it can faithfully render
+        // VRCX's header and permission-aware tabs.
+        if (cached?.ownerId && Array.isArray(cached.roles)) return groupResponse({ group: cached });
     }
     let expectedAuthCookie: string | undefined;
     try {

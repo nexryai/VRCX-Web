@@ -22,6 +22,8 @@ const captures = [
     { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
     { name: "world-dialog", path: "/favorite/worlds", readyText: "World ID", favoriteKind: "world", worldDialog: true },
     { name: "group-dialog", path: "/", readyText: "Group ID", groupDialog: true },
+    { name: "group-dialog-posts", path: "/", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
+    { name: "group-dialog-members", path: "/", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
@@ -119,6 +121,7 @@ for (const width of [360, 768, 1280, 1920]) {
         if (capture.groupDialog) {
             await page.getByRole("tab", { name: /^Groups/ }).click();
             await page.getByText("VRCX Test Group", { exact: true }).first().click();
+            if (capture.groupTab) await page.getByRole("tab", { name: capture.groupTab, exact: true }).click();
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
