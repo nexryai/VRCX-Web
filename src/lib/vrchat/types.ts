@@ -10,6 +10,7 @@ export const vrchatUserSchema = z
         currentAvatarImageUrl: z.string().optional(),
         currentAvatarThumbnailImageUrl: z.string().optional(),
         currentAvatar: z.string().optional(),
+        hasSharedConnectionsOptOut: z.boolean().optional(),
         bio: z.string().optional(),
         bioLinks: z.array(z.string()).optional(),
         date_joined: z.string().optional(),

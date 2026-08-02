@@ -73,7 +73,7 @@ The initial source audit below records the production scope. A feature marked `A
 | My Avatars | Implemented for remote management | Responsive grid/table browsing, filters, selection, metadata/visibility editing, impostor queueing, and deletion are ported; image/gallery upload and browser-local tags remain |
 | Feed and Friend Log | Implemented for remotely observable friend changes | Browser persistence records relationship, presence, location, status, avatar, bio, and display-name changes seen by periodic API refreshes; local game/Photon events are intentionally absent |
 | Dashboard | Implemented | Uses only ported remote friend, location, and browser-backed feed data; local instance and game-log widgets are omitted |
-| Mutual Friends chart | Not started | Port the remote graph with explicit rate-limit and opt-out handling |
+| Mutual Friends chart | Implemented | User-triggered, cancellable remote graph fetch includes rate limiting, 429 backoff, opt-out handling, browser snapshot caching, a responsive SVG overview, and ranked relationships |
 
 ## Delivery Strategy
 

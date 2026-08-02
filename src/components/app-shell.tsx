@@ -21,6 +21,7 @@ const navigation = [
     { href: "/search", label: "Search", icon: "ri-search-line" },
     { href: "/social/friend-list", label: "Friend List", icon: "ri-booklet-line" },
     { href: "/social/friend-log", label: "Friend Log", icon: "ri-file-history-line" },
+    { href: "/charts/mutual", label: "Mutual Friends", icon: "ri-node-tree" },
     { href: "/social/moderation", label: "Moderation", icon: "ri-shield-user-line" },
 ];
 
