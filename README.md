@@ -1,49 +1,56 @@
-# VRCX Web
+# VRCX Next.js Port
 
-VRCX Web is a responsive browser port of the remote-capable parts of [VRCX](https://github.com/vrcx-team/VRCX). The original source in `./VRCX/` is the behavior and visual reference; the root Next.js application runs independently and does not need the reference checkout at build time or runtime.
+This repository is a local-first, single-user Next.js port of [VRCX](https://github.com/vrcx-team/VRCX). The goal is to reproduce VRCX's eligible behavior and UI as exactly as the browser platform permits while running continuous VRChat API monitoring on the server and storing durable application data in MongoDB.
 
-This application is intended for a trusted private network. It does not provide application accounts, roles, or an additional access-control layer. It does establish a VRChat session for the signed-in user, so it must still be deployed and operated as sensitive software.
+The original source in `./VRCX/` is the behavior, implementation, and visual reference. The root application is the maintained port and must build and run without the reference checkout.
 
-## Ported Features
+## Current Status
 
-- VRChat login, TOTP, OTP, email OTP, session recovery, and logout
-- Responsive VRCX navigation, themes, Friends Locations, and online friend sidebar
-- User details, friend removal, user/world/group search, and complete friend list
-- VRChat friend, world, and avatar favorites with group browsing, moving, and removal
-- Legacy and V2 notifications, read/hide actions, friend approval, and V2 responses
-- Player moderation management
-- Remote My Avatars browsing, selection, editing, impostor queueing, and deletion
-- Browser-persisted Feed and Friend Log for remotely observed friend changes
-- Remote-data Dashboard and an explicit, cancellable Mutual Friends graph fetch
+The root application is an earlier browser-session prototype. It already contains partial VRChat API routes and screens for login, friends, favorites, notifications, moderation, avatars, activity, dashboard, and mutual friends, but it does not yet satisfy the current architecture or parity standard.
 
-The following VRCX areas are intentionally absent because they require local VRChat or desktop integration: Game Log, Player List/Photon data, screenshot Gallery, OpenVR and overlays, OSC, Steam/registry/process control, launch/attach, IPC, window/tray integration, and the Electron updater. See `PLANS.md` for the full eligibility inventory and remaining parity notes.
+In particular, browser-owned polling and `localStorage` persistence must be replaced by the always-on monitor and MongoDB, and the existing UI must be rebuilt where it differs from VRCX. See [PLANS.md](./PLANS.md) for the migration roadmap and acceptance criteria.
 
-## Requirements
+## Target Product
 
-- Node.js 20 or later
-- pnpm 11 or later
-- Network access from the server to `https://api.vrchat.cloud`
-- A trusted-network deployment, preferably behind HTTPS
+- One trusted operator and one active VRChat identity; no application accounts, roles, or multi-tenant behavior.
+- A long-running Next.js/Node.js server that maintains the VRChat Pipeline connection and performs scheduled HTTP API reconciliation even when no browser is open.
+- MongoDB as the source of truth for settings, synchronization state, snapshots, feed and friend history, notifications, favorites, tags, memos, caches, graph data, and other durable VRCX state.
+- A React UI ported from VRCX's views, components, styles, assets, strings, and interactions, with matched-viewport visual comparison as the acceptance standard.
+- Browser adaptations only where required, with each material difference documented.
 
-## Configuration
+## Scope Boundary
 
-Copy `.env.example` to `.env.local` and set:
+Features available from remote VRChat APIs, continuously observed remote state, MongoDB history, or standard browser capabilities are eligible. This includes server-derived Feed, Friend Log, previous-location history, dashboard data, and charts when the remote observations can support them truthfully.
 
-```dotenv
-VRCHAT_USER_AGENT="VRCX-Web/0.1.0 (operator@example.com)"
-VRCHAT_COOKIE_SECURE=true
-```
+Features that require a locally installed or running VRChat client remain excluded: raw Game Log data, Photon Player List, screenshot Gallery, OpenVR/overlay support, Steam/registry/process control, local OSC, launch/attach, IPC, Electron window/tray behavior, and the desktop updater. Excluded controls must not appear as broken placeholders.
 
-`VRCHAT_USER_AGENT` should contain a real operator contact. Keep `VRCHAT_COOKIE_SECURE=true` for production HTTPS. Set it to `false` only when a trusted private deployment cannot provide HTTPS; production cookies otherwise use `Secure`, `HttpOnly`, `SameSite=Strict`, and a root path.
+## Target Runtime
+
+The final deployment requires:
+
+- a persistent Node.js process rather than a request-only or scale-to-zero serverless host;
+- MongoDB reachable only from the application server;
+- outbound access to the approved VRChat API and realtime endpoints;
+- a trusted private network, preferably behind HTTPS.
+
+One monitor leader owns the active VRChat session, realtime connection, background reconciliation, and retention jobs. MongoDB-backed leadership prevents duplicate monitoring if more than one application process exists.
+
+## Security Boundary
+
+- The deployment intentionally has no separate application authentication or authorization layer, so it must not be exposed directly to the public internet.
+- VRChat credentials, cookies, tokens, MongoDB connection strings, and encryption keys remain server-side and must never enter browser storage or logs.
+- Restart-persistent VRChat session material, when implemented, is encrypted before storage in MongoDB; its encryption key is configured outside MongoDB and the repository.
+- Upstream requests use typed, fixed-host, allowlisted service boundaries rather than a general-purpose proxy.
+- Single-user operation does not remove normal XSS, CSRF, request-forgery, validation, cache, and secret-handling requirements.
 
 ## Development
+
+The current prototype uses Node.js 20+ and pnpm 11+:
 
 ```bash
 pnpm install
 pnpm dev
 ```
-
-Open `http://localhost:3000`. The root application is the port; do not run or modify `./VRCX/` unless working on the reference project separately.
 
 Run the verification suite with:
 
@@ -53,31 +60,11 @@ pnpm lint
 pnpm build
 ```
 
-## Production
+MongoDB configuration and migration commands will be documented when Milestone 1 in [PLANS.md](./PLANS.md) is implemented. Until then, existing prototype configuration remains in `.env.example`; do not interpret it as the finished always-on deployment contract.
 
-```bash
-pnpm install --frozen-lockfile
-pnpm build
-pnpm start
-```
+## Visual Acceptance
 
-Place the server behind a private reverse proxy with HTTPS. Preserve the original `Host` or provide correct `X-Forwarded-Host` and `X-Forwarded-Proto` headers so same-origin mutation checks can validate browser requests. Do not expose the deployment directly to the public internet: the trusted-network assumption deliberately means there is no separate VRCX Web authorization layer.
-
-## Security Boundary
-
-- VRChat credentials are sent only to same-origin server routes and are not stored by the application.
-- VRChat session cookies are stored in protected application cookies and are never returned to client JavaScript.
-- The upstream client has a fixed host and endpoint allowlist; this is not a general-purpose proxy.
-- Inputs and upstream payloads are schema-validated, private responses disable caching, and mutations reject cross-site browser requests.
-- Feed, Friend Log, UI preferences, and the Mutual Friends snapshot use browser storage. They contain social/activity data but never credentials or VRChat session cookies.
-
-VRChat API behavior, availability, and rate limits remain upstream dependencies. Large Mutual Friends graphs can require many requests, so fetching starts only after an explicit user action and can be cancelled.
-
-The available API specification is community-maintained and states that third-party API use is not officially supported by VRChat. Endpoints can change without notice. The integration was checked against the [VRChat API specification](https://github.com/vrchatapi/specification) and the current VRCX request implementations, but operators should expect upstream compatibility maintenance.
-
-## Browser and Responsive Support
-
-The supported baseline is the current stable versions of Chromium, Firefox, and Safari. Screens are designed for approximately 360, 768, 1280, and 1920 pixel widths. Wide data tables retain a mobile card layout or an intentional local horizontal scroller.
+The running VRCX application is the primary visual fixture. Screens must be compared at matching desktop content viewport sizes, including approximately 1280 and 1920 pixels wide, across populated, empty, loading, selected, dialog, menu, error, and disabled states. Narrow layouts at approximately 360 and 768 pixels must remain usable and recognizably VRCX rather than becoming a separate web design.
 
 ## License and Attribution
 

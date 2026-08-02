@@ -1,253 +1,311 @@
-# VRCX Web Port Plan
+# VRCX Next.js Port Plan
 
 ## Purpose
 
-This document is the living implementation plan for a browser-based VRCX port. It should be updated as investigation resolves unknowns. The goal is to port the applicable source code from `./VRCX/` into a faithful, responsive web application for features that can operate without a locally installed or running VRChat client.
+This is the living plan and decision log for a local-first, single-user VRCX port built with Next.js. The product should look and behave like VRCX for every feature that can be implemented from remote VRChat APIs, server-derived history, MongoDB, and standard browser capabilities.
+
+The Next.js server is an always-on application process, not merely a page renderer. It owns the VRChat session, realtime Pipeline connection, scheduled HTTP reconciliation, durable event processing, and MongoDB persistence. Monitoring must continue while no browser is connected.
+
+## Changed Direction
+
+The earlier root prototype treated this as a browser-session application: it omitted all local-derived areas, refreshed friends from an open page, and stored several histories and preferences in browser storage. That approach is superseded.
+
+The accepted direction is now:
+
+- keep excluding behavior that truly requires a locally installed or running VRChat client;
+- recover as much VRCX behavior as possible from continuous server-side VRChat HTTP and realtime API observation;
+- store all durable application data in MongoDB rather than browser storage or SQLite;
+- support exactly one operator and one active VRChat identity;
+- reproduce VRCX's UI instead of retaining the current root prototype's differing web design.
+
+Existing root features are useful API and domain prototypes, but no feature is considered parity-complete until it meets the new monitoring, MongoDB, and visual acceptance criteria.
 
 ## Product Constraints
 
-- `./VRCX/` is the read-only source checkout from which the root web application is ported. It is the primary implementation, visual, and behavioral reference.
-- The root web application must build and run independently; it must not import from or require the nested reference checkout at build time or runtime.
-- Make only the changes required by the browser platform, responsive layout, accessibility, and security.
-- Reuse VRCX code and assets when practical, while retaining required MIT license notices and recording provenance.
-- Exclude all features whose useful operation depends on local VRChat files, logs, processes, Steam, OpenVR, Electron, Windows APIs, IPC, or other desktop-only integrations.
-- Support mobile, tablet, desktop, and wide desktop layouts.
-- Do not build a separate application account, authorization, or access-control system. Support only the VRChat session flow required for remote VRChat functionality.
-- Write documentation, code comments, and Git commit messages in English.
-- Deliver work in small, verified commits.
+- `./VRCX/` is the read-only implementation, behavior, and visual reference. The root application must run independently of that checkout.
+- VRCX UI parity is the default. Every visible difference needs a browser, accessibility, security, or excluded-feature justification.
+- The deployment is a long-lived Node.js service on a trusted private network with access to MongoDB and the VRChat remote services.
+- The server monitors one VRChat identity continuously. It does not require a browser tab to remain open.
+- MongoDB is the authoritative store for all durable settings, observations, histories, caches, preferences, synchronization state, and retained session state.
+- No application accounts, roles, tenants, or authorization system will be added. VRChat authentication remains required and server-scoped.
+- Local VRChat installation/process/log/filesystem, Steam, OpenVR, Electron, Windows API, IPC, registry, local OSC, and tray/window integration remain out of scope.
+- Documentation, code comments, and Git messages are written in English.
+
+## Target Runtime Architecture
+
+```text
+VRChat HTTP API ---- reconciliation/snapshots ----+
+                                                  |
+VRChat Pipeline ---- realtime events ------------>+-- Monitor/ingestion service -- MongoDB
+                                                  |          |                   |
+Scheduled jobs ------ refresh/repair/retention -->+          |                   |
+                                                             v                   v
+Browser <------ VRCX-parity React UI <------ Next.js routes/server actions <--- queries
+```
+
+### Process Model
+
+- Run Next.js in a persistent Node.js environment. A request-only or scale-to-zero serverless deployment is unsupported.
+- Run one logical monitor leader. If the deployment has multiple Node.js processes, use a MongoDB-backed lease with expiry and renewal to prevent duplicate Pipeline connections and jobs.
+- Start monitoring after a stored session is validated. Authentication-required state is durable and visible to the operator.
+- Keep interactive API requests and background synchronization behind the same typed, allowlisted VRChat client and coordinated rate-limit budget.
+
+### Observation Model
+
+- Use the VRChat Pipeline WebSocket for prompt friend presence, relationship, notification, and other supported events.
+- Use paginated HTTP snapshots at startup and on a schedule to establish baselines and repair gaps because the Pipeline is not a durable event queue.
+- After disconnect or process restart, validate the session, reconcile current remote state, derive any safely inferable changes, and reconnect.
+- Persist both upstream occurrence time, when available, and ingestion time. Mark events derived from snapshot differences so the UI does not imply unavailable precision.
+- Deduplicate with upstream IDs or deterministic keys. Event handling and reconciliation must be safe to retry.
+- Expose connection, last-event, last-reconciliation, rate-limit, and authentication health in the VRCX-equivalent status surface.
+
+### MongoDB Model
+
+Collection names are provisional until each VRCX storage path is traced, but the logical groups are fixed:
+
+| Logical collection | Responsibility | Important indexes/invariants |
+| --- | --- | --- |
+| `app_settings` | Singleton VRCX settings, appearance, language, navigation, and retention configuration | Unique singleton key |
+| `vrchat_session` | One encrypted restart-persistent VRChat session when enabled | Unique singleton key; never return session material to clients |
+| `monitor_state` | Leader lease, cursors, baselines, health, reconciliation timestamps, and rate-limit state | Unique singleton/stream keys; lease expiry index |
+| `users` | Cached current user, friends, and remotely observed user profiles | Unique VRChat user ID; freshness index |
+| `worlds`, `groups`, `avatars` | Remote object caches used by VRCX workflows | Unique upstream ID; freshness/updated indexes |
+| `friend_snapshots` | Current authoritative remote-observable friend state | Unique friend ID for the single active identity |
+| `activity_events` | Feed, Friend Log, presence, status, location, avatar, bio, and relationship history | Unique idempotency key; subject/time and type/time indexes |
+| `notifications` | Legacy and V2 notification state and history | Unique upstream notification ID; created/seen indexes |
+| `favorites` | VRChat and VRCX-local favorite group membership | Unique owner/type/group/object tuple |
+| `memos`, `avatar_tags` | User/world/avatar memos and avatar tagging | Unique target or target/tag keys |
+| `moderations` | Remotely visible moderation snapshots/history | Unique subject/type key; updated index |
+| `mutual_graph` | Mutual-friend nodes, edges, opt-outs, and fetch metadata | Unique edge and friend metadata keys |
+| `jobs` | Restart-safe backfills, migrations, imports, and long-running fetch state | Unique job key; status/updated index |
+
+Detailed schemas, retention, and VRCX SQLite/JSON mappings must be added before implementing each repository. MongoDB migrations must be versioned, idempotent, and restart-safe.
 
 ## Definition of Done
 
-The initial web port is ready when:
+The port is ready when:
 
-1. Supported VRCX workflows are inventoried and every candidate feature has an explicit portability decision.
-2. Users can establish and recover the VRChat API session needed by supported features without a separate VRCX Web account system.
-3. The implemented navigation, shell, shared components, and feature screens closely match VRCX at desktop widths.
-4. Every implemented workflow remains usable at 360, 768, 1280, and 1920 px viewport widths.
-5. Local-only features are absent from the production UI and do not leave broken routes or controls.
-6. Credentials and session material remain server-side or in appropriately protected cookies; sensitive data is not logged or bundled into the client.
-7. Loading, empty, failure, rate-limit, and expired-session states are handled consistently.
-8. Lint, production build, relevant automated tests, and manual responsive checks pass.
-9. Copied VRCX code and assets retain the notices required by the MIT license.
-10. The roadmap and decision log accurately describe the shipped behavior and known gaps.
+1. Every VRCX area has a documented `Remote-compatible`, `Server-derived`, `Browser-adaptable`, or `Local-VRChat-only` decision supported by source paths.
+2. The server can establish, persist securely, validate, recover, and replace the one active VRChat session without a separate application identity system.
+3. The monitor stays healthy without an open browser, reconnects after failures, reconciles missed state, respects rate limits, and never processes the same upstream fact twice.
+4. VRCX-equivalent durable data is stored in MongoDB with validated schemas, indexes, migrations, retention, backup, and restore guidance.
+5. Eligible navigation, screens, dialogs, interactions, and states match VRCX at reference desktop viewport sizes, with only documented browser differences.
+6. Narrow layouts remain usable without changing the VRCX visual identity or silently dropping important content.
+7. Local-VRChat-only features are absent and do not leave dead routes, controls, or misleading data.
+8. Credentials, session material, and database secrets remain server-side, encrypted where persisted, and absent from logs and client storage.
+9. Startup, restart, disconnection, malformed payload, session expiry, upstream outage, and rate-limit behaviors have automated coverage.
+10. Unit/integration tests, lint, production build, visual comparisons, and the operator's authenticated smoke tests pass.
+11. Copied VRCX code and assets retain required MIT notices and provenance.
+12. This roadmap and the difference register match the shipped behavior.
 
 ## Feature Eligibility Inventory
 
-The initial source audit below records the production scope. A feature marked `Adaptable` is ported without the listed local-only subfeatures; it is not deferred indefinitely.
+This inventory replaces the old browser-only scope. `Server-derived` means the feature is eligible only to the fidelity supported by continuous remote observation; it does not permit fabricated local-game data.
 
-| Area | Decision | Reference evidence and web-port direction |
+| Area | Decision | Port direction |
 | --- | --- | --- |
-| Login, VRChat session, TOTP/OTP/email OTP, and logout | Web-compatible | Port `VRCX/src/views/Login`, `stores/auth.js`, `api/auth.js`, and the `auth/user` flow through server-only routes; omit saved passwords and custom endpoints initially |
-| Main layout, navigation, responsive friend sidebar, dialogs, themes, and supported settings | Adaptable | Port `views/Layout`, `views/Sidebar`, `components/nav-menu`, and `styles`; omit Electron window, updater, tray, local-game, VR, and native notification settings |
-| Friends Locations and remote friend presence | Adaptable | Port `views/FriendsLocations`, remote friend/location stores, and relevant dialogs; omit launch/attach controls and replace local-only favorites with browser-safe persistence where useful |
-| Search for users, worlds, groups, and avatars | Web-compatible | Port `views/Search` and its API-backed composables; keep all requests behind the allowlisted server boundary |
-| Favorite friends, worlds, and avatars | Adaptable | Port `views/Favorites` and remote favorite APIs; use browser-safe import/export and persistence, omitting arbitrary filesystem access and local avatar history derived from the desktop database |
-| Friend List | Web-compatible | Port `views/FriendList`, `api/friend.js`, and supported user details/actions |
-| Moderation | Web-compatible | Port `views/Moderation`, `api/playerModeration.js`, and supported moderation actions |
-| Notifications and invite responses | Web-compatible | Port `views/Notifications`, `api/notification.js`, and remote response flows; browser notifications are a separate optional adaptation |
-| My Avatars | Adaptable | Port remote avatar management and browser upload/crop flows from `views/MyAvatars`; omit desktop-database avatar history and filesystem-only operations |
-| Feed and Friend Log | Adaptable | Port remote events and history from `views/Feed` and `views/FriendLog` using web/server persistence; omit entries derived only from local VRChat logs |
-| Dashboard | Adaptable | Port `views/Dashboard` after supported widgets exist; do not expose widgets backed only by excluded local features |
-| Mutual Friends chart | Adaptable | Port the remote mutual-friends graph from `views/Charts/components/MutualFriends.vue`; replace desktop database caching with a web-safe store |
-| Instance Activity and Hot Worlds charts | Excluded in current form | Their source implementations read the desktop activity database populated by local observation; reconsider only if an equivalent remote-only data source is proven |
-| Game Log | Local-only | Exclude `views/GameLog`, `services/gameLog.js`, and local VRChat log watchers |
-| Player List and Photon data | Local-only | Exclude `views/PlayerList` and live local-game/photon processing |
-| Gallery and Screenshot Metadata | Local-only | Exclude screenshot-directory watching and arbitrary local-file metadata tooling |
-| VR overlay, OpenVR, OSC, Steam, registry, launch/attach, process, IPC, window, and tray integration | Local-only | Do not port these modules or show their controls |
-| Application updater | Local-only | Use normal web deployment and omit Electron updater UI |
-| Browser-safe application preferences and import/export | Web-compatible | Use protected browser/server storage and explicit browser downloads/uploads; never require arbitrary filesystem access |
+| Login, TOTP/OTP/email OTP, session recovery, logout | Remote-compatible | Port VRCX auth behavior into server-only routes and persist only encrypted restart state required for the single monitor |
+| Main layout, navigation, themes, status bar, dialogs, eligible settings | Browser-adaptable | Rebuild from VRCX layout/components/styles; remove only controls for excluded native integrations |
+| Friends Locations, online sidebar, presence | Remote-compatible | Drive live UI from MongoDB projections updated by Pipeline events and HTTP reconciliation |
+| Feed and Friend Log | Server-derived | Persist remote relationship, presence, location, status, display name, bio, avatar, and notification changes observed continuously by the server |
+| Friend List and user details | Remote-compatible | Port complete remote-backed tables, filters, tabs, dialogs, and actions |
+| Search for users, worlds, groups, avatars | Remote-compatible | Port approved provider/API searches through allowlisted server boundaries |
+| Favorite friends, worlds, avatars and local groups | Remote-compatible | Persist remote favorite state and VRCX-local organization in MongoDB |
+| Notifications and invite responses | Remote-compatible | Ingest Pipeline plus HTTP reconciliation; port remote actions; exclude join actions requiring the running game |
+| Moderation | Remote-compatible | Port remotely supported player/avatar moderation display and actions |
+| My Avatars | Browser-adaptable | Port remote management and browser upload/crop workflows; persist tags/memos/cache metadata in MongoDB |
+| Dashboard | Server-derived | Reproduce all widgets whose inputs exist in remote state or MongoDB history |
+| Mutual Friends chart | Server-derived | Store graph, opt-outs, cursors, and rate-limited fetch jobs in MongoDB |
+| Instance Activity and Hot Worlds charts | Server-derived, fidelity investigation required | Determine whether continuously observed remote friend locations can truthfully reproduce each metric; label or omit fields needing local instance occupancy |
+| Previous instances for users/worlds/groups | Server-derived | Build from remotely observed locations with explicit observation-source semantics |
+| Browser notifications | Browser-adaptable | Optional browser delivery may mirror eligible VRCX notifications after permission is granted |
+| Application preferences and import/export | Browser-adaptable | Store authoritative preferences in MongoDB; use explicit browser downloads/uploads for import/export |
+| Game Log details from local VRChat logs | Local-VRChat-only | Exclude raw join/leave, portal, video, resource, and local event records unavailable through remote APIs |
+| Player List and Photon data | Local-VRChat-only | Exclude current-instance Photon/player tracking that requires the running game |
+| Gallery and screenshot metadata | Local-VRChat-only | Exclude local screenshot watching and filesystem metadata tooling |
+| VR overlay, OpenVR, Steam, registry, process, launch/attach, IPC, window, tray, Electron updater | Local-VRChat-only | Exclude navigation, controls, and settings |
+| Local OSC integrations tied to VRChat | Local-VRChat-only | Exclude because the server must not require a local VRChat client |
 
-## Ported Feature Status
+## Existing Prototype Assessment
 
-| Feature slice | Status | Remaining parity work |
-| --- | --- | --- |
-| VRChat login/session | Implemented | Complete security review and add route-level integration tests |
-| Responsive VRCX shell and theme | Implemented | Add remaining navigation entries only as their screens become functional; expand appearance settings |
-| Friends Locations and friend sidebar | Implemented | Resolve world metadata more consistently and complete visual viewport comparisons |
-| User details | Implemented | Port additional remote-backed tabs such as mutual friends, groups, worlds, and avatars |
-| Search | Implemented for users, worlds, and groups | Add avatar-provider search when its optional remote-provider configuration is defined; replace external world/group links with full dialogs |
-| Favorites | Implemented for VRChat groups | Friend, world, and avatar groups support responsive browsing, filtering, moving, removal, display-name/visibility administration, and clearing; import/export and optional browser-local groups remain |
-| Friend List | Implemented | Add advanced VRCX columns, bulk mutual-data refresh, and favorite-only filtering |
-| Moderation | Implemented for player moderations | Add avatar moderation visibility and actions to avatar details |
-| Notifications | Implemented | Browser-safe legacy and V2 list, filtering, read/hide, friend approval, and V2 response actions are ported; actions that need the running VRChat client or its current instance are intentionally omitted |
-| My Avatars | Implemented for remote management | Responsive grid/table browsing, filters, selection, metadata/visibility editing, impostor queueing, and deletion are ported; image/gallery upload and browser-local tags remain |
-| Feed and Friend Log | Implemented for remotely observable friend changes | Browser persistence records relationship, presence, location, status, avatar, bio, and display-name changes seen by periodic API refreshes; local game/Photon events are intentionally absent |
-| Dashboard | Implemented | Uses only ported remote friend, location, and browser-backed feed data; local instance and game-log widgets are omitted |
-| Mutual Friends chart | Implemented | User-triggered, cancellable remote graph fetch includes rate limiting, 429 backoff, opt-out handling, browser snapshot caching, a responsive SVG overview, and ranked relationships |
+The root prototype already contains useful VRChat server routes and partial React screens for login, friends, favorites, moderation, notifications, avatars, dashboard, activity, and mutual friends. These are inputs to the new port, not completed slices.
 
-## Delivery Strategy
+Known rework required:
 
-Each milestone should be split into small vertical slices. A normal slice starts by tracing the implementation in `./VRCX/`, then includes an eligibility decision, source-path notes, ported types/service logic, UI states, responsive behavior, verification, a plan update when needed, and a focused English commit.
+- Replace browser-owned two-minute friend polling with the always-on monitor and MongoDB-backed projections.
+- Replace `localStorage` activity, graph, appearance, navigation, and view preferences with MongoDB repositories and server APIs.
+- Re-audit session persistence for restart-safe, encrypted single-user monitoring.
+- Replace the current custom web shell and screen styling with components and values ported directly from VRCX.
+- Reassess each previous exclusion under the `Server-derived` classification.
+- Remove claims that features are complete until matched-state screenshots and interactions prove VRCX parity.
 
-### Milestone 0 — Reference Audit and Baseline
+## Delivery Plan
 
-Status: In progress — implementation complete; authenticated visual capture remains
-
-- [x] Establish repository-wide contribution and porting rules in `AGENTS.md`.
-- [x] Establish the initial roadmap and constraints in `PLANS.md`.
-- [x] Map the top-level VRCX routes, default navigation, views, API modules, service boundaries, style tokens, icons, and English localization resources.
-- [x] Create a feature inventory with `Web-compatible`, `Adaptable`, or `Local-only` decisions and evidence paths into `VRCX/`.
-- [x] Define destination root source paths for ported views, shared UI, domain state, upstream API code, and reused assets; never import production modules from `./VRCX/`.
-- [x] Identify initial reused code/assets and distribute the VRCX MIT notice in `THIRD_PARTY_NOTICES.md`.
-- [ ] Capture desktop visual references for the first supported screens.
-- [x] Record the browser support policy and test viewport matrix in `README.md` and the responsive baseline in `AGENTS.md`.
-
-Exit criteria: the first implementation slice has a documented VRCX reference, confirmed remote data path, scope boundary, and visual acceptance target.
-
-### Milestone 1 — Web Foundation and VRCX Shell
+### Milestone 0 — Rebaseline and Reference Capture
 
 Status: In progress
 
-- [x] Replace starter metadata, fonts, colors, and global styles with initial VRCX-derived equivalents.
-- [x] Define the initial shared tokens for color, typography, spacing, radii, motion, and responsive breakpoints.
-- [x] Build the first responsive application shell, navigation, header, content region, mobile overlay, and feedback states.
-- [x] Preserve VRCX's desktop navigation at wide sizes and introduce a compact drawer at narrow sizes.
-- [ ] Add core reusable primitives needed by the first feature: buttons, inputs, tabs, list/table patterns, menus, dialogs, tooltips, skeletons, empty states, and errors.
-- [x] Establish typed server-only boundaries and documented environment configuration.
-- [x] Add unit test infrastructure for root web-port code without collecting tests from the reference checkout.
-- [ ] Add automated checks for accidental horizontal page overflow and key navigation accessibility where practical.
+- [x] Record the single-user, always-on, MongoDB, VRCX-parity direction in `AGENTS.md`, `PLANS.md`, and `README.md`.
+- [ ] Inventory every VRCX route, navigation item, dialog, store, realtime event, API path, setting, and database method.
+- [ ] Capture the running VRCX shell and key states at fixed desktop content viewport sizes.
+- [ ] Create a difference register mapping every current root route to its VRCX source and visible deviations.
+- [ ] Confirm remote observation feasibility for all formerly local-derived charts and histories.
+- [ ] Record exact exclusions without removing remotely derivable behavior.
 
-Exit criteria: a faithful VRCX shell renders at all baseline widths, shared primitives cover the first feature, and lint/build/tests pass.
+Exit criteria: the scope inventory, visual fixtures, persistence map, and remote-source map are sufficient to prevent guesswork.
 
-### Milestone 2 — VRChat Remote Session and API Boundary
+### Milestone 1 — MongoDB Foundation and Single-User State
 
-Status: In progress
+Status: Planned
 
-- [x] Confirm the VRChat API integration requirements and document the community-maintained, unsupported upstream constraint in `README.md`.
-- [x] Define a typed, allowlisted server-side VRChat service boundary; do not create a general-purpose proxy.
-- [x] Implement the minimum VRChat login/session, two-factor challenge, session validation, expiry recovery, and logout behavior required by the first supported feature.
-- [x] Store session material in secure, HTTP-only cookies or an equivalently protected server-side mechanism.
-- [x] Prevent credentials, cookies, tokens, and sensitive response fields from entering logs, error pages, analytics, or client-readable state.
-- [x] Implement normalized errors for offline/upstream failure, invalid session, forbidden action, rate limiting, and unexpected responses.
-- [ ] Complete boundary validation, retry policy, route-level security tests, and CSRF review as more upstream routes are added.
-- [x] Document that this session flow is VRChat integration, not a separate VRCX Web authentication system.
+- [ ] Add the MongoDB driver, validated environment configuration, connection lifecycle, health check, and test database strategy.
+- [ ] Define versioned migrations, indexes, repository boundaries, retention, backup, and restore behavior.
+- [ ] Implement singleton settings and active-identity records.
+- [ ] Move current durable browser state into MongoDB with an explicit one-time migration/import path.
+- [ ] Implement encrypted server-side VRChat session persistence with the key supplied outside MongoDB.
+- [ ] Add safe active-identity replacement that prevents cross-account data mixing.
 
-Exit criteria: a user can establish and terminate the required VRChat session, failure states are recoverable, and no custom application identity system exists.
+Exit criteria: the server restarts without losing authoritative application state, and no new durable product data is browser-owned.
 
-### Milestone 3 — First Complete Remote Workflow
+### Milestone 2 — Always-On VRChat Monitor
 
-Status: In progress — Friends Locations selected
+Status: Planned
 
-Select the first workflow after the inventory. Prefer a frequently used, clearly remote-backed workflow such as friend browsing and user details.
+- [ ] Port VRCX Pipeline event parsing and relevant coordinator behavior into typed server modules.
+- [ ] Implement startup baseline synchronization and paginated HTTP reconciliation.
+- [ ] Add reconnect backoff, post-gap reconciliation, session-expiry recovery, and coordinated rate limiting.
+- [ ] Add MongoDB-backed singleton leader leasing for multi-process safety.
+- [ ] Implement idempotent event writes, current-state projections, cursors, and derived-event provenance.
+- [ ] Expose monitor health and stream/reconciliation timestamps to the UI.
+- [ ] Prove monitoring and restart recovery with no browser connected.
 
-- [x] Port the Friends Locations navigation entry and overview screen.
-- [x] Port friend details, profile links, copy-ID, unfriend, search/filter, and refresh behavior.
-- [x] Match the core VRCX friend-card, desktop shell, and sidebar layout using shared primitives.
-- [x] Design narrow-screen reflow without removing core friend data.
-- [x] Implement initial loading, empty, error, rate-limit, and expired-session states.
-- [ ] Add service, component, and high-value flow tests.
-- [ ] Compare at all baseline widths and document intentional differences from VRCX.
+Exit criteria: one server monitor maintains recoverable remote state continuously and safely across disconnects and restarts.
 
-Exit criteria: one high-value workflow is usable end to end, visually faithful, responsive, tested, and independent of local VRChat.
+### Milestone 3 — Exact VRCX Shell and Shared UI
 
-### Milestone 4 — Expand Supported Remote Features
+Status: Planned
 
-Status: In progress
+- [ ] Port VRCX theme variables, typography, icons, spacing, density, scrollbars, motion, and component-state styles.
+- [ ] Recreate the VRCX layout, navigation, status bar, friend sidebar, menus, popovers, dialogs, and settings structure.
+- [ ] Build shared React primitives only from observed VRCX patterns.
+- [ ] Remove navigation and settings entries for confirmed Local-VRChat-only features.
+- [ ] Add matched-viewport screenshot tests for the shell's significant states.
+- [ ] Verify narrow layouts without introducing a separate visual design.
 
-Port additional areas one vertical slice at a time, in an order chosen from the verified inventory. Candidate areas include friends, notifications, groups, worlds, favorites, avatars, and remote profile actions. For each slice:
+Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.
 
-- [ ] Reconfirm feature eligibility and exclude local-only subfeatures.
-- [ ] Reuse or extend service types and shared UI instead of duplicating them.
-- [ ] Match all meaningful VRCX states and interactions.
-- [ ] Verify responsive behavior and keyboard/touch usability.
-- [ ] Add regression coverage for data mapping and key actions.
-- [ ] Update the feature inventory, differences, and decision log.
-- [ ] Commit each coherent slice separately with an English message.
+### Milestone 4 — Remote Workflows and History
 
-Exit criteria: every selected feature meets the global definition of done; excluded features remain absent.
+Status: Planned
 
-### Milestone 5 — Hardening and Release Readiness
+Port one complete VRCX workflow at a time in this order unless dependency discovery changes it:
 
-Status: In progress
+1. Friends Locations, sidebar, and status surfaces.
+2. Feed, Friend Log, and remotely observed previous locations.
+3. User dialogs, Friend List, search, and relationship actions.
+4. Notifications and responses.
+5. Favorites, memos, tags, and organization.
+6. Moderation and My Avatars.
+7. Dashboard, mutual graph, and eligible server-derived charts.
+8. Remaining remote-backed dialogs, settings, import/export, and tools.
 
-- [x] Audit all routes for secret exposure, unsafe forwarding, input validation, XSS, CSRF, and cache mistakes; add a shared browser mutation origin guard.
-- [ ] Test upstream outages, slow responses, session expiry, rate limiting, and malformed data.
-- [ ] Test responsive layouts on representative touch and desktop browsers.
-- [ ] Audit keyboard navigation, focus management, labels, contrast, motion, and screen-reader landmarks.
-- [x] Review performance for image sizing, request waterfalls, large lists, and unnecessary client-side JavaScript; page large API collections sequentially and cap the SVG graph view.
-- [x] Confirm local-only controls and dead routes are absent.
-- [x] Confirm VRCX attribution and third-party notices are complete.
-- [x] Replace the starter README with deployment, configuration, security-boundary, and operator documentation.
-- [x] Run `pnpm lint`, `pnpm test`, and `pnpm build`; smoke-test anonymous session, authenticated-route redirect, security headers, and cross-site mutation rejection.
+For every slice:
 
-Exit criteria: the web port is documented, deployable on the intended trusted network, resilient to expected upstream failures, and passes release checks.
+- [ ] Record exact VRCX source, remote inputs, Pipeline events, and persistence mapping.
+- [ ] Implement repository/service behavior and monitor projections before the UI depends on them.
+- [ ] Match all VRCX states and interactions at the reference viewport.
+- [ ] Add responsive, keyboard, and touch behavior without redesigning the screen.
+- [ ] Add transformation, persistence, action, recovery, and high-value UI tests.
+- [ ] Record unavoidable differences and authenticated verification evidence.
+
+Exit criteria: each eligible workflow is durable, continuously updated, tested, and visually faithful end to end.
+
+### Milestone 5 — Migration, Hardening, and Release
+
+Status: Planned
+
+- [ ] Provide migrations for current root browser data and supported VRCX exports without requiring `./VRCX/` at runtime.
+- [ ] Test prolonged operation, rate limits, upstream outages, malformed events, session expiry, MongoDB interruption, process restart, and lease failover.
+- [ ] Audit route allowlists, XSS, CSRF, request forgery, cache behavior, secrets, encryption, logging, and accidental public exposure.
+- [ ] Verify MongoDB backup/restore and retention/cleanup workflows.
+- [ ] Complete keyboard, focus, labels, contrast, reduced-motion, touch, and responsive audits.
+- [ ] Complete matched-state VRCX visual comparisons for every shipped screen.
+- [ ] Run the full test, lint, production build, and authenticated operator smoke suite.
+- [ ] Confirm attribution, deployment, monitoring, recovery, and known-difference documentation.
+
+Exit criteria: the application is suitable for continuous single-user private deployment and meets the global definition of done.
 
 ## Cross-Cutting Acceptance Checklist
 
-Apply this checklist to every feature slice:
-
-- [ ] The VRCX reference files and behavior were inspected.
-- [ ] Relevant code was ported from `./VRCX/` into maintained root source paths rather than recreated without reference.
-- [ ] The plan entry or implementation records the relevant `./VRCX/` source paths and material adaptations.
-- [ ] The feature does not require local VRChat or desktop integration.
-- [ ] Any omitted VRCX behavior is documented and absent from the UI.
-- [ ] Desktop visuals closely match VRCX.
-- [ ] Mobile and tablet layouts are intentional and usable.
-- [ ] Keyboard, touch, focus, loading, empty, error, and disabled states work.
-- [ ] External data is typed and validated at its boundary.
-- [ ] Secrets and session data do not leak to client state or logs.
+- [ ] Exact VRCX source files and running behavior were inspected.
+- [ ] Remote inputs, realtime events, reconciliation rules, and observation limits are documented.
+- [ ] Durable state is validated and stored in MongoDB with required indexes and migrations.
+- [ ] Ingestion and actions are idempotent, recoverable, and rate-limit aware.
+- [ ] The feature works after server restart and without a browser open when monitoring is involved.
+- [ ] Local-VRChat-only behavior is excluded without dead controls.
+- [ ] Desktop screenshots and interaction states match VRCX at the same content viewport.
+- [ ] Narrow layouts remain usable and recognizably VRCX.
+- [ ] Keyboard, touch, focus, loading, empty, error, disabled, unread, and stale states work.
+- [ ] External and stored data are typed and validated at their boundaries.
+- [ ] Secrets and session data do not leak to logs, client state, or unencrypted storage.
 - [ ] Relevant tests, `pnpm lint`, and `pnpm build` pass.
-- [ ] Non-obvious decisions have useful English comments.
-- [ ] Documentation and the feature inventory are current.
-- [ ] The change is committed as a small, focused commit with an English message.
+- [ ] Provenance, differences, and plan status are current.
+- [ ] The change is committed as a small, focused English commit.
 
 ## Decision Log
 
-Use this section for decisions that affect future work. Add the date, decision, rationale, and consequences.
+### 2026-08-02 — Make VRCX UI Parity the Acceptance Standard
 
-### 2026-08-02 — Preserve VRCX as the Design Baseline
+Decision: Replace the current root web design wherever it differs from VRCX and require matched-state, matched-viewport visual comparison.
 
-Decision: Use the original VRCX UI and interaction model with minimal browser-specific adaptation.
+Rationale: The product is a port of VRCX, not a VRCX-inspired website.
 
-Rationale: Familiarity and parity are product requirements, not merely inspiration.
+Consequence: Framework defaults and existing root components have no compatibility priority. Differences require correction or explicit documentation.
 
-Consequence: Proposed redesigns need a concrete browser, responsive, accessibility, or security justification.
+### 2026-08-02 — Monitor VRChat Continuously on the Server
 
-### 2026-08-02 — Exclude Local VRChat Dependencies
+Decision: Move observation out of browser refresh cycles into an always-running server monitor that uses the VRChat Pipeline and scheduled HTTP reconciliation.
 
-Decision: Do not port functionality that needs a local VRChat installation, running process, local logs/files, or native OS integration.
+Rationale: VRCX-like history must continue to accumulate while the UI is closed and must survive browser and server restarts.
 
-Rationale: Such behavior cannot work reliably as a browser application and is outside the requested product scope.
+Consequence: Persistent Node.js hosting is required. Serverless/scale-to-zero deployment is unsupported, and monitor leadership, retry, reconciliation, health, and rate-limit behavior become core product requirements.
 
-Consequence: Related navigation and controls are omitted rather than disabled indefinitely.
+### 2026-08-02 — Use MongoDB for All Durable Application Data
 
-### 2026-08-02 — No Separate Application Authentication
+Decision: Replace VRCX SQLite/JSON persistence and the root prototype's browser storage with MongoDB repositories.
 
-Decision: Do not build accounts, roles, or access control for VRCX Web. Implement only the VRChat session behavior required for supported remote features.
+Rationale: One server-owned database is needed for continuous monitoring, history, settings, recovery, and consistent UI state.
 
-Rationale: The application will run on a trusted network and does not need another identity layer.
+Consequence: Every feature requires a collection/index/migration mapping. Durable data may not be added to browser storage, JSON files, or process memory.
 
-Consequence: Deployment documentation must clearly state the trusted-network assumption, while implementation still protects VRChat credentials and sessions.
+### 2026-08-02 — Support One Operator and One Active VRChat Identity
 
-### 2026-08-02 — Responsive Adaptation Is Required
+Decision: Optimize the entire deployment for one trusted operator and one monitored VRChat account.
 
-Decision: Preserve the VRCX desktop experience while adding deliberate layouts for narrow screens.
+Rationale: Multi-user accounts, tenancy, and authorization would add complexity outside the intended deployment.
 
-Rationale: A browser port must remain useful across common viewport and input types.
+Consequence: Settings, monitor state, and retained session are singletons. Switching VRChat identities must be explicit and must prevent data mixing.
 
-Consequence: Responsive behavior is part of feature acceptance, not deferred polish.
+### 2026-08-02 — Exclude Features That Require Local VRChat
 
-### 2026-08-02 — Poll Remote State for Browser Activity History
+Decision: Do not require a local VRChat installation, process, logs, files, or desktop/VR integrations. Reconsider formerly excluded history and charts only when the same user-visible result can be derived truthfully from remote observation.
 
-Decision: Build Feed and Friend Log entries from periodic complete friend-list snapshots and persist them per VRChat user in browser storage.
+Rationale: The server should reproduce VRCX as closely as possible through VRChat APIs, not by coupling deployment to the game workstation.
 
-Rationale: VRCX normally combines remote pipeline events with its desktop database. Keeping VRChat cookies HTTP-only prevents a direct authenticated browser pipeline connection, while server-resident WebSocket state would make deployment substantially more complex.
+Consequence: Raw Game Log, Photon Player List, Gallery, OpenVR, Steam/process, OSC, IPC, registry, Electron window/tray, and similar functionality remain omitted. Remote-derived substitutes must disclose their observation limits.
 
-Consequence: The web feed records changes observed while the application is open, at refresh granularity, and intentionally contains no local game or Photon events.
+### 2026-08-02 — Keep the Deployment Private Without Custom Application Auth
 
-## Verification Evidence
+Decision: Do not add application accounts or authorization. Protect the deployment through trusted-network operations while keeping VRChat authentication and secrets server-side.
 
-The 2026-08-02 release audit completed the following checks:
+Rationale: Only one operator uses the server.
 
-- `pnpm test`: 5 files and 11 tests passed.
-- `pnpm lint`: Biome passed across the root port.
-- `pnpm build`: Next.js production compilation, TypeScript validation, and all 28 generated routes passed.
-- Production smoke test: `/login` returned 200 with security headers; `/` redirected anonymous users to `/login`; `/api/auth/session` returned an anonymous snapshot; a cross-site login POST returned 403.
-- Real authenticated VRChat mutation and visual comparison remain operator checks because no VRChat credentials are stored in or supplied to the repository test environment.
+Consequence: Private HTTPS deployment remains mandatory guidance, and normal XSS, CSRF, credential, proxy, and accidental-exposure protections still apply.
 
-## Resolved Release Choices
+## Historical Verification
 
-- Browser baseline: current stable Chromium, Firefox, and Safari; deployment baseline: Node.js 20+ with pnpm 11+, preferably behind an HTTPS reverse proxy.
-- Browser notifications are not part of the initial port; the in-application notification center is the supported browser behavior.
-- The initial port ships English UI text. VRCX localization reuse can be added without changing the feature boundary.
-- VRCX attribution and the MIT notice are present in `README.md`, `THIRD_PARTY_NOTICES.md`, and the deployed `/about` screen.
+Before this rebaseline, the browser-session prototype passed its existing unit tests, Biome check, Next.js production build, anonymous redirect smoke test, security-header check, and cross-site mutation rejection. That evidence remains useful for unchanged low-level code but does not establish MongoDB, always-on monitoring, or VRCX visual parity.
+
+The 2026-08-02 documentation rebaseline passed `pnpm test` (5 files, 13 tests), `pnpm lint` (74 files), and `pnpm build` (28 generated routes).
+
+Authenticated VRChat behavior, long-running monitoring, restart recovery, MongoDB migrations, and matched-state VRCX screenshots remain required operator checks as those systems are implemented.
