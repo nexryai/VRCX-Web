@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     if (!stored?.cookies.auth || stored.status !== "authenticated") return NextResponse.json({ error: "Sign in to refresh remote state." }, { status: 401 });
     try {
         const result = await reconcileRemoteState(stored.cookies);
+        if (!result) return NextResponse.json({ success: true, accepted: true, message: "A reconciliation is already running." }, { status: 202 });
         return NextResponse.json({ success: true, observedAt: new Date().toISOString(), userId: result.user.id });
     } catch (error) {
         const status = error instanceof VrchatApiError ? error.status : 502;

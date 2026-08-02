@@ -86,7 +86,8 @@ class AlwaysOnMonitor {
         if (!this.cookies || this.reconciling) return;
         this.reconciling = true;
         try {
-            const result = await reconcileRemoteState(this.cookies);
+            const result = await reconcileRemoteState(this.cookies, `${this.leaderId}:reconcile`);
+            if (!result) return;
             this.cookies = result.cookies;
             this.ownerId = result.user.id;
             await this.safeHealth({ ownerId: result.user.id, status: this.socket?.readyState === WebSocket.OPEN ? "healthy" : "reconnecting", lastReconciledAt: new Date(), lastError: "" });

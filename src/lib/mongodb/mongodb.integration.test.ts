@@ -25,7 +25,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7]);
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner"]);
         expect(sessionIndexes).toBe(true);
     });
@@ -43,6 +43,16 @@ describe("MongoDB application repositories", () => {
         expect(await getStoredVrchatSession()).toMatchObject({ status: "authenticated", activeUserId: ownerId, cookies: { auth: "auth-cookie", twoFactorAuth: "two-factor-cookie" } });
         expect(await getCachedUser(ownerId, ownerId)).toMatchObject(user);
         expect(await getCachedUser(otherOwnerId, ownerId)).toBeNull();
+    });
+
+    test("serializes reconciliation across server processes", async () => {
+        const { acquireReconciliationLease, releaseReconciliationLease } = await import("@/lib/monitor/lease");
+        const now = new Date("2026-08-02T10:00:00.000Z");
+        expect(await acquireReconciliationLease("worker-a", now)).toBe(true);
+        expect(await acquireReconciliationLease("worker-b", now)).toBe(false);
+        await releaseReconciliationLease("worker-a");
+        expect(await acquireReconciliationLease("worker-b", now)).toBe(true);
+        await releaseReconciliationLease("worker-b");
     });
 
     test("keeps notification history while updating the active projection", async () => {

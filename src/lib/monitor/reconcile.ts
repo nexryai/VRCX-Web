@@ -13,9 +13,10 @@ import { upsertCachedUser, upsertCachedUsers } from "@/lib/mongodb/user-reposito
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
 import { requestVrchat, type VrchatCookies } from "@/lib/vrchat/client";
 import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
+import { acquireReconciliationLease, releaseReconciliationLease } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 function activityId(ownerId: string, event: { type: string; userId: string; createdAt: string; previous?: string; current?: string }): string {
     return createHash("sha256")
@@ -91,7 +92,7 @@ async function fetchFavoriteState(cookies: VrchatCookies): Promise<{ favorites: 
     return { favorites, groups, moderations: z.array(vrchatPlayerModerationSchema).parse(moderationResponse.data), cookies: currentCookies };
 }
 
-export async function reconcileRemoteState(cookies: VrchatCookies): Promise<{ user: VrchatUser; cookies: VrchatCookies }> {
+async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ user: VrchatUser; cookies: VrchatCookies }> {
     await ensureMongoSchema();
     const currentResponse = await requestVrchat<unknown>("auth/user", { cookies });
     const user = vrchatUserSchema.parse(currentResponse.data);
@@ -193,4 +194,13 @@ export async function reconcileRemoteState(cookies: VrchatCookies): Promise<{ us
     }
 
     return { user, cookies: currentCookies };
+}
+
+export async function reconcileRemoteState(cookies: VrchatCookies, runnerId = `reconcile:${process.pid}:${randomUUID()}`): Promise<{ user: VrchatUser; cookies: VrchatCookies } | null> {
+    if (!(await acquireReconciliationLease(runnerId))) return null;
+    try {
+        return await reconcileRemoteStateUnlocked(cookies);
+    } finally {
+        await releaseReconciliationLease(runnerId);
+    }
 }

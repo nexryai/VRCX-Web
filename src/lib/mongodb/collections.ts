@@ -41,6 +41,8 @@ export type MonitorStateDocument = {
     ownerId?: string;
     leaderId?: string;
     leaseExpiresAt?: Date;
+    reconciliationLeaseOwner?: string;
+    reconciliationLeaseExpiresAt?: Date;
     status: "idle" | "starting" | "healthy" | "reconnecting" | "authentication-required" | "error";
     pipelineConnected: boolean;
     lastPipelineEventAt?: Date;

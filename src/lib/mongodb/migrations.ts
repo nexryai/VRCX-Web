@@ -143,6 +143,13 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 7,
+        name: "add-reconciliation-lease-index",
+        async apply(c) {
+            await c.monitorState.createIndex({ reconciliationLeaseExpiresAt: 1 }, { name: "reconciliation_lease_expiry" });
+        },
+    },
 ];
 
 async function applyMigrations() {
