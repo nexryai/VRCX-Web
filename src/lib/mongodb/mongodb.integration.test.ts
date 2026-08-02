@@ -122,4 +122,29 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("favorites").findOne({ ownerId, recordId: favorite.id })).toMatchObject({ active: false, objectId: favorite.favoriteId });
         expect(await database.collection("moderations").findOne({ ownerId, targetUserId: moderation.targetUserId })).toMatchObject({ active: false, moderationType: "block" });
     });
+
+    test("applies typed Pipeline friend events directly and records provenance", async () => {
+        const { applyPipelineFriendEvent } = await import("@/lib/monitor/friend-events");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000005";
+        const friendId = "usr_00000000-0000-0000-0000-000000000006";
+        const addedAt = new Date("2026-08-02T13:00:00.000Z");
+        const movedAt = new Date("2026-08-02T13:05:00.000Z");
+        const offlineAt = new Date("2026-08-02T13:10:00.000Z");
+
+        expect(await applyPipelineFriendEvent(ownerId, "friend-add", { userId: friendId, user: { id: friendId, displayName: "Pipeline Friend", state: "online", location: "wrld_00000000-0000-0000-0000-000000000010:11111" } }, addedAt)).toBe(true);
+        expect(await applyPipelineFriendEvent(ownerId, "friend-location", { userId: friendId, location: "wrld_00000000-0000-0000-0000-000000000011:22222" }, movedAt)).toBe(true);
+        expect(await applyPipelineFriendEvent(ownerId, "friend-offline", { userId: friendId }, offlineAt)).toBe(true);
+        expect(await applyPipelineFriendEvent(ownerId, "friend-online", { userId: friendId, location: "wrld_00000000-0000-0000-0000-000000000010:stale" }, movedAt)).toBe(true);
+
+        const database = await getMongoDatabase();
+        expect(await database.collection("friend_snapshots").findOne({ ownerId, friendId })).toMatchObject({ online: false, user: { state: "offline" }, updatedAt: offlineAt });
+        const activity = await database.collection("activity_events").find({ ownerId }).toArray();
+        expect(activity.map((event) => event.type)).toEqual(expect.arrayContaining(["Friend", "GPS", "Offline"]));
+        expect(activity.every((event) => event.provenance === "pipeline")).toBe(true);
+
+        expect(await applyPipelineFriendEvent(ownerId, "friend-delete", { userId: friendId }, new Date("2026-08-02T13:15:00.000Z"))).toBe(true);
+        expect(await database.collection("friend_snapshots").findOne({ ownerId, friendId })).toBeNull();
+        expect(await database.collection("activity_events").findOne({ ownerId, type: "Unfriend" })).not.toBeNull();
+    });
 });

@@ -8,6 +8,7 @@ import { clearStoredVrchatSession, getStoredVrchatSession, updateStoredVrchatCoo
 import { applyPipelineNotificationState, upsertPipelineNotification } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { vrchatNotificationSchema } from "@/lib/vrchat/types";
+import { applyPipelineFriendEvent, isPipelineFriendEventType } from "./friend-events";
 import { acquireMonitorLease, updateMonitorHealth } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
 import { reconcileRemoteState } from "./reconcile";
@@ -199,7 +200,11 @@ class AlwaysOnMonitor {
             return;
         }
 
-        if (envelope.data.type.startsWith("friend-") || envelope.data.type === "notification-v2-update") {
+        if (this.ownerId && content.success && isPipelineFriendEventType(envelope.data.type)) {
+            if (await applyPipelineFriendEvent(this.ownerId, envelope.data.type, content.data, now)) return;
+        }
+
+        if (envelope.data.type.startsWith("friend-") || envelope.data.type === "notification-v2-update" || envelope.data.type === "user-update") {
             // Reconciliation applies the same typed projection path and
             // deduplicates results, while coalescing noisy Pipeline bursts.
             void this.reconcile();

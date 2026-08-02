@@ -126,8 +126,9 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ u
     currentCookies = favoriteState.cookies;
     await updateStoredVrchatCookies(currentCookies);
 
-    const onlineIds = new Set(online.users.map((friend) => friend.id));
-    const combined = [...online.users, ...offline.users.filter((friend) => !onlineIds.has(friend.id))];
+    const remotelyPresentIds = new Set(online.users.map((friend) => friend.id));
+    const combined = [...online.users, ...offline.users.filter((friend) => !remotelyPresentIds.has(friend.id))];
+    const onlineIds = new Set(online.users.filter((friend) => friend.state !== "active" && friend.state !== "offline").map((friend) => friend.id));
     const c = collections(await getMongoDatabase());
     const previousDocuments = await c.friendSnapshots.find({ ownerId: user.id }).toArray();
     const previous = previousDocuments.map((document) => ({
