@@ -3,7 +3,7 @@ import "server-only";
 import WebSocket from "ws";
 import { z } from "zod";
 
-import { observeGameSession } from "@/lib/game-log/session-repository";
+import { enrichGameSession, observeGameSession } from "@/lib/game-log/session-repository";
 import { clearStoredVrchatSession, getStoredVrchatSession, updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
 import { applyPipelineNotificationState, upsertPipelineNotification } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
@@ -42,6 +42,7 @@ class AlwaysOnMonitor {
     private reconnectAttempt = 0;
     private started = false;
     private reconciling = false;
+    private pipelineTail: Promise<void> = Promise.resolve();
 
     start() {
         if (this.started) return;
@@ -121,10 +122,13 @@ class AlwaysOnMonitor {
             void this.safeHealth({ status: "healthy", pipelineConnected: true, lastError: "" });
         });
         socket.on("message", (data) => {
-            void this.handlePipelineMessage(data.toString()).catch(async () => {
-                await this.safeHealth({ status: "error", lastError: "A Pipeline event could not be processed." });
-                void this.reconcile();
-            });
+            const receivedAt = new Date();
+            this.pipelineTail = this.pipelineTail
+                .then(() => this.handlePipelineMessage(data.toString(), receivedAt))
+                .catch(async () => {
+                    await this.safeHealth({ status: "error", lastError: "A Pipeline event could not be processed." });
+                    void this.reconcile();
+                });
         });
         socket.on("error", () => socket.close());
         socket.on("close", () => {
@@ -135,7 +139,7 @@ class AlwaysOnMonitor {
         });
     }
 
-    private async handlePipelineMessage(raw: string) {
+    private async handlePipelineMessage(raw: string, receivedAt: Date) {
         let json: unknown;
         try {
             json = JSON.parse(raw);
@@ -151,22 +155,16 @@ class AlwaysOnMonitor {
             return;
         }
 
-        const now = new Date();
+        const now = receivedAt;
         await this.safeHealth({ status: "healthy", pipelineConnected: true, lastPipelineEventAt: now });
         const content = z.record(z.string(), z.unknown()).safeParse(parsedContent);
         if (envelope.data.type === "user-location" && this.ownerId && content.success && content.data.userId === this.ownerId) {
             const location = typeof content.data.location === "string" ? content.data.location : undefined;
+            await observeGameSession({ ownerId: this.ownerId, location, observedAt: now, provenance: "pipeline" });
             const metadata = this.cookies ? await resolveLocationMetadata(this.ownerId, location, this.cookies) : { cookies: this.cookies ?? {} };
             this.cookies = metadata.cookies;
             await updateStoredVrchatCookies(metadata.cookies);
-            await observeGameSession({
-                ownerId: this.ownerId,
-                location,
-                worldName: metadata.worldName,
-                groupName: metadata.groupName,
-                observedAt: now,
-                provenance: "pipeline",
-            });
+            await enrichGameSession(this.ownerId, location, metadata);
             return;
         }
 

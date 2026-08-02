@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Filter } from "mongodb";
+import { type Filter, MongoServerError } from "mongodb";
 
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { collections, type GameSessionDocument } from "@/lib/mongodb/collections";
@@ -32,6 +32,7 @@ export async function observeGameSession(observation: SessionObservation): Promi
     const c = collections(await getMongoDatabase());
     const parsed = parseObservableLocation(observation.location);
     const open = await c.gameSessions.findOne({ ownerId: observation.ownerId, current: true });
+    if (open && observation.observedAt < open.lastObservedAt) return;
 
     if (!parsed) {
         if (!open) return;
@@ -54,7 +55,7 @@ export async function observeGameSession(observation: SessionObservation): Promi
 
     if (open?.location === parsed.location) {
         await c.gameSessions.updateOne(
-            { _id: open._id },
+            { _id: open._id, current: true, lastObservedAt: { $lte: observation.observedAt } },
             {
                 $set: {
                     lastObservedAt: observation.observedAt,
@@ -103,7 +104,24 @@ export async function observeGameSession(observation: SessionObservation): Promi
         current: true,
         updatedAt: observation.observedAt,
     };
-    await c.gameSessions.updateOne({ _id: document._id }, { $setOnInsert: document }, { upsert: true });
+    try {
+        await c.gameSessions.updateOne({ _id: document._id }, { $setOnInsert: document }, { upsert: true });
+    } catch (error) {
+        if (error instanceof MongoServerError && error.code === 11000) {
+            // A newer concurrent observation won the unique-current-session
+            // race. Never reopen an older location after that transition.
+            const current = await c.gameSessions.findOne({ ownerId: observation.ownerId, current: true });
+            if (current && current.lastObservedAt >= observation.observedAt) return;
+        }
+        throw error;
+    }
+}
+
+export async function enrichGameSession(ownerId: string, location: string | undefined, metadata: { worldName?: string; groupName?: string }): Promise<void> {
+    const parsed = parseObservableLocation(location);
+    if (!parsed || (!metadata.worldName && !metadata.groupName)) return;
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).gameSessions.updateOne({ ownerId, location: parsed.location }, { $set: { ...(metadata.worldName ? { worldName: metadata.worldName } : {}), ...(metadata.groupName ? { groupName: metadata.groupName } : {}), updatedAt: new Date() } }, { sort: { startedAt: -1 } });
 }
 
 export async function listGameSessions(options: { ownerId: string; limit: number; cursor?: GameSessionCursor; from?: Date; to?: Date; search?: string }): Promise<{ sessions: GameSessionDocument[]; nextCursor?: GameSessionCursor }> {

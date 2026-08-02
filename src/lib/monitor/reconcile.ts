@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { diffFriendSnapshots, toFriendSnapshots } from "@/lib/activity-log";
-import { observeGameSession } from "@/lib/game-log/session-repository";
+import { enrichGameSession, observeGameSession } from "@/lib/game-log/session-repository";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { type ActivityEventDocument, collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
@@ -99,17 +99,17 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies): Promise<{ u
     let currentCookies = { ...cookies, ...currentResponse.cookies };
 
     const location = user.location || user.travelingToLocation;
-    const locationMetadata = await resolveLocationMetadata(user.id, location, currentCookies);
-    currentCookies = locationMetadata.cookies;
-
+    const locationObservedAt = new Date();
     await observeGameSession({
         ownerId: user.id,
         location,
-        worldName: user.world?.name || locationMetadata.worldName,
-        groupName: locationMetadata.groupName,
-        observedAt: new Date(),
+        worldName: user.world?.name,
+        observedAt: locationObservedAt,
         provenance: "reconciliation",
     });
+    const locationMetadata = await resolveLocationMetadata(user.id, location, currentCookies);
+    currentCookies = locationMetadata.cookies;
+    await enrichGameSession(user.id, location, { worldName: user.world?.name || locationMetadata.worldName, groupName: locationMetadata.groupName });
 
     const online = await fetchAllFriends(currentCookies, false);
     currentCookies = online.cookies;
