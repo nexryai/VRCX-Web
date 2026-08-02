@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
     poweredByHeader: false,
+    output: "standalone",
+    experimental: {
+        serverActions: {
+            allowedOrigins: ["localhost:3000", "*.app.github.dev", "frost.nexryai.me"],
+        },
+    },
     async headers() {
         return [
             {
