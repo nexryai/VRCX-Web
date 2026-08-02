@@ -111,8 +111,8 @@ At each width, check navigation access, overflow, dialogs, tables/lists, touch t
 For every change, run the smallest relevant checks during development and the full applicable checks before handoff:
 
 ```bash
-npm run lint
-npm run build
+pnpm lint
+pnpm build
 ```
 
 Add tests as test infrastructure and features are introduced. Prioritize tests for:
