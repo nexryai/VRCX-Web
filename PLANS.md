@@ -196,40 +196,40 @@ Exit criteria: the scope inventory, visual fixtures, persistence map, and remote
 
 ### Milestone 1 — MongoDB Foundation and Single-User State
 
-Status: Planned
+Status: In progress
 
 - [ ] Add the MongoDB driver, validated environment configuration, connection lifecycle, health check, and test database strategy.
 - [ ] Define versioned migrations, indexes, repository boundaries, retention, backup, and restore behavior.
-- [ ] Implement singleton settings and active-identity records.
+- [x] Implement singleton settings and active-identity records.
 - [ ] Move current durable browser state into MongoDB with an explicit one-time migration/import path.
-- [ ] Implement encrypted server-side VRChat session persistence with the key supplied outside MongoDB.
-- [ ] Add safe active-identity replacement that prevents cross-account data mixing.
+- [x] Implement encrypted server-side VRChat session persistence with the key supplied outside MongoDB.
+- [x] Add safe active-identity replacement that prevents cross-account data mixing.
 
 Exit criteria: the server restarts without losing authoritative application state, and no new durable product data is browser-owned.
 
 ### Milestone 2 — Always-On VRChat Monitor
 
-Status: Planned
+Status: In progress
 
-- [ ] Port VRCX Pipeline event parsing and relevant coordinator behavior into typed server modules.
-- [ ] Implement startup baseline synchronization and paginated HTTP reconciliation.
-- [ ] Add reconnect backoff, post-gap reconciliation, session-expiry recovery, and coordinated rate limiting.
-- [ ] Add MongoDB-backed singleton leader leasing for multi-process safety.
+- [x] Port the currently eligible VRCX Pipeline event parsing for own location, notifications, and friend invalidation into typed server modules.
+- [x] Implement startup baseline synchronization and paginated HTTP reconciliation for current user, friends, and notifications.
+- [x] Add reconnect backoff, post-gap reconciliation, session-expiry recovery, and coordinated in-process rate limiting.
+- [x] Add MongoDB-backed singleton leader leasing for multi-process safety.
 - [ ] Implement idempotent event writes, current-state projections, cursors, and derived-event provenance.
-- [ ] Implement active-account location session opening, transition, bounded closing, and restart/gap reconciliation in `game_sessions`.
-- [ ] Expose monitor health and stream/reconciliation timestamps to the UI.
+- [x] Implement active-account location session opening, transition, bounded closing, and restart/gap reconciliation in `game_sessions`.
+- [x] Expose monitor health and stream/reconciliation timestamps to the UI.
 - [ ] Prove monitoring and restart recovery with no browser connected.
 
 Exit criteria: one server monitor maintains recoverable remote state continuously and safely across disconnects and restarts.
 
 ### Milestone 3 — Exact VRCX Shell and Shared UI
 
-Status: Planned
+Status: In progress
 
 - [ ] Port VRCX theme variables, typography, icons, spacing, density, scrollbars, motion, and component-state styles.
 - [ ] Recreate the VRCX layout, navigation, status bar, friend sidebar, menus, popovers, dialogs, and settings structure.
 - [ ] Build shared React primitives only from observed VRCX patterns.
-- [ ] Remove navigation and settings entries for confirmed Local-VRChat-only features.
+- [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 

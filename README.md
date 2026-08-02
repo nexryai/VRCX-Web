@@ -6,9 +6,9 @@ The original source in `./VRCX/` is the behavior, implementation, and visual ref
 
 ## Current Status
 
-The root application is an earlier browser-session prototype. It already contains partial VRChat API routes and screens for login, friends, favorites, notifications, moderation, avatars, activity, Dashboard, and mutual friends, but it does not yet satisfy the current architecture or parity standard. Dashboard is now outside the product scope, so that prototype route will be removed rather than ported further.
+The MongoDB foundation, encrypted server-owned VRChat session, monitor leadership, Pipeline connection, scheduled friend/notification reconciliation, activity projections, and remote-derived Game Log session storage are implemented. Durable prototype settings and graph state no longer use browser storage. The explicitly excluded Dashboard route and navigation entry have been removed.
 
-In particular, browser-owned polling and `localStorage` persistence must be replaced by the always-on monitor and MongoDB, and the existing UI must be rebuilt where it differs from VRCX. See [PLANS.md](./PLANS.md) for the migration roadmap and acceptance criteria.
+This remains an in-progress port: several remote workflows still call VRChat interactively instead of reading complete MongoDB projections, and screen-by-screen visual parity work is not finished. See [PLANS.md](./PLANS.md) for the remaining acceptance work.
 
 ## Target Product
 
@@ -42,13 +42,15 @@ One monitor leader owns the active VRChat session, realtime connection, backgrou
 
 - The deployment intentionally has no separate application authentication or authorization layer, so it must not be exposed directly to the public internet.
 - VRChat credentials, cookies, tokens, MongoDB connection strings, and encryption keys remain server-side and must never enter browser storage or logs.
-- Restart-persistent VRChat session material, when implemented, is encrypted before storage in MongoDB; its encryption key is configured outside MongoDB and the repository.
+- Restart-persistent VRChat session material is encrypted with AES-256-GCM before storage in MongoDB; its encryption key is configured outside MongoDB and the repository.
 - Upstream requests use typed, fixed-host, allowlisted service boundaries rather than a general-purpose proxy.
 - Single-user operation does not remove normal XSS, CSRF, request-forgery, validation, cache, and secret-handling requirements.
 
 ## Development
 
 The current prototype uses Node.js 20+ and pnpm 11+:
+
+Copy `.env.example` to an uncommitted environment file or configure the equivalent deployment secrets. Generate the session key with `openssl rand -base64 32`; keep the same key for the lifetime of the database because changing it invalidates the retained VRChat session.
 
 ```bash
 pnpm install
@@ -63,7 +65,23 @@ pnpm lint
 pnpm build
 ```
 
-MongoDB configuration and migration commands will be documented when Milestone 1 in [PLANS.md](./PLANS.md) is implemented. Until then, existing prototype configuration remains in `.env.example`; do not interpret it as the finished always-on deployment contract.
+MongoDB migrations are versioned in `schema_migrations` and run automatically and idempotently when the application first accesses the database. `GET /api/health` is the deployment health probe; it returns HTTP 503 without exposing driver details when MongoDB is unavailable.
+
+Production must run as a persistent Node.js process:
+
+```bash
+pnpm build
+pnpm start
+```
+
+Do not deploy to a scale-to-zero or request-only runtime. Back up both MongoDB and `VRCHAT_SESSION_ENCRYPTION_KEY`; the database backup alone cannot decrypt the retained session. A standard backup and restore flow is:
+
+```bash
+mongodump --uri="$MONGODB_URI" --db="$MONGODB_DATABASE" --archive=vrcx.archive --gzip
+mongorestore --uri="$MONGODB_URI" --nsInclude="$MONGODB_DATABASE.*" --archive=vrcx.archive --gzip
+```
+
+Test restores against a separate database before relying on them. Stop application writers or otherwise take a consistent database snapshot during recovery. Never commit archives, environment files, or encryption keys.
 
 ## Visual Acceptance
 

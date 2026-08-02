@@ -110,6 +110,12 @@ export type NotificationDocument = {
     updatedAt: Date;
 };
 
+export type SchemaMigrationDocument = {
+    _id: number;
+    name: string;
+    appliedAt: Date;
+};
+
 export type Collections = {
     appSettings: Collection<AppSettingsDocument>;
     vrchatSession: Collection<VrchatSessionDocument>;
@@ -118,6 +124,7 @@ export type Collections = {
     activityEvents: Collection<ActivityEventDocument>;
     gameSessions: Collection<GameSessionDocument>;
     notifications: Collection<NotificationDocument>;
+    schemaMigrations: Collection<SchemaMigrationDocument>;
     mutualGraph: Collection<MutualGraphDocument>;
 };
 
@@ -130,6 +137,7 @@ export function collections(db: Db): Collections {
         activityEvents: db.collection<ActivityEventDocument>("activity_events"),
         gameSessions: db.collection<GameSessionDocument>("game_sessions"),
         notifications: db.collection<NotificationDocument>("notifications"),
+        schemaMigrations: db.collection<SchemaMigrationDocument>("schema_migrations"),
         mutualGraph: db.collection<MutualGraphDocument>("mutual_graph"),
     };
 }
