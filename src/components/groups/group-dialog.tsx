@@ -2,13 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Clipboard, ExternalLink, ImageIcon, Loader2, RefreshCw, Search, ShieldCheck, Users, X } from "lucide-react";
+import { Bell, BellOff, Bookmark, BookmarkCheck, Check, Clipboard, Ellipsis, ExternalLink, Eye, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Search, ShieldCheck, Trash2, Users, X, XCircle } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { locationLabel } from "@/lib/friends";
 import type { VrchatGroup, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
 type GroupTab = "Info" | "Posts" | "Members" | "JSON";
+type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
+type ConfirmAction = "block" | "leave";
+
+function inGroup(group: VrchatGroup) {
+    return group.membershipStatus === "member" || group.myMember?.membershipStatus === "member";
+}
 
 export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: string; friends: VrchatUser[]; openUser: (userId: string) => void; onClose: () => void }) {
     const [group, setGroup] = useState<VrchatGroup | null>(null);
@@ -24,6 +30,8 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [postsLoaded, setPostsLoaded] = useState(false);
     const [membersLoaded, setMembersLoaded] = useState(false);
     const [search, setSearch] = useState("");
+    const [actionLoading, setActionLoading] = useState<GroupActionName | "">("");
+    const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const closeButton = useRef<HTMLButtonElement>(null);
 
     const load = useCallback(
@@ -98,6 +106,8 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setPostsLoaded(false);
         setMembersLoaded(false);
         setSearch("");
+        setActionLoading("");
+        setConfirmAction(null);
         void Promise.all([load(), loadPosts()]);
         closeButton.current?.focus();
     }, [load, loadPosts]);
@@ -114,6 +124,31 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         await navigator.clipboard.writeText(value);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1_500);
+    }
+
+    async function runAction(action: GroupActionName, value?: boolean | string) {
+        setActionLoading(action);
+        setConfirmAction(null);
+        setError("");
+        try {
+            const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/actions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action, ...(value === undefined ? {} : { value }) }),
+            });
+            const payload = (await response.json()) as { error?: string; group?: VrchatGroup; refreshRequired?: boolean };
+            if (response.status === 401) {
+                window.location.assign("/login");
+                return;
+            }
+            if (!response.ok) throw new Error(payload.error || "The group action could not be completed.");
+            if (payload.group) setGroup(payload.group);
+            if (!payload.group || payload.refreshRequired) await load(true);
+        } catch (actionError) {
+            setError(actionError instanceof Error ? actionError.message : "The group action could not be completed.");
+        } finally {
+            setActionLoading("");
+        }
     }
 
     const groupFriends = useMemo(() => friends.filter((friend) => friend.location?.includes(`~group(${groupId})`)), [friends, groupId]);
@@ -155,6 +190,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                     {group.joinState ? <Badge>{group.joinState}</Badge> : null}
                                     {group.membershipStatus === "member" || group.myMember?.membershipStatus === "member" ? <Badge>Joined</Badge> : null}
                                     {group.myMember?.visibility ? <Badge>{group.myMember.visibility}</Badge> : null}
+                                    {group.myMember?.isSubscribedToAnnouncements ? <Badge>Subscribed</Badge> : null}
                                     {(group.languages || []).map((language) => (
                                         <Badge key={language}>{language.toUpperCase()}</Badge>
                                     ))}
@@ -162,6 +198,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                 {group.description && group.description !== group.name ? <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs">{group.description}</p> : null}
                             </div>
                             <div className="flex shrink-0 items-end gap-2 sm:mt-12 sm:items-start">
+                                <GroupPrimaryAction group={group} loading={actionLoading} runAction={runAction} />
                                 <button type="button" onClick={() => void load(true)} disabled={loading} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh group">
                                     <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                                 </button>
@@ -171,8 +208,10 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                 <a href={`https://vrchat.com/home/group/${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer" className="inline-flex size-9 items-center justify-center rounded-full border border-input" aria-label="Open on VRChat">
                                     <ExternalLink className="size-4" />
                                 </a>
+                                <GroupManageMenu group={group} loading={actionLoading} runAction={runAction} confirm={setConfirmAction} />
                             </div>
                         </header>
+                        {confirmAction ? <GroupActionConfirmation group={group} action={confirmAction} loading={actionLoading !== ""} cancel={() => setConfirmAction(null)} confirm={() => void runAction(confirmAction)} /> : null}
                         {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                         <div className="mt-3 flex shrink-0 overflow-x-auto border-b border-border" role="tablist" aria-label="Group details">
                             {(["Info", "Posts", "Members", "JSON"] as GroupTab[]).map((item) => (
@@ -208,6 +247,120 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                     </>
                 ) : null}
             </section>
+        </div>
+    );
+}
+
+function GroupPrimaryAction({ group, loading, runAction }: { group: VrchatGroup; loading: GroupActionName | ""; runAction: (action: GroupActionName, value?: boolean | string) => Promise<void> }) {
+    const busy = loading !== "";
+    if (inGroup(group) && group.myMember) {
+        const representing = group.myMember.isRepresenting === true;
+        return (
+            <button
+                type="button"
+                onClick={() => void runAction("representation", !representing)}
+                disabled={busy || (!representing && group.privacy === "private")}
+                className={`inline-flex size-9 items-center justify-center rounded-full border disabled:opacity-40 ${representing ? "border-primary bg-primary/15 text-primary" : "border-input hover:bg-muted"}`}
+                aria-label={representing ? "Stop representing group" : "Represent group"}
+            >
+                {loading === "representation" ? <Loader2 className="size-4 animate-spin" /> : representing ? <BookmarkCheck className="size-4" /> : <Bookmark className="size-4" />}
+            </button>
+        );
+    }
+
+    if (group.myMember?.membershipStatus === "requested") {
+        return (
+            <button type="button" onClick={() => void runAction("cancel-request")} disabled={busy} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Cancel join request">
+                {loading === "cancel-request" ? <Loader2 className="size-4 animate-spin" /> : <X className="size-4" />}
+            </button>
+        );
+    }
+
+    const canJoin = group.myMember?.membershipStatus === "invited" || group.joinState === "open" || group.joinState === "request";
+    if (!canJoin) return null;
+    const requested = group.joinState === "request" && group.myMember?.membershipStatus !== "invited";
+    return (
+        <button type="button" onClick={() => void runAction("join")} disabled={busy} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label={requested ? "Request to join group" : "Join group"}>
+            {loading === "join" ? <Loader2 className="size-4 animate-spin" /> : requested ? <MessageSquare className="size-4" /> : <Check className="size-4" />}
+        </button>
+    );
+}
+
+function GroupManageMenu({ group, loading, runAction, confirm }: { group: VrchatGroup; loading: GroupActionName | ""; runAction: (action: GroupActionName, value?: boolean | string) => Promise<void>; confirm: (action: ConfirmAction) => void }) {
+    const member = inGroup(group) && group.myMember;
+    const closeAndRun = (event: React.MouseEvent<HTMLButtonElement>, action: () => void) => {
+        event.currentTarget.closest("details")?.removeAttribute("open");
+        action();
+    };
+    return (
+        <details className="relative">
+            <summary className="inline-flex size-9 cursor-pointer list-none items-center justify-center rounded-full border border-input hover:bg-muted [&::-webkit-details-marker]:hidden" aria-label="Manage group">
+                <Ellipsis className="size-4" />
+            </summary>
+            <div className="absolute top-10 right-0 z-40 max-h-[min(28rem,70dvh)] w-64 overflow-y-auto rounded-md border border-border bg-popover p-1 text-xs shadow-xl">
+                {member ? (
+                    <>
+                        <GroupMenuButton
+                            icon={group.myMember?.isSubscribedToAnnouncements ? <BellOff /> : <Bell />}
+                            label={group.myMember?.isSubscribedToAnnouncements ? "Unsubscribe from announcements" : "Subscribe to announcements"}
+                            disabled={loading !== ""}
+                            action={(event) => closeAndRun(event, () => void runAction("announcements", !group.myMember?.isSubscribedToAnnouncements))}
+                        />
+                        <GroupMenuButton
+                            icon={group.myMember?.isSubscribedToEventAnnouncements === false ? <MessageCircle /> : <MessageCircleOff />}
+                            label={group.myMember?.isSubscribedToEventAnnouncements === false ? "Subscribe to event announcements" : "Unsubscribe from event announcements"}
+                            disabled={loading !== ""}
+                            action={(event) => closeAndRun(event, () => void runAction("event-announcements", group.myMember?.isSubscribedToEventAnnouncements === false))}
+                        />
+                        {group.privacy === "default" ? (
+                            <>
+                                <hr className="my-1 border-border" />
+                                <GroupMenuButton icon={<Eye />} label="Visibility: Everyone" selected={group.myMember?.visibility === "visible"} disabled={loading !== ""} action={(event) => closeAndRun(event, () => void runAction("visibility", "visible"))} />
+                                <GroupMenuButton icon={<Eye />} label="Visibility: Friends" selected={group.myMember?.visibility === "friends"} disabled={loading !== ""} action={(event) => closeAndRun(event, () => void runAction("visibility", "friends"))} />
+                                <GroupMenuButton icon={<Eye />} label="Visibility: Hidden" selected={group.myMember?.visibility === "hidden"} disabled={loading !== ""} action={(event) => closeAndRun(event, () => void runAction("visibility", "hidden"))} />
+                            </>
+                        ) : null}
+                        <hr className="my-1 border-border" />
+                        <GroupMenuButton icon={<Trash2 />} label="Leave group" destructive disabled={loading !== ""} action={(event) => closeAndRun(event, () => confirm("leave"))} />
+                    </>
+                ) : group.membershipStatus === "userblocked" || group.myMember?.membershipStatus === "userblocked" ? (
+                    <GroupMenuButton icon={<Check />} label="Unblock group" disabled={loading !== ""} action={(event) => closeAndRun(event, () => void runAction("unblock"))} />
+                ) : (
+                    <GroupMenuButton icon={<XCircle />} label="Block group" destructive disabled={loading !== ""} action={(event) => closeAndRun(event, () => confirm("block"))} />
+                )}
+            </div>
+        </details>
+    );
+}
+
+function GroupMenuButton({ icon, label, action, disabled = false, destructive = false, selected = false }: { icon: React.ReactNode; label: string; action: (event: React.MouseEvent<HTMLButtonElement>) => void; disabled?: boolean; destructive?: boolean; selected?: boolean }) {
+    return (
+        <button type="button" onClick={action} disabled={disabled} className={`flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-muted disabled:opacity-40 ${destructive ? "text-destructive" : ""}`}>
+            <span className="[&>svg]:size-4">{icon}</span>
+            <span className="min-w-0 flex-1">{label}</span>
+            {selected ? <Check className="size-4" /> : null}
+        </button>
+    );
+}
+
+function GroupActionConfirmation({ group, action, loading, cancel, confirm }: { group: VrchatGroup; action: ConfirmAction; loading: boolean; cancel: () => void; confirm: () => void }) {
+    return (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div role="alertdialog" aria-modal="true" aria-labelledby="group-action-title" className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                <h3 id="group-action-title" className="font-semibold">
+                    {action === "leave" ? "Leave group?" : "Block group?"}
+                </h3>
+                <p className="mt-2 text-xs text-muted-foreground">{action === "leave" ? `Leave ${group.name}?` : `Block ${group.name}? You will no longer receive this group's content.`}</p>
+                <div className="mt-4 flex justify-end gap-2">
+                    <button type="button" onClick={cancel} disabled={loading} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                        Cancel
+                    </button>
+                    <button type="button" onClick={confirm} disabled={loading} className="inline-flex h-9 items-center gap-1 rounded-md bg-destructive px-4 text-xs text-white disabled:opacity-40">
+                        {loading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                        {action === "leave" ? "Leave" : "Block"}
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }

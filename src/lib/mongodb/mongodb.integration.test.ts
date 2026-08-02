@@ -191,6 +191,24 @@ describe("MongoDB application repositories", () => {
         expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
     });
 
+    test("updates group membership projection without crossing owners", async () => {
+        const { setCachedGroupMembershipActive, upsertCachedGroups } = await import("./entity-repository");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000081";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000082";
+        const groupId = "grp_00000000-0000-0000-0000-000000000083";
+        const group = { id: groupId, name: "Membership Group", membershipStatus: "member" };
+        await upsertCachedGroups(ownerId, [group], "lookup");
+        await upsertCachedGroups(otherOwnerId, [group], "lookup");
+
+        const observedAt = new Date("2026-08-02T14:00:00.000Z");
+        await setCachedGroupMembershipActive(ownerId, groupId, true, observedAt);
+
+        const database = await getMongoDatabase();
+        expect(await database.collection("groups").findOne({ ownerId, groupId })).toMatchObject({ membershipActive: true, membershipObservedAt: observedAt });
+        expect((await database.collection("groups").findOne({ ownerId: otherOwnerId, groupId }))?.membershipActive).toBeUndefined();
+    });
+
     test("stores entity memos without leaking them between owners", async () => {
         const { getEntityMemo, saveEntityMemo } = await import("./memo-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000061";
