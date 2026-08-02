@@ -206,6 +206,14 @@ Legacy friend requests retain the remotely supported accept action. V2 notificat
 
 Invite-request acceptance and Join actions are intentionally absent because VRCX fulfills them through the running local VRChat client and its current location. The server does not invent equivalent actions or claim it can join an instance through the remote API. V2 notifications never use the legacy friend-request accept endpoint even when an upstream type string resembles a friend request. At narrow widths the complete source table scrolls inside its content pane rather than dropping columns.
 
+## Search Scope
+
+`VRCX/src/views/Search/Search.vue`, `components/SearchPagination.vue`, and the four `composables/useSearch*.js` files define the search layout, controls, result density, and pagination behavior. The web port retains the shared search field, clear-results action, User/World/Group tabs, Enter-to-search behavior, Alt+Arrow pagination shortcuts, user bio and last-login options, Community Labs toggle, and VRChat-provided dynamic world categories. Search responses populate the owner-scoped MongoDB user, world, and group caches before reaching the browser.
+
+User results preserve the avatar, display name, trust level, languages, and one-line bio structure and open the maintained user dialog. World results preserve VRCX's compact `180px` card grid and Group results preserve its dense avatar/name/member/short-code/description rows. Until maintained world and group dialogs are ported, those two result types use safe VRChat web links; this is an outstanding interaction difference rather than a new product design. Narrow screens reflow the tab/search toolbar and grid without changing the desktop information hierarchy.
+
+The Avatar tab is intentionally absent. VRCX searches avatars only through an optional, separately configured external avatar database; the official VRChat API does not provide that search workflow. The tab must not appear until a user-approved remote provider integration, server-side provider allowlist, credential boundary, and corresponding VRCX provider settings are implemented. My Avatars remains a separate official-API-backed workflow.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -260,7 +268,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, and Game Log states at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, and Search states at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.

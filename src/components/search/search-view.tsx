@@ -1,226 +1,342 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
-import { ChevronLeft, ChevronRight, Loader2, Search, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Trash2, User, Users } from "lucide-react";
 
+import { trustLevelFromTags } from "@/lib/activity-log";
 import { friendImage } from "@/lib/friends";
 import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 import { useFriends } from "../friends/friends-provider";
 
 type SearchType = "users" | "worlds" | "groups";
 type SearchResult = VrchatUser | VrchatWorld | VrchatGroup;
+type WorldSortHeading = "relevance" | "featured" | "trending" | "updated" | "created" | "publication" | "shuffle" | "active" | "recent" | "favorite" | "labs" | "heat";
+type WorldRow = {
+    index: string | number;
+    name: string;
+    sortHeading?: string;
+    sortOrder?: string;
+    sortOwnership?: string;
+    tag?: string;
+};
 
-const tabs: Array<{ type: SearchType; label: string; icon: string }> = [
-    { type: "users", label: "Users", icon: "ri-user-line" },
-    { type: "worlds", label: "Worlds", icon: "ri-earth-line" },
-    { type: "groups", label: "Groups", icon: "ri-group-line" },
+const tabs: Array<{ type: SearchType; label: string }> = [
+    { type: "users", label: "User" },
+    { type: "worlds", label: "World" },
+    { type: "groups", label: "Group" },
 ];
+
+const worldSortHeadings = new Set<WorldSortHeading>(["relevance", "featured", "trending", "updated", "created", "publication", "shuffle", "active", "recent", "favorite", "labs", "heat"]);
+const emptyResults: Record<SearchType, SearchResult[]> = { users: [], worlds: [], groups: [] };
+const emptyOffsets: Record<SearchType, number> = { users: 0, worlds: 0, groups: 0 };
+
+function languages(user: VrchatUser) {
+    return (user.tags || []).filter((tag) => tag.startsWith("language_")).map((tag) => tag.slice("language_".length).toUpperCase());
+}
+
+function resolvedWorldHeading(row?: WorldRow): WorldSortHeading {
+    return row?.sortHeading && worldSortHeadings.has(row.sortHeading as WorldSortHeading) ? (row.sortHeading as WorldSortHeading) : "relevance";
+}
 
 export function SearchView() {
     const { openUser } = useFriends();
     const [type, setType] = useState<SearchType>("users");
     const [query, setQuery] = useState("");
-    const [submittedQuery, setSubmittedQuery] = useState("");
-    const [results, setResults] = useState<SearchResult[]>([]);
-    const [offset, setOffset] = useState(0);
-    const [loading, setLoading] = useState(false);
+    const [results, setResults] = useState<Record<SearchType, SearchResult[]>>(emptyResults);
+    const [offsets, setOffsets] = useState<Record<SearchType, number>>(emptyOffsets);
+    const [loadingType, setLoadingType] = useState<SearchType | "">("");
     const [error, setError] = useState("");
-    const [searched, setSearched] = useState(false);
+    const [searchUserByBio, setSearchUserByBio] = useState(false);
+    const [searchUserSortByLastLoggedIn, setSearchUserSortByLastLoggedIn] = useState(false);
+    const [searchWorldLabs, setSearchWorldLabs] = useState(false);
+    const [worldRows, setWorldRows] = useState<WorldRow[]>([]);
+    const [worldCategoryIndex, setWorldCategoryIndex] = useState("");
 
-    async function runSearch(nextOffset: number, nextType = type, nextQuery = submittedQuery || query) {
-        const trimmed = nextQuery.trim();
-        if (!trimmed) return;
-        setLoading(true);
-        setError("");
-        try {
-            const response = await fetch(`/api/search?type=${nextType}&q=${encodeURIComponent(trimmed)}&offset=${nextOffset}`, { cache: "no-store" });
-            const payload = (await response.json()) as { error?: string; results?: SearchResult[] };
-            if (response.status === 401) {
-                window.location.assign("/login");
-                return;
+    useEffect(() => {
+        const controller = new AbortController();
+        void fetch("/api/search/config", { cache: "no-store", signal: controller.signal })
+            .then(async (response) => {
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return null;
+                }
+                if (!response.ok) return null;
+                return (await response.json()) as { worldRows?: WorldRow[] };
+            })
+            .then((payload) => setWorldRows(payload?.worldRows || []))
+            .catch((loadError) => {
+                if (!(loadError instanceof DOMException && loadError.name === "AbortError")) setWorldRows([]);
+            });
+        return () => controller.abort();
+    }, []);
+
+    const selectedWorldRow = useMemo(() => worldRows.find((row) => String(row.index) === worldCategoryIndex), [worldCategoryIndex, worldRows]);
+
+    const runSearch = useCallback(
+        async (nextOffset: number, nextType: SearchType = type, category: WorldRow | null | undefined = selectedWorldRow) => {
+            const trimmed = query.trim();
+            const heading = resolvedWorldHeading(category ?? undefined);
+            if (!trimmed && !(nextType === "worlds" && heading !== "relevance")) return;
+            setLoadingType(nextType);
+            setError("");
+            try {
+                const params = new URLSearchParams({ type: nextType, q: trimmed, offset: String(nextOffset) });
+                if (nextType === "users") {
+                    params.set("userField", searchUserByBio ? "bio" : "displayName");
+                    params.set("userSort", searchUserSortByLastLoggedIn ? "last_login" : "relevance");
+                }
+                if (nextType === "worlds") {
+                    params.set("worldLabs", String(searchWorldLabs));
+                    params.set("worldSortHeading", heading);
+                    params.set("worldSortOrder", category?.sortOrder === "ascending" ? "ascending" : "descending");
+                    params.set("worldOwnership", category?.sortOwnership === "mine" ? "mine" : "any");
+                    if (category?.tag) params.set("worldTag", category.tag);
+                }
+                const response = await fetch(`/api/search?${params}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; results?: SearchResult[] };
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!response.ok || !payload.results) throw new Error(payload.error || "Search failed.");
+                setResults((current) => ({ ...current, [nextType]: payload.results || [] }));
+                setOffsets((current) => ({ ...current, [nextType]: nextOffset }));
+            } catch (searchError) {
+                setError(searchError instanceof Error ? searchError.message : "Search failed.");
+            } finally {
+                setLoadingType("");
             }
-            if (!response.ok || !payload.results) throw new Error(payload.error || "Search failed.");
-            setResults(payload.results);
-            setOffset(nextOffset);
-            setSubmittedQuery(trimmed);
-            setSearched(true);
-        } catch (searchError) {
-            setError(searchError instanceof Error ? searchError.message : "Search failed.");
-        } finally {
-            setLoading(false);
+        },
+        [query, searchUserByBio, searchUserSortByLastLoggedIn, searchWorldLabs, selectedWorldRow, type],
+    );
+
+    useEffect(() => {
+        function handlePaginationShortcut(event: KeyboardEvent) {
+            if (!event.altKey || loadingType) return;
+            const current = results[type];
+            const offset = offsets[type];
+            if (event.key === "ArrowLeft" && offset > 0) {
+                event.preventDefault();
+                void runSearch(Math.max(0, offset - 10));
+            }
+            if (event.key === "ArrowRight" && current.length === 10) {
+                event.preventDefault();
+                void runSearch(offset + 10);
+            }
         }
-    }
+        window.addEventListener("keydown", handlePaginationShortcut);
+        return () => window.removeEventListener("keydown", handlePaginationShortcut);
+    }, [loadingType, offsets, results, runSearch, type]);
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        void runSearch(0, type, query);
+        if (type === "worlds") {
+            // VRCX resets a selected discovery category when Enter starts a
+            // text search, while pagination keeps the active category.
+            setWorldCategoryIndex("");
+            void runSearch(0, "worlds", null);
+            return;
+        }
+        void runSearch(0);
     }
 
-    function changeType(nextType: SearchType) {
-        setType(nextType);
-        setResults([]);
-        setOffset(0);
-        setSearched(false);
+    function clearSearch() {
+        setQuery("");
+        setResults(emptyResults);
+        setOffsets(emptyOffsets);
         setError("");
     }
 
+    const visible = results[type];
+    const offset = offsets[type];
+    const loading = loadingType === type;
+    const paginationVisible = visible.length > 0 && !loading;
+
     return (
-        <section className="flex h-full min-h-0 flex-col" aria-labelledby="search-heading">
-            <div className="border-b border-border px-2 pt-2">
-                <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Search type">
+        <section className="flex h-full min-h-0 flex-col overflow-hidden p-2" aria-labelledby="search-heading">
+            <h1 id="search-heading" className="sr-only">
+                Search
+            </h1>
+            <form onSubmit={submit} className="mb-2 flex shrink-0 flex-wrap items-center gap-2 sm:gap-5">
+                <div className="flex w-full max-w-full shrink-0 overflow-x-auto rounded-md bg-muted p-1 sm:w-auto" role="tablist" aria-label="Search tabs">
                     {tabs.map((tab) => (
                         <button
                             key={tab.type}
                             type="button"
                             role="tab"
                             aria-selected={type === tab.type}
-                            onClick={() => changeType(tab.type)}
-                            className={`inline-flex h-9 shrink-0 items-center gap-2 border-b-2 px-3 text-xs font-medium transition ${type === tab.type ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                            onClick={() => {
+                                setType(tab.type);
+                                setError("");
+                            }}
+                            className={`h-8 rounded px-4 text-xs font-medium ${type === tab.type ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                         >
-                            <i className={`${tab.icon} text-base`} aria-hidden="true" />
                             {tab.label}
                         </button>
                     ))}
                 </div>
-            </div>
-
-            <form onSubmit={submit} className="flex gap-2 border-b border-border p-2">
-                <label className="relative min-w-0 flex-1 sm:max-w-xl">
-                    <span className="sr-only">Search {type}</span>
-                    <Search aria-hidden="true" className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <div className="flex min-w-0 basis-full items-center sm:basis-auto sm:flex-1">
                     <input
                         type="search"
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
-                        className="h-10 w-full rounded-md border border-input bg-background pr-3 pl-9 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-                        placeholder={`Search ${type}`}
-                        minLength={1}
+                        className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                        placeholder="Search"
                         maxLength={128}
-                        required
+                        aria-label={`Search ${type}`}
                     />
-                </label>
-                <button type="submit" disabled={loading || !query.trim()} className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">
-                    {loading ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : <Search aria-hidden="true" className="size-4" />}
-                    <span className="hidden sm:inline">Search</span>
-                </button>
-            </form>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-                <h1 id="search-heading" className="sr-only">
-                    Search VRChat
-                </h1>
-                {error ? <p className="mx-auto mt-10 max-w-md rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-center text-sm text-destructive">{error}</p> : null}
-                {!error && !searched && !loading ? (
-                    <div className="flex min-h-72 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-                        <Search aria-hidden="true" className="size-9" />
-                        <p className="text-sm">Search VRChat {type}.</p>
-                    </div>
-                ) : null}
-                {!error && searched && results.length === 0 && !loading ? (
-                    <div className="flex min-h-72 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-                        <Users aria-hidden="true" className="size-9" />
-                        <p className="text-sm">
-                            No {type} found for “{submittedQuery}”.
-                        </p>
-                    </div>
-                ) : null}
-                {loading && results.length === 0 ? <SearchSkeleton /> : null}
-                {results.length ? (
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
-                        {type === "users" ? (results as VrchatUser[]).map((user) => <UserResult key={user.id} user={user} onOpen={() => openUser(user.id)} />) : null}
-                        {type === "worlds" ? (results as VrchatWorld[]).map((world) => <WorldResult key={world.id} world={world} />) : null}
-                        {type === "groups" ? (results as VrchatGroup[]).map((group) => <GroupResult key={group.id} group={group} />) : null}
-                    </div>
-                ) : null}
-            </div>
-
-            {searched && (offset > 0 || results.length === 10) ? (
-                <div className="flex shrink-0 items-center justify-center gap-2 border-t border-border p-2">
-                    <button type="button" onClick={() => void runSearch(Math.max(0, offset - 10))} disabled={loading || offset === 0} className="inline-flex h-9 items-center gap-1 rounded-md bg-secondary px-3 text-xs disabled:opacity-40">
-                        <ChevronLeft aria-hidden="true" className="size-4" />
-                        Previous
-                    </button>
-                    <span className="px-2 text-xs text-muted-foreground">Page {Math.floor(offset / 10) + 1}</span>
-                    <button type="button" onClick={() => void runSearch(offset + 10)} disabled={loading || results.length < 10} className="inline-flex h-9 items-center gap-1 rounded-md bg-secondary px-3 text-xs disabled:opacity-40">
-                        Next
-                        <ChevronRight aria-hidden="true" className="size-4" />
+                    <button type="button" onClick={clearSearch} className="ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Clear search results" title="Clear search results">
+                        <Trash2 className="size-4" />
                     </button>
                 </div>
+            </form>
+
+            {type === "users" ? (
+                <div className="mb-3 flex shrink-0 flex-wrap justify-end gap-x-3 gap-y-2 text-xs">
+                    <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={searchUserByBio} onChange={(event) => setSearchUserByBio(event.target.checked)} className="accent-primary" />
+                        Search by bio
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={searchUserSortByLastLoggedIn} onChange={(event) => setSearchUserSortByLastLoggedIn(event.target.checked)} className="accent-primary" />
+                        Sort by last logged in
+                    </label>
+                </div>
             ) : null}
+
+            {type === "worlds" ? (
+                <div className="mb-4 flex shrink-0 flex-wrap items-center justify-end gap-2 text-xs">
+                    <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={searchWorldLabs} onChange={(event) => setSearchWorldLabs(event.target.checked)} className="accent-primary" />
+                        Community Labs
+                    </label>
+                    <select
+                        value={worldCategoryIndex}
+                        onChange={(event) => {
+                            const index = event.target.value;
+                            setWorldCategoryIndex(index);
+                            const row = worldRows.find((candidate) => String(candidate.index) === index);
+                            if (row) void runSearch(0, "worlds", row);
+                        }}
+                        className="h-8 max-w-56 rounded-md border border-input bg-background px-2 text-xs"
+                        aria-label="World category"
+                    >
+                        <option value="">Category</option>
+                        {worldRows.map((row) => (
+                            <option key={String(row.index)} value={String(row.index)}>
+                                {row.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            ) : null}
+
+            {error ? <p className="mb-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                {loading ? (
+                    <div className="flex h-full min-h-64 items-center justify-center">
+                        <Loader2 className="size-6 animate-spin text-muted-foreground" aria-label="Loading search results" />
+                    </div>
+                ) : null}
+                {!loading && !visible.length ? <div className="flex h-full min-h-64 items-center justify-center text-xs text-muted-foreground">No data</div> : null}
+                {!loading && type === "users" && visible.length ? <UserResults users={visible as VrchatUser[]} openUser={openUser} /> : null}
+                {!loading && type === "worlds" && visible.length ? <WorldResults worlds={visible as VrchatWorld[]} /> : null}
+                {!loading && type === "groups" && visible.length ? <GroupResults groups={visible as VrchatGroup[]} /> : null}
+            </div>
+
+            {paginationVisible ? <SearchPagination previousDisabled={offset === 0} nextDisabled={visible.length < 10} onPrevious={() => void runSearch(Math.max(0, offset - 10))} onNext={() => void runSearch(offset + 10)} /> : null}
         </section>
     );
 }
 
-function UserResult({ user, onOpen }: { user: VrchatUser; onOpen: () => void }) {
-    const image = friendImage(user);
+function UserResults({ users, openUser }: { users: VrchatUser[]; openUser: (id: string) => void }) {
     return (
-        <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card p-3 text-left shadow-xs transition hover:bg-muted">
-            <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">{image ? <img src={image} alt="" className="size-full object-cover" referrerPolicy="no-referrer" /> : <i className="ri-user-line text-xl" aria-hidden="true" />}</span>
-            <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold">{user.displayName}</span>
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">{user.statusDescription || user.bio || user.id}</span>
-            </span>
-        </button>
-    );
-}
-
-function WorldResult({ world }: { world: VrchatWorld }) {
-    return (
-        <a href={`https://vrchat.com/home/world/${encodeURIComponent(world.id)}`} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:bg-muted">
-            <div className="aspect-[16/9] bg-muted">
-                {world.thumbnailImageUrl ? (
-                    <img src={world.thumbnailImageUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
-                ) : (
-                    <span className="flex size-full items-center justify-center">
-                        <i className="ri-earth-line text-3xl text-muted-foreground" aria-hidden="true" />
-                    </span>
-                )}
-            </div>
-            <div className="p-3">
-                <p className="truncate text-sm font-semibold">{world.name}</p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">by {world.authorName || "Unknown"}</p>
-                <div className="mt-2 flex gap-3 text-[10px] text-muted-foreground">
-                    {world.occupants !== undefined ? (
-                        <span>
-                            <i className="ri-group-line" aria-hidden="true" /> {world.occupants}
+        <div>
+            {users.map((user) => {
+                const image = friendImage(user);
+                return (
+                    <button key={user.id} type="button" onClick={() => openUser(user.id)} className="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-none px-3 py-2 text-left hover:bg-muted">
+                        <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">
+                            {image ? <img src={image} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <User className="size-5" aria-hidden="true" />}
                         </span>
-                    ) : null}
-                    {world.favorites !== undefined ? (
-                        <span>
-                            <i className="ri-star-line" aria-hidden="true" /> {world.favorites.toLocaleString()}
+                        <span className="min-w-0 flex-1">
+                            <span className="flex max-w-full items-center gap-1.5">
+                                <span className="truncate text-sm font-medium">{user.displayName}</span>
+                                <span className="shrink-0 text-xs font-normal text-muted-foreground">{trustLevelFromTags(user.tags)}</span>
+                                {languages(user).map((language) => (
+                                    <span key={language} className="shrink-0 rounded-sm border border-border px-1 text-[9px] text-muted-foreground" title={language}>
+                                        {language}
+                                    </span>
+                                ))}
+                            </span>
+                            {user.bio ? <span className="block truncate text-xs text-muted-foreground">{user.bio}</span> : null}
                         </span>
-                    ) : null}
-                </div>
-            </div>
-        </a>
+                    </button>
+                );
+            })}
+        </div>
     );
 }
 
-function GroupResult({ group }: { group: VrchatGroup }) {
+function WorldResults({ worlds }: { worlds: VrchatWorld[] }) {
     return (
-        <a href={`https://vrchat.com/home/group/${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer" className="overflow-hidden rounded-xl border border-border bg-card shadow-xs transition hover:bg-muted">
-            <div className="h-20 bg-muted">{group.bannerUrl ? <img src={group.bannerUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : null}</div>
-            <div className="relative p-3 pt-7">
-                <span className="absolute -top-7 left-3 flex size-14 items-center justify-center overflow-hidden rounded-xl border-2 border-card bg-muted">
-                    {group.iconUrl ? <img src={group.iconUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" /> : <i className="ri-group-line text-2xl text-muted-foreground" aria-hidden="true" />}
-                </span>
-                <p className="truncate text-sm font-semibold">{group.name}</p>
-                <p className="text-xs text-muted-foreground">{group.shortCode || group.id}</p>
-                <p className="mt-2 line-clamp-2 min-h-8 text-xs text-foreground/80">{group.description || "No description."}</p>
-                {group.memberCount !== undefined ? <p className="mt-2 text-[10px] text-muted-foreground">{group.memberCount.toLocaleString()} members</p> : null}
-            </div>
-        </a>
-    );
-}
-
-function SearchSkeleton() {
-    const ids = ["search-skeleton-a", "search-skeleton-b", "search-skeleton-c", "search-skeleton-d", "search-skeleton-e", "search-skeleton-f"];
-    return (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3" aria-label="Loading search results">
-            {ids.map((id) => (
-                <div key={id} className="h-24 animate-pulse rounded-xl border border-border bg-muted/50" />
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
+            {worlds.map((world) => (
+                <a key={world.id} href={`https://vrchat.com/home/world/${encodeURIComponent(world.id)}`} target="_blank" rel="noreferrer" className="min-w-0 cursor-pointer overflow-hidden rounded-lg border border-border p-3 hover:bg-muted">
+                    <div className="aspect-[16/10] w-full overflow-hidden rounded-lg bg-muted">{world.thumbnailImageUrl ? <img src={world.thumbnailImageUrl} alt={world.name} loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" /> : null}</div>
+                    <p className="mt-2 truncate text-sm font-medium" title={world.name}>
+                        {world.name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                        {world.authorName || "Unknown"}
+                        {world.occupants ? ` (${world.occupants})` : ""}
+                    </p>
+                </a>
             ))}
+        </div>
+    );
+}
+
+function GroupResults({ groups }: { groups: VrchatGroup[] }) {
+    return (
+        <div>
+            {groups.map((group) => (
+                <a key={group.id} href={`https://vrchat.com/home/group/${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer" className="flex min-w-0 cursor-pointer items-center gap-3 rounded-none px-3 py-2 hover:bg-muted">
+                    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted text-muted-foreground">
+                        {group.iconUrl ? <img src={group.iconUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <Users className="size-5" aria-hidden="true" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">
+                            {group.name} <span className="font-normal">({group.memberCount ?? 0})</span>{" "}
+                            <span className="font-mono text-xs font-normal text-muted-foreground">
+                                {group.shortCode || ""}
+                                {group.discriminator ? `.${group.discriminator}` : ""}
+                            </span>
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">{group.description || ""}</span>
+                    </span>
+                </a>
+            ))}
+        </div>
+    );
+}
+
+function SearchPagination({ previousDisabled, nextDisabled, onPrevious, onNext }: { previousDisabled: boolean; nextDisabled: boolean; onPrevious: () => void; onNext: () => void }) {
+    return (
+        <div className="flex h-[60px] shrink-0 items-center justify-center">
+            <div className="inline-flex overflow-hidden rounded-lg shadow-lg">
+                <button type="button" disabled={previousDisabled} onClick={onPrevious} className="inline-flex h-8 items-center gap-1 border border-input bg-background px-3 text-xs disabled:opacity-40" aria-label="Previous search page">
+                    <ArrowLeft className="size-4" />
+                    <kbd className="rounded border border-border px-1 text-[9px]">Alt</kbd>
+                    <kbd className="rounded border border-border px-1 text-[9px]">←</kbd>
+                </button>
+                <button type="button" disabled={nextDisabled} onClick={onNext} className="inline-flex h-8 items-center gap-1 border border-l-0 border-input bg-background px-3 text-xs disabled:opacity-40" aria-label="Next search page">
+                    <kbd className="rounded border border-border px-1 text-[9px]">Alt</kbd>
+                    <kbd className="rounded border border-border px-1 text-[9px]">→</kbd>
+                    <ArrowRight className="size-4" />
+                </button>
+            </div>
         </div>
     );
 }

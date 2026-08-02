@@ -155,6 +155,7 @@ export const vrchatGroupSchema = z
         id: z.string(),
         name: z.string(),
         shortCode: z.string().optional(),
+        discriminator: z.string().optional(),
         description: z.string().optional(),
         iconUrl: z.string().optional(),
         bannerUrl: z.string().optional(),
