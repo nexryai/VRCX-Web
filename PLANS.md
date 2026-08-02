@@ -66,7 +66,7 @@ The initial source audit below records the production scope. A feature marked `A
 | Friends Locations and friend sidebar | Implemented | Resolve world metadata more consistently and complete visual viewport comparisons |
 | User details | Implemented | Port additional remote-backed tabs such as mutual friends, groups, worlds, and avatars |
 | Search | Implemented for users, worlds, and groups | Add avatar-provider search when its optional remote-provider configuration is defined; replace external world/group links with full dialogs |
-| Favorites | Not started | Port remote friend/world/avatar favorite groups and browser-safe local groups |
+| Favorites | Implemented for VRChat groups | Friend, world, and avatar groups support responsive browsing, filtering, moving, and removal; group administration, import/export, and optional browser-local groups remain |
 | Friend List | Implemented | Add advanced VRCX columns, bulk mutual-data refresh, and favorite-only filtering |
 | Moderation | Implemented for player moderations | Add avatar moderation visibility and actions to avatar details |
 | Notifications | Implemented | Browser-safe legacy and V2 list, filtering, read/hide, friend approval, and V2 response actions are ported; actions that need the running VRChat client or its current instance are intentionally omitted |

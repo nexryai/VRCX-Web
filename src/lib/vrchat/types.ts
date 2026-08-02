@@ -79,6 +79,61 @@ export const vrchatWorldSchema = z
 
 export type VrchatWorld = z.infer<typeof vrchatWorldSchema>;
 
+export const vrchatAvatarSchema = z
+    .object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        authorId: z.string().optional(),
+        authorName: z.string().optional(),
+        imageUrl: z.string().optional(),
+        thumbnailImageUrl: z.string().optional(),
+        releaseStatus: z.string().optional(),
+        created_at: z.string().optional(),
+        updated_at: z.string().optional(),
+        favoriteGroup: z.string().optional(),
+        favoriteId: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+    })
+    .passthrough();
+
+export type VrchatAvatar = z.infer<typeof vrchatAvatarSchema>;
+
+export const vrchatFavoriteSchema = z
+    .object({
+        id: z.string(),
+        favoriteId: z.string(),
+        type: z.string(),
+        tags: z.array(z.string()).default([]),
+    })
+    .passthrough();
+
+export type VrchatFavorite = z.infer<typeof vrchatFavoriteSchema>;
+
+export const vrchatFavoriteGroupSchema = z
+    .object({
+        id: z.string(),
+        ownerId: z.string().optional(),
+        ownerDisplayName: z.string().optional(),
+        name: z.string(),
+        displayName: z.string().optional(),
+        type: z.string(),
+        visibility: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+    })
+    .passthrough();
+
+export type VrchatFavoriteGroup = z.infer<typeof vrchatFavoriteGroupSchema>;
+
+export const vrchatFavoriteLimitsSchema = z
+    .object({
+        maxFavoriteGroups: z.record(z.string(), z.number()).optional(),
+        maxFavoritesPerGroup: z.record(z.string(), z.number()).optional(),
+    })
+    .passthrough();
+
+export type VrchatFavoriteLimits = z.infer<typeof vrchatFavoriteLimitsSchema>;
+
 export const vrchatGroupSchema = z
     .object({
         id: z.string(),

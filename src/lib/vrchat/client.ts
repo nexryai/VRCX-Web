@@ -7,9 +7,28 @@ import { extractVrchatCookies, serializeVrchatCookies, type VrchatCookies } from
 const VRCHAT_API_BASE = "https://api.vrchat.cloud/api/1/";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const allowedEndpoints = ["config", "auth/user", "auth/user/friends", "auth/user/notifications", "auth/user/playermoderations", "auth/user/unplayermoderate", "notifications", "users", "worlds", "groups", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"];
+const allowedEndpoints = [
+    "avatars/favorites",
+    "auth/user/favoritelimits",
+    "auth/user",
+    "auth/user/friends",
+    "auth/user/notifications",
+    "auth/user/playermoderations",
+    "auth/user/unplayermoderate",
+    "config",
+    "favorite/groups",
+    "favorites",
+    "groups",
+    "notifications",
+    "users",
+    "worlds",
+    "worlds/favorites",
+    "auth/twofactorauth/otp/verify",
+    "auth/twofactorauth/totp/verify",
+    "auth/twofactorauth/emailotp/verify",
+];
 const allowedEndpointSet = new Set(allowedEndpoints);
-const allowedEndpointPatterns = [/^users\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i, /^notifications\/not_[a-z0-9_-]+$/i, /^notifications\/not_[a-z0-9_-]+\/(respond|see)$/i];
+const allowedEndpointPatterns = [/^users\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i, /^favorites\/(usr|wrld|avtr)_[0-9a-f-]{36}$/i, /^notifications\/not_[a-z0-9_-]+$/i, /^notifications\/not_[a-z0-9_-]+\/(respond|see)$/i];
 
 const errorPayloadSchema = z
     .object({
