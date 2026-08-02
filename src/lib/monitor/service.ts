@@ -32,7 +32,7 @@ type MonitorGlobal = typeof globalThis & {
 
 const monitorGlobal = globalThis as MonitorGlobal;
 
-class AlwaysOnMonitor {
+export class AlwaysOnMonitor {
     private readonly leaderId = `${process.pid}:${randomUUID()}`;
     private leaseTimer?: NodeJS.Timeout;
     private reconciliationTimer?: NodeJS.Timeout;
@@ -47,12 +47,22 @@ class AlwaysOnMonitor {
     private reconciliationPromise?: Promise<void>;
     private pipelineTail: Promise<void> = Promise.resolve();
 
-    start() {
-        if (this.started) return;
+    start(): Promise<void> {
+        if (this.started) return Promise.resolve();
         this.started = true;
-        void this.tickLeadership();
+        const initialTick = this.tickLeadership();
         this.leaseTimer = setInterval(() => void this.tickLeadership(), LEASE_RENEWAL_MS);
         this.leaseTimer.unref();
+        return initialTick;
+    }
+
+    stop() {
+        if (!this.started) return;
+        this.started = false;
+        this.hasLeadership = false;
+        if (this.leaseTimer) clearInterval(this.leaseTimer);
+        this.leaseTimer = undefined;
+        this.disconnect();
     }
 
     private async tickLeadership() {
@@ -288,5 +298,5 @@ class AlwaysOnMonitor {
 
 export function startAlwaysOnMonitor() {
     monitorGlobal.__vrcxMonitor ??= new AlwaysOnMonitor();
-    monitorGlobal.__vrcxMonitor.start();
+    void monitorGlobal.__vrcxMonitor.start();
 }

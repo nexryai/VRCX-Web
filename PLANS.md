@@ -218,6 +218,7 @@ Status: In progress
 - [ ] Implement idempotent event writes, current-state projections, cursors, and derived-event provenance.
 - [x] Implement active-account location session opening, transition, bounded closing, and restart/gap reconciliation in `game_sessions`.
 - [x] Expose monitor health and stream/reconciliation timestamps to the UI.
+- [x] Cover browser-independent lease loss, disconnect, reacquisition, baseline reconciliation, and Pipeline reconnection with a deterministic monitor lifecycle test.
 - [ ] Prove monitoring and restart recovery with no browser connected.
 
 Exit criteria: one server monitor maintains recoverable remote state continuously and safely across disconnects and restarts.
@@ -370,3 +371,5 @@ The 2026-08-02 documentation rebaseline passed `pnpm test` (5 files, 13 tests), 
 Authenticated VRChat behavior, long-running monitoring, restart recovery, MongoDB migrations, and matched-state VRCX screenshots remain required operator checks as those systems are implemented.
 
 The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 tests), `pnpm lint` (108 files), and `pnpm build` (21 generated pages). Friends Locations and Game Log were rendered from synthetic MongoDB projections at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. This found and fixed a status-clock hydration mismatch and narrow-layout clipping. Running-VRCX reference comparisons and authenticated operator smoke tests remain outstanding.
+
+The 2026-08-02 monitor-failover increment passed `pnpm test` (8 files, 26 tests), `pnpm lint` (109 files), and `pnpm build` (21 generated pages). Automated coverage now proves that a monitor with no browser connected closes its Pipeline socket when it loses the MongoDB lease, then performs a new HTTP baseline before reconnecting after lease reacquisition. A live authenticated process-restart soak remains an operator acceptance item.
