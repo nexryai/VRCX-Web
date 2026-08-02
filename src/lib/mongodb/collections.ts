@@ -51,6 +51,11 @@ export type AppSettingsDocument = {
     favoriteCardSpacing: Record<"avatar" | "friend" | "world", number>;
     moderationFilters: string[];
     moderationTablePageSize: 20 | 50 | 100;
+    mutualGraphLayoutIterations: number;
+    mutualGraphLayoutSpacing: number;
+    mutualGraphEdgeCurvature: number;
+    mutualGraphCommunitySeparation: number;
+    mutualGraphExcludedFriendIds: string[];
     updatedAt: Date;
 };
 
@@ -173,6 +178,14 @@ export type MutualGraphDocument = {
     ownerId: string;
     relationships: Record<string, string[]>;
     optedOut: string[];
+    jobId?: string;
+    jobStatus?: "cancelled" | "complete" | "error" | "running";
+    jobProcessed?: number;
+    jobTotal?: number;
+    jobCancelRequested?: boolean;
+    jobError?: string;
+    jobHeartbeatAt?: Date;
+    jobTargetFriendId?: string;
     updatedAt: Date;
 };
 

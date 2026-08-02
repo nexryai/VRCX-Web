@@ -21,6 +21,7 @@ const captures = [
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
+    { name: "mutual-friends", path: "/charts/mutual", readyText: "Aoi Sample" },
 ];
 
 const searchFixture = [

@@ -15,6 +15,7 @@ The accepted direction is now:
 - keep excluding behavior that truly requires a locally installed or running VRChat client;
 - recover as much VRCX behavior as possible from continuous server-side VRChat HTTP and realtime API observation;
 - include Game Log as a remote-derived feature, limited to VRCX's session presentation and every session field the APIs can support;
+- exclude Dashboard completely, including its route, navigation, widgets, data jobs, and settings;
 - store all durable application data in MongoDB rather than browser storage or SQLite;
 - support exactly one operator and one active VRChat identity;
 - reproduce VRCX's UI instead of retaining the current root prototype's differing web design.
@@ -79,7 +80,7 @@ Collection names are provisional until each VRCX storage path is traced, but the
 | `local_favorite_groups`, `local_favorites` | MongoDB-native VRCX local groups and cached user/world/avatar membership snapshots | Unique owner/kind/normalized-name and owner/group/object keys |
 | `memos`, `avatar_tags` | User/world/avatar memos and avatar tagging | Unique target or target/tag keys |
 | `moderations` | Remotely visible moderation snapshots/history | Unique subject/type key; updated index |
-| `mutual_graph` | Mutual-friend nodes, edges, opt-outs, and fetch metadata | Unique edge and friend metadata keys |
+| `mutual_graph` | Last complete mutual-friend snapshot plus durable fetch status, progress, cancellation, target, and heartbeat | Unique active-owner document and job ID |
 | `jobs` | Restart-safe backfills, migrations, imports, and long-running fetch state | Unique job key; status/updated index |
 
 Detailed schemas, retention, and VRCX SQLite/JSON mappings must be added before implementing each repository. MongoDB migrations must be versioned, idempotent, and restart-safe.
@@ -233,6 +234,14 @@ The complete dense table scrolls within its pane on narrow screens rather than b
 
 Wear, make public/private, rename, change description, and impostor creation use narrowly scoped VRChat routes. Until the maintained avatar dialog is ported, View Details, content-tag editing, and style/author-tag editing open the safe VRChat avatar page and remain interaction differences. Browser upload and 4:3 crop are platform-eligible, but the multi-stage signed avatar-image upload is still outstanding and must be implemented through a fixed-purpose server boundary before the Change Image command is exposed. VRCX Time Spent is intentionally omitted because it comes from local game logs; no synthetic duration is shown. The table preserves all other remotely available source columns and scrolls within its pane on narrow screens.
 
+## Mutual Friends Scope
+
+`VRCX/src/views/Charts/components/MutualFriends.vue`, `views/Charts/graphLayoutWorker.js`, `stores/charts.js`, and `services/database/mutualGraph.js` define the Mutual Friends graph, fetch state, settings, and persistence behavior. The web port keeps VRCX's fetch/stop states, processed-friend progress, friend navigator, avatar-backed colored nodes, curved edges, selection focus, pan/zoom camera, click-through user dialog, node context menu, single-friend refresh, hide action, empty state, and right-side layout settings. Iterations, spacing, edge curvature, community separation, and excluded friends are stored in the singleton MongoDB settings document.
+
+Mutual fetching is a server-owned, rate-limited VRChat API job rather than a browser loop. MongoDB stores the last complete graph, opt-outs, job identity, target, status, progress, cancellation request, error, and heartbeat. Closing the browser stops only client polling; the Node.js process continues the job. A cancelled or failed fetch leaves the previous complete graph intact, and a node refresh replaces only that friend's relationships. A stale job left by process termination can be superseded after its heartbeat timeout. Automatic resume from the exact interrupted friend is still release-hardening work; a replacement job currently restarts the fetch from its beginning.
+
+The Sigma/Graphology/Louvain worker rendering pipeline is translated to a browser-safe React/SVG renderer so the root build does not depend on the reference checkout. It preserves the visible graph vocabulary and deterministic force layout, but very large-graph performance and community placement must still be compared against the running VRCX reference before visual parity is considered complete. Full fetches are intentionally operator-triggered, as in VRCX, because scanning every friend consumes rate-limited API calls; once triggered, they no longer depend on an open page.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -287,7 +296,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, all three Favorites states, Moderation, and My Avatars at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, all three Favorites states, Moderation, My Avatars, and Mutual Friends at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.
@@ -409,6 +418,14 @@ Rationale: Dashboard is outside the requested product scope.
 
 Consequence: Remove the existing prototype Dashboard route and navigation entry during implementation. Its widgets do not need parity work and must not be shown as placeholders elsewhere.
 
+### 2026-08-02 — Run Mutual Graph Fetches as Durable Server Jobs
+
+Decision: Preserve VRCX's operator-triggered Mutual Friends fetch, but execute it entirely on the persistent server and keep its state in MongoDB.
+
+Rationale: Mutual discovery is a large, rate-limited HTTP scan. It must continue after the initiating browser closes and must never replace a valid graph with an interrupted partial result.
+
+Consequence: The browser starts, observes, or cancels a fixed-purpose job; it does not loop over VRChat endpoints. MongoDB retains the last complete snapshot and separate job progress. Node context refresh targets one friend. Process termination is detected by heartbeat expiry, after which a new request safely restarts the work.
+
 ### 2026-08-02 — Keep the Deployment Private Without Custom Application Auth
 
 Decision: Do not add application accounts or authorization. Protect the deployment through trusted-network operations while keeping VRChat authentication and secrets server-side.
@@ -428,3 +445,5 @@ Authenticated VRChat behavior, long-running monitoring, restart recovery, MongoD
 The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 tests), `pnpm lint` (108 files), and `pnpm build` (21 generated pages). Friends Locations and Game Log were rendered from synthetic MongoDB projections at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. This found and fixed a status-clock hydration mismatch and narrow-layout clipping. The later Feed, Friend Log, Friend List, and User Dialog ports extended the same fixture to those screens and again passed all four overflow checks. Running-VRCX reference comparisons and authenticated operator smoke tests remain outstanding.
 
 The 2026-08-02 monitor-failover increment passed `pnpm test` (8 files, 26 tests), `pnpm lint` (109 files), and `pnpm build` (21 generated pages). Automated coverage now proves that a monitor with no browser connected closes its Pipeline socket when it loses the MongoDB lease, then performs a new HTTP baseline before reconnecting after lease reacquisition. A live authenticated process-restart soak remains an operator acceptance item.
+
+The 2026-08-02 Mutual Friends increment passed `pnpm test` (9 files, 33 tests), `pnpm lint` (120 files), and `pnpm build` (24 generated pages). The populated graph passed deterministic captures at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow; the narrow settings sheet also passed an interaction smoke check. Live authenticated API scanning, very-large-graph comparison, and a forced process-termination recovery soak remain operator acceptance items.

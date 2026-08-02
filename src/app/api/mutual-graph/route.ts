@@ -5,24 +5,13 @@ import { z } from "zod";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { collections } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
-import { getStoredVrchatSession } from "@/lib/mongodb/session-repository";
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
+import { cancelMutualGraphJob, startMutualGraphJob } from "@/lib/mutual-graph-job";
 import { isMutationOriginAllowed } from "@/lib/request-security";
-
-const userIdSchema = z.string().regex(/^usr_[0-9a-f-]{36}$/i);
-const graphSchema = z.object({
-    relationships: z.record(userIdSchema, z.array(userIdSchema).max(10_000)),
-    optedOut: z.array(userIdSchema).max(10_000),
-    updatedAt: z.iso.datetime(),
-});
-
-async function activeOwnerId() {
-    const stored = await getStoredVrchatSession();
-    return stored?.status === "authenticated" ? stored.activeUserId : undefined;
-}
+import { requireVrchatCookies } from "@/lib/vrchat/session";
 
 export async function GET() {
-    const ownerId = await activeOwnerId();
-    if (!ownerId) return NextResponse.json({ error: "Sign in to view the mutual graph." }, { status: 401 });
+    const ownerId = await requireActiveUserId();
     await ensureMongoSchema();
     const graph = await collections(await getMongoDatabase()).mutualGraph.findOne({ ownerId });
     const response = NextResponse.json({
@@ -33,29 +22,36 @@ export async function GET() {
                   updatedAt: graph.updatedAt.toISOString(),
               }
             : null,
+        job: graph
+            ? {
+                  status: graph.jobStatus || "complete",
+                  processed: graph.jobProcessed || 0,
+                  total: graph.jobTotal || 0,
+                  error: graph.jobError,
+              }
+            : { status: "complete", processed: 0, total: 0 },
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;
 }
 
-export async function PUT(request: NextRequest) {
+export async function POST(request: NextRequest) {
     if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
-    const ownerId = await activeOwnerId();
-    if (!ownerId) return NextResponse.json({ error: "Sign in to save the mutual graph." }, { status: 401 });
-    const body = graphSchema.safeParse(await request.json().catch(() => null));
-    if (!body.success) return NextResponse.json({ error: "The mutual graph snapshot is invalid." }, { status: 400 });
-    await ensureMongoSchema();
-    await collections(await getMongoDatabase()).mutualGraph.updateOne(
-        { _id: ownerId },
-        {
-            $set: {
-                ownerId,
-                relationships: body.data.relationships,
-                optedOut: body.data.optedOut,
-                updatedAt: new Date(body.data.updatedAt),
-            },
-        },
-        { upsert: true },
-    );
-    return NextResponse.json({ success: true });
+    const body = z
+        .object({
+            friendId: z
+                .string()
+                .regex(/^usr_[0-9a-f-]{36}$/i)
+                .optional(),
+        })
+        .safeParse(await request.json().catch(() => ({})));
+    if (!body.success) return NextResponse.json({ error: "The mutual graph request is invalid." }, { status: 400 });
+    const [ownerId, cookies] = await Promise.all([requireActiveUserId(), requireVrchatCookies()]);
+    const started = await startMutualGraphJob(ownerId, cookies, body.data.friendId);
+    return NextResponse.json({ started }, { status: started ? 202 : 409 });
+}
+
+export async function DELETE(request: NextRequest) {
+    if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
+    return NextResponse.json({ cancelled: await cancelMutualGraphJob(await requireActiveUserId()) });
 }

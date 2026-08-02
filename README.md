@@ -6,7 +6,7 @@ The original source in `./VRCX/` is the behavior, implementation, and visual ref
 
 ## Current Status
 
-The MongoDB foundation, encrypted server-owned VRChat session, monitor leadership, Pipeline connection, scheduled friend/notification reconciliation, activity projections, and remote-derived Game Log session storage are implemented. Durable prototype settings and graph state no longer use browser storage. The explicitly excluded Dashboard route and navigation entry have been removed.
+The MongoDB foundation, encrypted server-owned VRChat session, monitor leadership, Pipeline connection, scheduled friend/notification reconciliation, activity projections, remote-derived Game Log session storage, and server-owned Mutual Friends fetch jobs are implemented. Durable settings and completed graph snapshots no longer use browser storage. The explicitly excluded Dashboard route and navigation entry have been removed.
 
 This remains an in-progress port: several remote workflows still call VRChat interactively instead of reading complete MongoDB projections, and screen-by-screen visual parity work is not finished. See [PLANS.md](./PLANS.md) for the remaining acceptance work.
 
@@ -73,7 +73,7 @@ pnpm visual:fixture
 pnpm visual:capture
 ```
 
-The capture command writes ignored images under `.visual/` for Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, Favorite Friends, Favorite Worlds, Favorite Avatars, Moderation, and My Avatars at 360, 768, 1280, and 1920 pixels wide, and fails on page-level horizontal overflow. The fixture uses only synthetic records and disables the always-on monitor in development; production startup cannot use this bypass. These images make the current port reproducible but do not replace matched screenshots from the running VRCX reference application.
+The capture command writes ignored images under `.visual/` for Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, Favorite Friends, Favorite Worlds, Favorite Avatars, Moderation, My Avatars, and Mutual Friends at 360, 768, 1280, and 1920 pixels wide, and fails on page-level horizontal overflow. The fixture uses only synthetic records and disables the always-on monitor in development; production startup cannot use this bypass. These images make the current port reproducible but do not replace matched screenshots from the running VRCX reference application.
 
 MongoDB migrations are versioned in `schema_migrations` and run automatically and idempotently when the application first accesses the database. `GET /api/health` is the deployment health probe; it returns HTTP 503 without exposing driver details when MongoDB is unavailable.
 

@@ -44,6 +44,14 @@ const updateSchema = z
         favoriteCardSpacing: z.object({ avatar: z.number().min(0.5).max(1.5), friend: z.number().min(0.5).max(1.5), world: z.number().min(0.5).max(1.5) }).optional(),
         moderationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
         moderationTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
+        mutualGraphLayoutIterations: z.number().int().min(300).max(1_500).optional(),
+        mutualGraphLayoutSpacing: z.number().int().min(8).max(240).optional(),
+        mutualGraphEdgeCurvature: z.number().min(0).max(0.2).optional(),
+        mutualGraphCommunitySeparation: z.number().min(0).max(3).optional(),
+        mutualGraphExcludedFriendIds: z
+            .array(z.string().regex(/^usr_[0-9a-f-]{36}$/i))
+            .max(10_000)
+            .optional(),
     })
     .refine((value) => Object.values(value).some((item) => item !== undefined));
 
@@ -77,6 +85,11 @@ export async function GET() {
         favoriteCardSpacing: settings?.favoriteCardSpacing ?? { avatar: 1, friend: 1, world: 1 },
         moderationFilters: settings?.moderationFilters ?? [],
         moderationTablePageSize: settings?.moderationTablePageSize ?? 20,
+        mutualGraphLayoutIterations: settings?.mutualGraphLayoutIterations ?? 800,
+        mutualGraphLayoutSpacing: settings?.mutualGraphLayoutSpacing ?? 60,
+        mutualGraphEdgeCurvature: settings?.mutualGraphEdgeCurvature ?? 0.1,
+        mutualGraphCommunitySeparation: settings?.mutualGraphCommunitySeparation ?? 0,
+        mutualGraphExcludedFriendIds: settings?.mutualGraphExcludedFriendIds ?? [],
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;

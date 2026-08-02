@@ -154,6 +154,11 @@ await database.collection("app_settings").insertOne({
     favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
     moderationFilters: [],
     moderationTablePageSize: 20,
+    mutualGraphLayoutIterations: 800,
+    mutualGraphLayoutSpacing: 60,
+    mutualGraphEdgeCurvature: 0.1,
+    mutualGraphCommunitySeparation: 0,
+    mutualGraphExcludedFriendIds: [],
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });

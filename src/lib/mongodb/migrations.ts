@@ -255,6 +255,27 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 18,
+        name: "add-mutual-graph-job-state",
+        async apply(c) {
+            await c.mutualGraph.updateMany({ jobStatus: { $exists: false } }, { $set: { jobStatus: "complete", jobProcessed: 0, jobTotal: 0, jobCancelRequested: false } });
+        },
+    },
+    {
+        version: 19,
+        name: "add-mutual-graph-layout-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ mutualGraphLayoutIterations: { $exists: false } }, { $set: { mutualGraphLayoutIterations: 800, updatedAt } }),
+                c.appSettings.updateMany({ mutualGraphLayoutSpacing: { $exists: false } }, { $set: { mutualGraphLayoutSpacing: 60, updatedAt } }),
+                c.appSettings.updateMany({ mutualGraphEdgeCurvature: { $exists: false } }, { $set: { mutualGraphEdgeCurvature: 0.1, updatedAt } }),
+                c.appSettings.updateMany({ mutualGraphCommunitySeparation: { $exists: false } }, { $set: { mutualGraphCommunitySeparation: 0, updatedAt } }),
+                c.appSettings.updateMany({ mutualGraphExcludedFriendIds: { $exists: false } }, { $set: { mutualGraphExcludedFriendIds: [], updatedAt } }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {
