@@ -25,7 +25,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
         expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -47,6 +47,7 @@ describe("MongoDB application repositories", () => {
         expect(sessionIndexes).toBe(true);
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
+        expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
     });
 
     test("stores encrypted session material and isolates cached users by owner", async () => {
@@ -158,6 +159,18 @@ describe("MongoDB application repositories", () => {
         expect(await listCachedGroupPosts(otherOwnerId, groupId)).toEqual([]);
         expect(await listCachedGroupMembers(ownerId, groupId, 0, 100)).toMatchObject({ total: 1, members: [expect.objectContaining({ userId })] });
         expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
+    });
+
+    test("stores entity memos without leaking them between owners", async () => {
+        const { getEntityMemo, saveEntityMemo } = await import("./memo-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000061";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000062";
+        const worldId = "wrld_00000000-0000-0000-0000-000000000063";
+        expect(await saveEntityMemo(ownerId, "world", worldId, "  Weekend meetup world  ")).toBe("Weekend meetup world");
+        expect(await getEntityMemo(ownerId, "world", worldId)).toBe("Weekend meetup world");
+        expect(await getEntityMemo(otherOwnerId, "world", worldId)).toBe("");
+        expect(await saveEntityMemo(ownerId, "world", worldId, "")).toBe("");
+        expect(await getEntityMemo(ownerId, "world", worldId)).toBe("");
     });
 
     test("projects remotely observed friend-request notifications into Friend Log once", async () => {

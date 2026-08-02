@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarDays, Clipboard, ExternalLink, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
+import { MemoField } from "@/components/memo-field";
 import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
 import { friendImage, locationLabel, statusColor } from "@/lib/friends";
 import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
@@ -333,6 +334,9 @@ function UserSummary({ user, isFriend, copied, confirming, removing, copyUserId,
 function InfoTab({ user }: { user: VrchatUser }) {
     return (
         <div className="space-y-2">
+            <section className="rounded-xl bg-background p-1.5">
+                <MemoField entityType="user" entityId={user.id} />
+            </section>
             <section className="rounded-xl bg-background p-3">
                 <SectionTitle>Current instance</SectionTitle>
                 <div className="flex gap-3">

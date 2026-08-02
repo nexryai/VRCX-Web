@@ -288,6 +288,13 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 21,
+        name: "add-entity-memo-indexes",
+        async apply(c) {
+            await Promise.all([c.entityMemos.createIndex({ ownerId: 1, entityType: 1, entityId: 1 }, { unique: true, name: "owner_type_entity_unique" }), c.entityMemos.createIndex({ ownerId: 1, entityType: 1, updatedAt: -1 }, { name: "owner_type_updated" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

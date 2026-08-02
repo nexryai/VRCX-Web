@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Apple, CheckCircle, Clipboard, ExternalLink, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, X } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
+import { MemoField } from "@/components/memo-field";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
 type AvatarTab = "Info" | "JSON";
@@ -167,6 +168,7 @@ function AvatarInfo({ avatar, copied, copy }: { avatar: VrchatAvatar; copied: st
     const packages = avatarPlatforms(avatar);
     return (
         <div className="flex flex-wrap items-start px-1">
+            <MemoField entityType="avatar" entityId={avatar.id} />
             <Info label="Avatar ID" value={copied === "ID" ? "Copied" : avatar.id} action={() => void copy(avatar.id, "ID")} full />
             <Info label="Created" value={date(avatar.created_at)} />
             <Info label="Last updated" value={date(avatar.updated_at)} />

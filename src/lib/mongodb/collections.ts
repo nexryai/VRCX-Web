@@ -160,6 +160,16 @@ export type AvatarTagDocument = {
     updatedAt: Date;
 };
 
+export type EntityMemoDocument = {
+    _id: string;
+    ownerId: string;
+    entityType: "avatar" | "user" | "world";
+    entityId: string;
+    memo: string;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
 export type ActivityEventDocument = {
     _id: string;
     ownerId: string;
@@ -297,6 +307,7 @@ export type Collections = {
     groupMembers: Collection<GroupMemberDocument>;
     avatars: Collection<AvatarDocument>;
     avatarTags: Collection<AvatarTagDocument>;
+    entityMemos: Collection<EntityMemoDocument>;
     friendSnapshots: Collection<FriendSnapshotDocument>;
     activityEvents: Collection<ActivityEventDocument>;
     gameSessions: Collection<GameSessionDocument>;
@@ -322,6 +333,7 @@ export function collections(db: Db): Collections {
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         avatars: db.collection<AvatarDocument>("avatars"),
         avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),
+        entityMemos: db.collection<EntityMemoDocument>("entity_memos"),
         friendSnapshots: db.collection<FriendSnapshotDocument>("friend_snapshots"),
         activityEvents: db.collection<ActivityEventDocument>("activity_events"),
         gameSessions: db.collection<GameSessionDocument>("game_sessions"),

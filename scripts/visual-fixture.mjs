@@ -227,6 +227,11 @@ await database.collection("avatar_tags").insertMany([
     { _id: `${ownerId}:${ownedAvatars[0].id}:dance`, ownerId, avatarId: ownedAvatars[0].id, tag: "Dance", normalizedTag: "dance", color: "#3b82f6", createdAt: now, updatedAt: now },
     { _id: `${ownerId}:${ownedAvatars[1].id}:fallback`, ownerId, avatarId: ownedAvatars[1].id, tag: "Fallback", normalizedTag: "fallback", color: "#22c55e", createdAt: now, updatedAt: now },
 ]);
+await database.collection("entity_memos").insertMany([
+    { _id: `${ownerId}:user:${friends[0].id}`, ownerId, entityType: "user", entityId: friends[0].id, memo: "Met through the browser-port test crew.", createdAt: now, updatedAt: now },
+    { _id: `${ownerId}:world:${favoriteWorld.id}`, ownerId, entityType: "world", entityId: favoriteWorld.id, memo: "Good event world for groups of about twenty people.", createdAt: now, updatedAt: now },
+    { _id: `${ownerId}:avatar:${favoriteAvatar.id}`, ownerId, entityType: "avatar", entityId: favoriteAvatar.id, memo: "Cross-platform dance avatar.", createdAt: now, updatedAt: now },
+]);
 const localFriendGroupId = "lfg_00000000-0000-0000-0000-000000000053";
 await database.collection("local_favorite_groups").insertOne({ _id: `${ownerId}:${localFriendGroupId}`, ownerId, groupId: localFriendGroupId, kind: "friend", name: "Event Crew", normalizedName: "event crew", createdAt: now, updatedAt: now });
 await database.collection("local_favorites").insertOne({ _id: `${ownerId}:${localFriendGroupId}:${friends[1].id}`, ownerId, groupId: localFriendGroupId, kind: "friend", objectId: friends[1].id, item: friends[1], createdAt: now, updatedAt: now });

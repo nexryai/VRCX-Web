@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Apple, Clipboard, ExternalLink, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, User, X } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
+import { MemoField } from "@/components/memo-field";
 import type { VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 type WorldTab = "Info" | "Instances" | "JSON";
@@ -160,6 +161,9 @@ function WorldInfo({ world, copy, copied }: { world: VrchatWorld; copy: (value: 
     const occupants = world.occupants ?? (world.publicOccupants !== undefined || world.privateOccupants !== undefined ? (world.publicOccupants || 0) + (world.privateOccupants || 0) : undefined);
     return (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1">
+            <div className="col-span-full">
+                <MemoField entityType="world" entityId={world.id} />
+            </div>
             <Info label="World ID" value={copied === "ID" ? "Copied" : world.id} action={() => void copy(world.id, "ID")} />
             <Info label="Occupants" value={number(occupants)} />
             <Info label="Capacity" value={`${world.recommendedCapacity ?? world.capacity ?? "—"} / ${world.capacity ?? "—"}`} />
