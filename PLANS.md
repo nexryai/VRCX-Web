@@ -68,7 +68,7 @@ The initial source audit below records the production scope. A feature marked `A
 | Search | Implemented for users, worlds, and groups | Add avatar-provider search when its optional remote-provider configuration is defined; replace external world/group links with full dialogs |
 | Favorites | Not started | Port remote friend/world/avatar favorite groups and browser-safe local groups |
 | Friend List | Implemented | Add advanced VRCX columns, bulk mutual-data refresh, and favorite-only filtering |
-| Moderation | Not started | Port player and avatar moderation lists/actions |
+| Moderation | Implemented for player moderations | Add avatar moderation visibility and actions to avatar details |
 | Notifications | Not started | Port notification list and response actions |
 | My Avatars | Not started | Port remote management; omit desktop history |
 | Feed and Friend Log | Not started | Define web persistence for remote events |

@@ -7,7 +7,8 @@ import { extractVrchatCookies, serializeVrchatCookies, type VrchatCookies } from
 const VRCHAT_API_BASE = "https://api.vrchat.cloud/api/1/";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const allowedEndpoints = new Set(["config", "auth/user", "auth/user/friends", "users", "worlds", "groups", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"]);
+const allowedEndpoints = ["config", "auth/user", "auth/user/friends", "auth/user/playermoderations", "auth/user/unplayermoderate", "users", "worlds", "groups", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"];
+const allowedEndpointSet = new Set(allowedEndpoints);
 const allowedEndpointPatterns = [/^users\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i];
 
 const errorPayloadSchema = z
@@ -47,7 +48,7 @@ export class VrchatApiError extends Error {
 }
 
 function assertAllowedEndpoint(endpoint: string) {
-    if (!allowedEndpoints.has(endpoint) && !allowedEndpointPatterns.some((pattern) => pattern.test(endpoint))) {
+    if (!allowedEndpointSet.has(endpoint) && !allowedEndpointPatterns.some((pattern) => pattern.test(endpoint))) {
         throw new Error(`VRChat endpoint is not allowlisted: ${endpoint}`);
     }
 }

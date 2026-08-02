@@ -96,6 +96,20 @@ export const vrchatGroupSchema = z
 
 export type VrchatGroup = z.infer<typeof vrchatGroupSchema>;
 
+export const vrchatPlayerModerationSchema = z
+    .object({
+        id: z.string().optional(),
+        type: z.string(),
+        sourceUserId: z.string(),
+        sourceDisplayName: z.string().optional(),
+        targetUserId: z.string(),
+        targetDisplayName: z.string().optional(),
+        created: z.string().optional(),
+    })
+    .passthrough();
+
+export type VrchatPlayerModeration = z.infer<typeof vrchatPlayerModerationSchema>;
+
 export const vrchatAuthResponseSchema = z
     .object({
         requiresTwoFactorAuth: z.array(z.string()).optional(),

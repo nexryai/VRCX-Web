@@ -15,6 +15,7 @@ const navigation = [
     { href: "/", label: "Friends Locations", icon: "ri-user-location-line" },
     { href: "/search", label: "Search", icon: "ri-search-line" },
     { href: "/social/friend-list", label: "Friend List", icon: "ri-booklet-line" },
+    { href: "/social/moderation", label: "Moderation", icon: "ri-shield-user-line" },
 ];
 
 export function AppShell({ user, children, aside }: { user: VrchatUser; children: React.ReactNode; aside?: React.ReactNode }) {
