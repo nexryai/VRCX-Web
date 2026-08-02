@@ -84,6 +84,8 @@ const friends = [
     },
 ];
 const currentUser = { id: ownerId, displayName: "Visual Operator", state: "online", status: "online", statusDescription: "VRCX browser port", location: "wrld_00000000-0000-0000-0000-000000000010:12345", world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" } };
+const favoriteWorld = { id: "wrld_00000000-0000-0000-0000-000000000051", name: "Favorite Moonlit World", authorName: "Favorite World Author", occupants: 24 };
+const favoriteAvatar = { id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" };
 
 await database.collection("app_settings").insertOne({
     _id: "singleton",
@@ -107,13 +109,30 @@ await database.collection("app_settings").insertOne({
     userDialogLastTab: "Info",
     notificationFilters: [],
     notificationTablePageSize: 20,
+    favoriteSortByDate: false,
+    favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
+    favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
 await database.collection("monitor_state").insertOne({ _id: "singleton", schemaVersion: 1, ownerId, status: "healthy", pipelineConnected: true, lastPipelineEventAt: now, lastReconciledAt: now, updatedAt: now });
 await database.collection("users").insertOne({ _id: `${ownerId}:${ownerId}`, ownerId, userId: ownerId, user: currentUser, source: "auth", observedAt: now, updatedAt: now });
 await database.collection("friend_snapshots").insertMany(friends.map((user) => ({ _id: `${ownerId}:${user.id}`, ownerId, friendId: user.id, online: user.state === "online", user, observedAt: now, updatedAt: now })));
-await database.collection("favorites").insertOne({ _id: `${ownerId}:fvrt_visual`, ownerId, recordId: "fvrt_visual", objectId: friends[0].id, favoriteType: "friend", favorite: { id: "fvrt_visual", favoriteId: friends[0].id, type: "friend", tags: ["group_0"] }, active: true, observedAt: now, updatedAt: now });
+await database.collection("favorites").insertMany([
+    { _id: `${ownerId}:fvrt_visual_friend`, ownerId, recordId: "fvrt_visual_friend", objectId: friends[0].id, favoriteType: "friend", favorite: { id: "fvrt_visual_friend", favoriteId: friends[0].id, type: "friend", tags: ["group_0"] }, active: true, observedAt: now, updatedAt: now },
+    { _id: `${ownerId}:fvrt_visual_world`, ownerId, recordId: "fvrt_visual_world", objectId: favoriteWorld.id, favoriteType: "world", favorite: { id: "fvrt_visual_world", favoriteId: favoriteWorld.id, type: "world", tags: ["worlds1"] }, active: true, observedAt: now, updatedAt: now },
+    { _id: `${ownerId}:fvrt_visual_avatar`, ownerId, recordId: "fvrt_visual_avatar", objectId: favoriteAvatar.id, favoriteType: "avatar", favorite: { id: "fvrt_visual_avatar", favoriteId: favoriteAvatar.id, type: "avatar", tags: ["avatars1"] }, active: true, observedAt: now, updatedAt: now },
+]);
+await database.collection("favorite_groups").insertMany([
+    { _id: `${ownerId}:friend:group_0`, ownerId, groupId: "friend:group_0", group: { id: "friend:group_0", name: "group_0", displayName: "Best Friends", type: "friend", visibility: "friends" }, active: true, observedAt: now, updatedAt: now },
+    { _id: `${ownerId}:world:worlds1`, ownerId, groupId: "world:worlds1", group: { id: "world:worlds1", name: "worlds1", displayName: "Cozy Worlds", type: "world", visibility: "private" }, active: true, observedAt: now, updatedAt: now },
+    { _id: `${ownerId}:avatar:avatars1`, ownerId, groupId: "avatar:avatars1", group: { id: "avatar:avatars1", name: "avatars1", displayName: "Daily Avatars", type: "avatar", visibility: "public" }, active: true, observedAt: now, updatedAt: now },
+]);
+await database.collection("worlds").insertOne({ _id: `${ownerId}:${favoriteWorld.id}`, ownerId, worldId: favoriteWorld.id, world: favoriteWorld, source: "favorite", observedAt: now, updatedAt: now });
+await database.collection("avatars").insertOne({ _id: `${ownerId}:${favoriteAvatar.id}`, ownerId, avatarId: favoriteAvatar.id, avatar: favoriteAvatar, source: "favorite", observedAt: now, updatedAt: now });
+const localFriendGroupId = "lfg_00000000-0000-0000-0000-000000000053";
+await database.collection("local_favorite_groups").insertOne({ _id: `${ownerId}:${localFriendGroupId}`, ownerId, groupId: localFriendGroupId, kind: "friend", name: "Event Crew", normalizedName: "event crew", createdAt: now, updatedAt: now });
+await database.collection("local_favorites").insertOne({ _id: `${ownerId}:${localFriendGroupId}:${friends[1].id}`, ownerId, groupId: localFriendGroupId, kind: "friend", objectId: friends[1].id, item: friends[1], createdAt: now, updatedAt: now });
 await database.collection("groups").insertOne({
     _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020`,
     ownerId,

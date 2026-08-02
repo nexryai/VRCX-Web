@@ -221,6 +221,18 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 15,
+        name: "add-favorites-layout-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ favoriteSortByDate: { $exists: false } }, { $set: { favoriteSortByDate: false, updatedAt } }),
+                c.appSettings.updateMany({ favoriteCardScale: { $exists: false } }, { $set: { favoriteCardScale: { avatar: 1, friend: 1, world: 1 }, updatedAt } }),
+                c.appSettings.updateMany({ favoriteCardSpacing: { $exists: false } }, { $set: { favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 }, updatedAt } }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

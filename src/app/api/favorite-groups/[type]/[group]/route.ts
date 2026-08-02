@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { clearFavoriteGroupProjection, upsertFavoriteGroupProjection } from "@/lib/mongodb/projection-repository";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
@@ -35,7 +36,9 @@ export async function PATCH(request: NextRequest, context: RouteContext<"/api/fa
         if (!resolved) return NextResponse.json({ error: "Sign in and provide a valid favorite group." }, { status: 401 });
         const { params, cookies, userId } = resolved;
         const upstream = await requestVrchat<unknown>(`favorite/group/${params.type}/${params.group}/${userId}`, { method: "PUT", cookies, body: { ...params, ...body.data } });
-        const response = NextResponse.json({ group: vrchatFavoriteGroupSchema.parse(upstream.data) });
+        const group = vrchatFavoriteGroupSchema.parse(upstream.data);
+        await upsertFavoriteGroupProjection(userId, group);
+        const response = NextResponse.json({ group });
         await persistRotatedVrchatCookies({ ...cookies, ...upstream.cookies }, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
@@ -52,6 +55,7 @@ export async function DELETE(request: NextRequest, context: RouteContext<"/api/f
         if (!resolved) return NextResponse.json({ error: "Sign in and provide a valid favorite group." }, { status: 401 });
         const { params, cookies, userId } = resolved;
         const upstream = await requestVrchat<unknown>(`favorite/group/${params.type}/${params.group}/${userId}`, { method: "DELETE", cookies, body: params });
+        await clearFavoriteGroupProjection(userId, params.type, params.group);
         const response = NextResponse.json({ success: true });
         await persistRotatedVrchatCookies({ ...cookies, ...upstream.cookies }, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");

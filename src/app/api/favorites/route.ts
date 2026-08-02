@@ -18,7 +18,14 @@ const querySchema = z.discriminatedUnion("section", [
     z.object({ section: z.literal("records"), offset: z.coerce.number().int().min(0).max(5_000).default(0) }),
     z.object({ section: z.literal("groups"), offset: z.coerce.number().int().min(0).max(500).default(0) }),
     z.object({ section: z.literal("limits") }),
-    z.object({ section: z.literal("items"), type: z.enum(["avatar", "world"]), tag: z.string().regex(/^[a-z0-9_-]+$/i) }),
+    z.object({
+        section: z.literal("items"),
+        type: z.enum(["avatar", "world"]),
+        tag: z
+            .string()
+            .regex(/^[a-z0-9_-]+$/i)
+            .optional(),
+    }),
 ]);
 
 const favoriteTagSchema = z.string().regex(/^[a-z0-9_-]+$/i);

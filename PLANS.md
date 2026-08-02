@@ -215,6 +215,12 @@ User results preserve the avatar, display name, trust level, languages, and one-
 
 The Avatar tab is intentionally absent. VRCX searches avatars only through an optional, separately configured external avatar database; the official VRChat API does not provide that search workflow. The tab must not appear until a user-approved remote provider integration, server-side provider allowlist, credential boundary, and corresponding VRCX provider settings are implemented. My Avatars remains a separate official-API-backed workflow.
 
+## Favorites Scope
+
+`VRCX/src/views/Favorites/FavoritesFriend.vue`, `FavoritesWorld.vue`, `FavoritesAvatar.vue`, `components/FavoritesToolbar.vue`, `FavoritesContentHeader.vue`, the three favorite item components, `composables/useFavoritesCardScaling.js`, `composables/useFavoritesGroupPanel.js`, `styles/favorites-layout.css`, and `styles/favorites-card.css` define the Favorites port. The web application keeps VRCX's separate friend, world, and avatar routes; remote and local group panel; name/date sorting; cross-group search; scale and spacing controls; edit mode; select-all and bulk removal; remote group display-name, visibility, move, unfavorite, and clear actions; and local group create, rename, delete, copy, and remove workflows. Remote favorite and group projections are retained in MongoDB, while VRCX-local groups and memberships are MongoDB-native and scoped to the one active owner. Favorite layout settings are stored in the singleton MongoDB settings document.
+
+At desktop widths the fixed group pane and dense responsive card grid closely translate VRCX. At narrow widths the group pane becomes a select with adjacent manage and local-group creation controls so no workflow depends on hover or disappears. Friend cards open the maintained user dialog. World and avatar cards currently use allowlisted VRChat web detail links until maintained root detail dialogs are ported; this remains an interaction difference. Browser file upload/download is eligible, but VRCX local-group import and export are still outstanding and must be added before Favorites is parity-complete. VRCX avatar history is excluded because it reads the desktop application's local avatar history database. Local-game request, invite, launch, and join actions remain absent.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -269,7 +275,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, and Search states at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, Notifications, Game Log, Search, and all three Favorites states at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.

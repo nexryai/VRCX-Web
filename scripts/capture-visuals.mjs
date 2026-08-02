@@ -16,6 +16,9 @@ const captures = [
     { name: "notifications", path: "/notification", readyText: "Group announcement, Community meetup starts in one hour." },
     { name: "game-log", path: "/game-log", readyText: "Midnight Rooftop" },
     { name: "search", path: "/search", readyText: "Found through the VRChat user search.", searchQuery: "sample creator" },
+    { name: "favorite-friends", path: "/favorite/friends", readyText: "Building a new world", favoriteKind: "friend" },
+    { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
+    { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
 ];
 
 const searchFixture = [
@@ -33,7 +36,8 @@ const searchFixture = [
         tags: ["system_trust_known", "language_eng"],
     },
 ];
-const selectedCaptures = process.env.VRCX_VISUAL_ONLY ? captures.filter((capture) => capture.name === process.env.VRCX_VISUAL_ONLY) : captures;
+const requestedCaptures = new Set((process.env.VRCX_VISUAL_ONLY || "").split(",").filter(Boolean));
+const selectedCaptures = requestedCaptures.size ? captures.filter((capture) => requestedCaptures.has(capture.name)) : captures;
 
 for (const width of [360, 768, 1280, 1920]) {
     for (const capture of selectedCaptures) {
@@ -44,6 +48,18 @@ for (const width of [360, 768, 1280, 1920]) {
         if (capture.searchQuery) {
             await page.route("**/api/search/config", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ worldRows: [{ index: 0, name: "Featured", sortHeading: "featured" }] }) }));
             await page.route("**/api/search?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ type: "users", results: searchFixture, offset: 0, pageSize: 10 }) }));
+        }
+        if (capture.favoriteKind) {
+            await page.route("**/api/favorites?section=limits", (route) =>
+                route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ limits: { maxFavoriteGroups: { avatar: 6, friend: 3, vrcPlusWorld: 4, world: 4 }, maxFavoritesPerGroup: { avatar: 50, friend: 150, vrcPlusWorld: 100, world: 100 } } }) }),
+            );
+            if (capture.favoriteKind !== "friend") {
+                const items =
+                    capture.favoriteKind === "world"
+                        ? [{ id: "wrld_00000000-0000-0000-0000-000000000051", name: "Favorite Moonlit World", authorName: "Favorite World Author", occupants: 24 }]
+                        : [{ id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" }];
+                await page.route(`**/api/favorites?section=items&type=${capture.favoriteKind}`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) }));
+            }
         }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
         if (capture.clickText) {

@@ -43,6 +43,9 @@ export type AppSettingsDocument = {
     userDialogLastTab: "Info" | "Mutual" | "Groups" | "Worlds" | "Activity" | "JSON";
     notificationFilters: string[];
     notificationTablePageSize: 20 | 50 | 100;
+    favoriteSortByDate: boolean;
+    favoriteCardScale: Record<"avatar" | "friend" | "world", number>;
+    favoriteCardSpacing: Record<"avatar" | "friend" | "world", number>;
     updatedAt: Date;
 };
 

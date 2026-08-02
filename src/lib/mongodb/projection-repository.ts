@@ -42,6 +42,17 @@ export async function replaceFavoriteGroupProjection(ownerId: string, groups: Vr
     await collection.updateMany({ ownerId, active: true, ...(groupIds.length ? { groupId: { $nin: groupIds } } : {}) }, { $set: { active: false, updatedAt: observedAt } });
 }
 
+export async function upsertFavoriteGroupProjection(ownerId: string, group: VrchatFavoriteGroup, observedAt = new Date()) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).favoriteGroups.updateOne({ _id: `${ownerId}:${group.id}` }, { $set: { ownerId, groupId: group.id, group, active: true, observedAt, updatedAt: observedAt } }, { upsert: true });
+}
+
+export async function clearFavoriteGroupProjection(ownerId: string, favoriteType: string, groupName: string, observedAt = new Date()) {
+    await ensureMongoSchema();
+    // VRChat clears the contents of a favorite group but leaves the group itself in place.
+    await collections(await getMongoDatabase()).favorites.updateMany({ ownerId, favoriteType, active: true, "favorite.tags": groupName }, { $set: { active: false, updatedAt: observedAt } });
+}
+
 export async function replaceModerationProjection(ownerId: string, moderations: VrchatPlayerModeration[], observedAt = new Date()) {
     await ensureMongoSchema();
     const collection = collections(await getMongoDatabase()).moderations;

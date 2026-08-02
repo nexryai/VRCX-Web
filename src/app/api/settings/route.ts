@@ -36,6 +36,9 @@ const updateSchema = z
         userDialogLastTab: z.enum(["Info", "Mutual", "Groups", "Worlds", "Activity", "JSON"]).optional(),
         notificationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
         notificationTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
+        favoriteSortByDate: z.boolean().optional(),
+        favoriteCardScale: z.object({ avatar: z.number().min(0.6).max(1), friend: z.number().min(0.6).max(1), world: z.number().min(0.6).max(1) }).optional(),
+        favoriteCardSpacing: z.object({ avatar: z.number().min(0.5).max(1.5), friend: z.number().min(0.5).max(1.5), world: z.number().min(0.5).max(1.5) }).optional(),
     })
     .refine((value) => Object.values(value).some((item) => item !== undefined));
 
@@ -61,6 +64,9 @@ export async function GET() {
         userDialogLastTab: settings?.userDialogLastTab ?? "Info",
         notificationFilters: settings?.notificationFilters ?? [],
         notificationTablePageSize: settings?.notificationTablePageSize ?? 20,
+        favoriteSortByDate: settings?.favoriteSortByDate ?? false,
+        favoriteCardScale: settings?.favoriteCardScale ?? { avatar: 1, friend: 1, world: 1 },
+        favoriteCardSpacing: settings?.favoriteCardSpacing ?? { avatar: 1, friend: 1, world: 1 },
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;

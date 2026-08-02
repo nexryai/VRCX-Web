@@ -25,8 +25,14 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
-        expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({ notificationFilters: [], notificationTablePageSize: 20 });
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+        expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
+            notificationFilters: [],
+            notificationTablePageSize: 20,
+            favoriteSortByDate: false,
+            favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
+            favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
+        });
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner"]);
         expect(sessionIndexes).toBe(true);
     });
@@ -159,19 +165,23 @@ describe("MongoDB application repositories", () => {
     });
 
     test("retains inactive favorite and moderation projections for history", async () => {
-        const { replaceFavoriteProjection, replaceModerationProjection } = await import("./projection-repository");
+        const { clearFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection, upsertFavoriteGroupProjection } = await import("./projection-repository");
         const { getMongoDatabase } = await import("./client");
         const ownerId = "usr_00000000-0000-0000-0000-000000000001";
         const favorite = { id: "fvrt_1", favoriteId: "wrld_00000000-0000-0000-0000-000000000010", type: "world", tags: ["world1"] };
+        const favoriteGroup = { id: "favorite-group-1", ownerId, name: "world1", displayName: "Worlds", type: "world", visibility: "private" };
         const moderation = { type: "block", sourceUserId: ownerId, targetUserId: "usr_00000000-0000-0000-0000-000000000003" };
 
         await replaceFavoriteProjection(ownerId, [favorite]);
+        await upsertFavoriteGroupProjection(ownerId, favoriteGroup);
+        await clearFavoriteGroupProjection(ownerId, "world", "world1");
         await replaceModerationProjection(ownerId, [moderation]);
         await replaceFavoriteProjection(ownerId, []);
         await replaceModerationProjection(ownerId, []);
 
         const database = await getMongoDatabase();
         expect(await database.collection("favorites").findOne({ ownerId, recordId: favorite.id })).toMatchObject({ active: false, objectId: favorite.favoriteId });
+        expect(await database.collection("favorite_groups").findOne({ ownerId, groupId: favoriteGroup.id })).toMatchObject({ active: true, group: favoriteGroup });
         expect(await database.collection("moderations").findOne({ ownerId, targetUserId: moderation.targetUserId })).toMatchObject({ active: false, moderationType: "block" });
     });
 
