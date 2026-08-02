@@ -110,6 +110,49 @@ export const vrchatPlayerModerationSchema = z
 
 export type VrchatPlayerModeration = z.infer<typeof vrchatPlayerModerationSchema>;
 
+export const vrchatNotificationSchema = z
+    .object({
+        id: z.string(),
+        type: z.string(),
+        senderUserId: z.string().optional(),
+        senderUsername: z.string().optional(),
+        receiverUserId: z.string().optional(),
+        message: z.string().optional(),
+        title: z.string().optional(),
+        details: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+        seen: z.boolean().optional(),
+        created_at: z.union([z.string(), z.number()]).optional(),
+        createdAt: z.union([z.string(), z.number()]).optional(),
+        updatedAt: z.union([z.string(), z.number()]).optional(),
+        expiresAt: z.union([z.string(), z.number()]).optional(),
+        imageUrl: z.string().optional(),
+        worldId: z.string().optional(),
+        worldName: z.string().optional(),
+        instanceId: z.string().optional(),
+        link: z.string().optional(),
+        linkText: z.string().optional(),
+        groupName: z.string().optional(),
+        data: z.record(z.string(), z.unknown()).optional(),
+        responses: z
+            .array(
+                z
+                    .object({
+                        type: z.string(),
+                        data: z.string().optional(),
+                        text: z.string().optional(),
+                        label: z.string().optional(),
+                        icon: z.string().optional(),
+                    })
+                    .passthrough(),
+            )
+            .optional(),
+    })
+    .passthrough();
+
+export type VrchatNotification = z.infer<typeof vrchatNotificationSchema> & {
+    source?: "hidden" | "legacy" | "v2";
+};
+
 export const vrchatAuthResponseSchema = z
     .object({
         requiresTwoFactorAuth: z.array(z.string()).optional(),

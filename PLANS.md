@@ -69,7 +69,7 @@ The initial source audit below records the production scope. A feature marked `A
 | Favorites | Not started | Port remote friend/world/avatar favorite groups and browser-safe local groups |
 | Friend List | Implemented | Add advanced VRCX columns, bulk mutual-data refresh, and favorite-only filtering |
 | Moderation | Implemented for player moderations | Add avatar moderation visibility and actions to avatar details |
-| Notifications | Not started | Port notification list and response actions |
+| Notifications | Implemented | Browser-safe legacy and V2 list, filtering, read/hide, friend approval, and V2 response actions are ported; actions that need the running VRChat client or its current instance are intentionally omitted |
 | My Avatars | Not started | Port remote management; omit desktop history |
 | Feed and Friend Log | Not started | Define web persistence for remote events |
 | Dashboard and Mutual Friends chart | Not started | Start after their supported source data is available |
@@ -141,7 +141,7 @@ Exit criteria: one high-value workflow is usable end to end, visually faithful, 
 
 ### Milestone 4 — Expand Supported Remote Features
 
-Status: Not started
+Status: In progress
 
 Port additional areas one vertical slice at a time, in an order chosen from the verified inventory. Candidate areas include friends, notifications, groups, worlds, favorites, avatars, and remote profile actions. For each slice:
 
