@@ -11,6 +11,25 @@ describe("mutation origin checks", () => {
         expect(isMutationOriginAllowed(request({ origin: "https://vrcx.example", "sec-fetch-site": "same-origin", "x-forwarded-host": "vrcx.example", "x-forwarded-proto": "https" }))).toBe(true);
     });
 
+    it("trusts same-origin Fetch Metadata when a proxy exposes its internal host", () => {
+        expect(
+            isMutationOriginAllowed(
+                request({
+                    host: "app:3000",
+                    origin: "https://vrcx.example",
+                    "sec-fetch-site": "same-origin",
+                    "x-forwarded-host": "app:3000",
+                    "x-forwarded-proto": "http",
+                }),
+            ),
+        ).toBe(true);
+    });
+
+    it("checks Origin when Fetch Metadata is unavailable", () => {
+        expect(isMutationOriginAllowed(request({ origin: "https://vrcx.example", "x-forwarded-host": "vrcx.example", "x-forwarded-proto": "https" }))).toBe(true);
+        expect(isMutationOriginAllowed(request({ origin: "https://attacker.example", "x-forwarded-host": "vrcx.example", "x-forwarded-proto": "https" }))).toBe(false);
+    });
+
     it("rejects cross-site browser requests", () => {
         expect(isMutationOriginAllowed(request({ origin: "https://attacker.example", "sec-fetch-site": "cross-site", host: "vrcx.internal" }))).toBe(false);
     });
