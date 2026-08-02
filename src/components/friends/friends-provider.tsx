@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { AvatarDialog } from "@/components/avatars/avatar-dialog";
 import { GroupDialog } from "@/components/groups/group-dialog";
 import { WorldDialog } from "@/components/worlds/world-dialog";
 import { fetchAllFriends } from "@/lib/friends-client";
@@ -18,6 +19,7 @@ type FriendsContextValue = {
     openUser: (userId: string) => void;
     openWorld: (worldId: string) => void;
     openGroup: (groupId: string) => void;
+    openAvatar: (avatarId: string) => void;
     removeFriend: (userId: string) => void;
 };
 
@@ -31,6 +33,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const [selectedUserId, setSelectedUserId] = useState("");
     const [selectedWorldId, setSelectedWorldId] = useState("");
     const [selectedGroupId, setSelectedGroupId] = useState("");
+    const [selectedAvatarId, setSelectedAvatarId] = useState("");
     const controllerRef = useRef<AbortController | null>(null);
 
     const load = useCallback(async (reconcile: boolean) => {
@@ -70,21 +73,31 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const openUser = useCallback((userId: string) => {
         setSelectedWorldId("");
         setSelectedGroupId("");
+        setSelectedAvatarId("");
         setSelectedUserId(userId);
     }, []);
     const closeUser = useCallback(() => setSelectedUserId(""), []);
     const openWorld = useCallback((worldId: string) => {
         setSelectedUserId("");
         setSelectedGroupId("");
+        setSelectedAvatarId("");
         setSelectedWorldId(worldId);
     }, []);
     const closeWorld = useCallback(() => setSelectedWorldId(""), []);
     const openGroup = useCallback((groupId: string) => {
         setSelectedUserId("");
         setSelectedWorldId("");
+        setSelectedAvatarId("");
         setSelectedGroupId(groupId);
     }, []);
     const closeGroup = useCallback(() => setSelectedGroupId(""), []);
+    const openAvatar = useCallback((avatarId: string) => {
+        setSelectedUserId("");
+        setSelectedWorldId("");
+        setSelectedGroupId("");
+        setSelectedAvatarId(avatarId);
+    }, []);
+    const closeAvatar = useCallback(() => setSelectedAvatarId(""), []);
     const removeFriend = useCallback((userId: string) => {
         setFriends((current) => current.filter((friend) => friend.id !== userId));
         setAllFriends((current) => current.filter((friend) => friend.id !== userId));
@@ -101,13 +114,14 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         };
     }, [load]);
 
-    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, removeFriend }), [friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, removeFriend]);
+    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, openAvatar, removeFriend }), [friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, openAvatar, removeFriend]);
     return (
         <FriendsContext.Provider value={value}>
             {children}
             {selectedUserId ? <UserDialog userId={selectedUserId} onClose={closeUser} /> : null}
             {selectedWorldId ? <WorldDialog worldId={selectedWorldId} friends={allFriends} openUser={openUser} onClose={closeWorld} /> : null}
             {selectedGroupId ? <GroupDialog groupId={selectedGroupId} friends={allFriends} openUser={openUser} onClose={closeGroup} /> : null}
+            {selectedAvatarId ? <AvatarDialog avatarId={selectedAvatarId} openUser={openUser} onClose={closeAvatar} /> : null}
         </FriendsContext.Provider>
     );
 }

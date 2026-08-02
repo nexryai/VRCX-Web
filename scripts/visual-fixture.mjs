@@ -149,7 +149,25 @@ const favoriteWorld = {
         ["67890~region(jp)", 6],
     ],
 };
-const favoriteAvatar = { id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" };
+const favoriteAvatar = {
+    id: "avtr_00000000-0000-0000-0000-000000000052",
+    name: "Favorite Browser Avatar",
+    description: "A cross-platform favorite used to verify the VRCX Avatar Dialog port.",
+    authorId: "usr_00000000-0000-0000-0000-000000000031",
+    authorName: "Avatar Artist",
+    releaseStatus: "public",
+    version: 18,
+    created_at: new Date(now.getTime() - 420 * 86_400_000).toISOString(),
+    updated_at: new Date(now.getTime() - 6 * 86_400_000).toISOString(),
+    styles: { primary: "Realistic", secondary: "Human" },
+    tags: ["content_featured", "author_tag_dancer"],
+    unityPackages: [
+        { platform: "standalonewindows", performanceRating: "Good" },
+        { platform: "android", performanceRating: "Medium" },
+        { platform: "ios", performanceRating: "Poor" },
+        { platform: "standalonewindows", variant: "impostor", impostorizerVersion: "1.2.0" },
+    ],
+};
 
 await database.collection("app_settings").insertOne({
     _id: "singleton",

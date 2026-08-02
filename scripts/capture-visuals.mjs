@@ -25,6 +25,7 @@ const captures = [
     { name: "group-dialog-posts", path: "/", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
     { name: "group-dialog-members", path: "/", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
+    { name: "avatar-dialog", path: "/favorite/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
     { name: "mutual-friends", path: "/charts/mutual", readyText: "Aoi Sample" },
@@ -122,6 +123,9 @@ for (const width of [360, 768, 1280, 1920]) {
             await page.getByRole("tab", { name: /^Groups/ }).click();
             await page.getByText("VRCX Test Group", { exact: true }).first().click();
             if (capture.groupTab) await page.getByRole("tab", { name: capture.groupTab, exact: true }).click();
+        }
+        if (capture.avatarDialog) {
+            await page.getByText("Favorite Browser Avatar", { exact: true }).first().click();
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();

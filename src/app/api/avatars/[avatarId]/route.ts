@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/avat
     const ownerId = await requireActiveUserId();
     if (!refresh) {
         const cached = await getCachedAvatar(ownerId, avatarId.data);
-        if (cached) return avatarResponse({ avatar: cached });
+        if (cached?.authorId && Array.isArray(cached.unityPackages)) return avatarResponse({ avatar: cached });
     }
     let expectedAuthCookie: string | undefined;
     try {

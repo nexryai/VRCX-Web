@@ -5,6 +5,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Apple, ArrowUpDown, Check, ChevronLeft, ChevronRight, Ellipsis, ExternalLink, Grid2X2, ImageIcon, List, ListFilter, Loader2, Monitor, Pencil, RefreshCw, Settings, Smartphone, Sparkles, Tag, User, X } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
+import { useFriends } from "@/components/friends/friends-provider";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
 type ReleaseFilter = "all" | "private" | "public";
@@ -63,12 +64,9 @@ function hashColor(tag: string) {
     return tagPalette[Math.abs(hash) % tagPalette.length];
 }
 
-function externalAvatarUrl(id: string) {
-    return `https://vrchat.com/home/avatar/${encodeURIComponent(id)}`;
-}
-
 export function MyAvatarsView() {
     const currentUser = useCurrentUser();
+    const { openAvatar } = useFriends();
     const [avatars, setAvatars] = useState<VrchatAvatar[]>([]);
     const [tagsByAvatar, setTagsByAvatar] = useState<Record<string, AvatarTag[]>>({});
     const [currentAvatarId, setCurrentAvatarId] = useState(currentUser.currentAvatar || "");
@@ -231,7 +229,7 @@ export function MyAvatarsView() {
     }
 
     function showDetails(avatar: VrchatAvatar) {
-        window.open(externalAvatarUrl(avatar.id), "_blank", "noopener,noreferrer");
+        openAvatar(avatar.id);
     }
 
     return (

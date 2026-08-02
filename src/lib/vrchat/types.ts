@@ -120,12 +120,22 @@ export const vrchatAvatarSchema = z
         favoriteGroup: z.string().optional(),
         favoriteId: z.string().optional(),
         version: z.number().optional(),
+        styles: z
+            .object({
+                primary: z.string().nullable().optional(),
+                secondary: z.string().nullable().optional(),
+            })
+            .passthrough()
+            .optional(),
         unityPackages: z
             .array(
                 z
                     .object({
                         platform: z.string(),
                         performanceRating: z.string().optional(),
+                        variant: z.string().optional(),
+                        impostorizerVersion: z.string().optional(),
+                        created_at: z.string().optional(),
                     })
                     .passthrough(),
             )
