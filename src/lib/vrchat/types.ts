@@ -68,16 +68,37 @@ export const vrchatWorldSchema = z
         id: z.string(),
         name: z.string(),
         description: z.string().optional(),
+        authorId: z.string().optional(),
         authorName: z.string().optional(),
         thumbnailImageUrl: z.string().optional(),
         imageUrl: z.string().optional(),
         occupants: z.number().optional(),
         capacity: z.number().optional(),
+        recommendedCapacity: z.number().optional(),
+        publicOccupants: z.number().optional(),
+        privateOccupants: z.number().optional(),
         favorites: z.number().optional(),
         visits: z.number().optional(),
+        heat: z.number().optional(),
+        popularity: z.number().optional(),
+        version: z.number().optional(),
         releaseStatus: z.string().optional(),
         publicationDate: z.string().optional(),
+        labsPublicationDate: z.string().optional(),
+        created_at: z.string().optional(),
         updated_at: z.string().optional(),
+        unityPackages: z
+            .array(
+                z
+                    .object({
+                        platform: z.string(),
+                        unityVersion: z.string().optional(),
+                        created_at: z.string().optional(),
+                    })
+                    .passthrough(),
+            )
+            .optional(),
+        instances: z.array(z.unknown()).optional(),
         tags: z.array(z.string()).optional(),
     })
     .passthrough();

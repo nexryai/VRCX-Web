@@ -152,7 +152,7 @@ function objectKindMatches(kind: FavoriteKind, record: VrchatFavorite) {
 }
 
 export function FavoriteView({ kind }: { kind: FavoriteKind }) {
-    const { allFriends, openUser } = useFriends();
+    const { allFriends, openUser, openWorld } = useFriends();
     const [records, setRecords] = useState<VrchatFavorite[]>([]);
     const [remoteGroups, setRemoteGroups] = useState<VrchatFavoriteGroup[]>([]);
     const [limits, setLimits] = useState<VrchatFavoriteLimits>();
@@ -582,6 +582,7 @@ export function FavoriteView({ kind }: { kind: FavoriteKind }) {
                                             })
                                         }
                                         openUser={openUser}
+                                        openWorld={openWorld}
                                         remoteGroups={remoteGroupViews}
                                         busy={busy}
                                         moveRemote={moveRemote}
@@ -657,6 +658,7 @@ function FavoriteCard({
     selected,
     toggle,
     openUser,
+    openWorld,
     remoteGroups,
     busy,
     moveRemote,
@@ -669,6 +671,7 @@ function FavoriteCard({
     selected: boolean;
     toggle: () => void;
     openUser: (id: string) => void;
+    openWorld: (id: string) => void;
     remoteGroups: FavoriteGroupView[];
     busy: boolean;
     moveRemote: (id: string, group: string) => Promise<void>;
@@ -682,6 +685,7 @@ function FavoriteCard({
     const image = remoteItem?.thumbnailImageUrl || "";
     const open = () => {
         if (kind === "friend") openUser(entry.objectId);
+        else if (kind === "world") openWorld(entry.objectId);
         else window.open(`https://vrchat.com/home/${kind}/${encodeURIComponent(entry.objectId)}`, "_blank", "noopener,noreferrer");
     };
     return (

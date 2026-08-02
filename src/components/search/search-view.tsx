@@ -40,7 +40,7 @@ function resolvedWorldHeading(row?: WorldRow): WorldSortHeading {
 }
 
 export function SearchView() {
-    const { openUser } = useFriends();
+    const { openUser, openWorld } = useFriends();
     const [type, setType] = useState<SearchType>("users");
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<Record<SearchType, SearchResult[]>>(emptyResults);
@@ -241,7 +241,7 @@ export function SearchView() {
                 ) : null}
                 {!loading && !visible.length ? <div className="flex h-full min-h-64 items-center justify-center text-xs text-muted-foreground">No data</div> : null}
                 {!loading && type === "users" && visible.length ? <UserResults users={visible as VrchatUser[]} openUser={openUser} /> : null}
-                {!loading && type === "worlds" && visible.length ? <WorldResults worlds={visible as VrchatWorld[]} /> : null}
+                {!loading && type === "worlds" && visible.length ? <WorldResults worlds={visible as VrchatWorld[]} openWorld={openWorld} /> : null}
                 {!loading && type === "groups" && visible.length ? <GroupResults groups={visible as VrchatGroup[]} /> : null}
             </div>
 
@@ -279,11 +279,11 @@ function UserResults({ users, openUser }: { users: VrchatUser[]; openUser: (id: 
     );
 }
 
-function WorldResults({ worlds }: { worlds: VrchatWorld[] }) {
+function WorldResults({ worlds, openWorld }: { worlds: VrchatWorld[]; openWorld: (worldId: string) => void }) {
     return (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
             {worlds.map((world) => (
-                <a key={world.id} href={`https://vrchat.com/home/world/${encodeURIComponent(world.id)}`} target="_blank" rel="noreferrer" className="min-w-0 cursor-pointer overflow-hidden rounded-lg border border-border p-3 hover:bg-muted">
+                <button key={world.id} type="button" onClick={() => openWorld(world.id)} className="min-w-0 cursor-pointer overflow-hidden rounded-lg border border-border p-3 text-left hover:bg-muted">
                     <div className="aspect-[16/10] w-full overflow-hidden rounded-lg bg-muted">{world.thumbnailImageUrl ? <img src={world.thumbnailImageUrl} alt={world.name} loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" /> : null}</div>
                     <p className="mt-2 truncate text-sm font-medium" title={world.name}>
                         {world.name}
@@ -292,7 +292,7 @@ function WorldResults({ worlds }: { worlds: VrchatWorld[] }) {
                         {world.authorName || "Unknown"}
                         {world.occupants ? ` (${world.occupants})` : ""}
                     </p>
-                </a>
+                </button>
             ))}
         </div>
     );

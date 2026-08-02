@@ -34,7 +34,7 @@ function userLanguages(user: VrchatUser) {
 }
 
 export function UserDialog({ userId, onClose }: { userId: string; onClose: () => void }) {
-    const { friends, openUser, removeFriend } = useFriends();
+    const { friends, openUser, openWorld, removeFriend } = useFriends();
     const [user, setUser] = useState<VrchatUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -222,7 +222,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                 {!tabLoading && activeTab === "Info" ? <InfoTab user={user} /> : null}
                                 {!tabLoading && activeTab === "Mutual" ? <MutualTab users={mutuals} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Mutual", true)} openUser={openUser} /> : null}
                                 {!tabLoading && activeTab === "Groups" ? <GroupsTab groups={groups} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Groups", true)} /> : null}
-                                {!tabLoading && activeTab === "Worlds" ? <WorldsTab worlds={worlds} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Worlds", true)} /> : null}
+                                {!tabLoading && activeTab === "Worlds" ? <WorldsTab worlds={worlds} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Worlds", true)} openWorld={openWorld} /> : null}
                                 {!tabLoading && activeTab === "Activity" ? <ActivityTab entries={activity} refresh={() => void loadTab("Activity", true)} /> : null}
                                 {!tabLoading && activeTab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(user, null, 2)}</pre> : null}
                             </div>
@@ -430,14 +430,14 @@ function GroupsTab({ groups, search, setSearch, refresh }: { groups: VrchatGroup
     );
 }
 
-function WorldsTab({ worlds, search, setSearch, refresh }: { worlds: VrchatWorld[]; search: string; setSearch: (value: string) => void; refresh: () => void }) {
+function WorldsTab({ worlds, search, setSearch, refresh, openWorld }: { worlds: VrchatWorld[]; search: string; setSearch: (value: string) => void; refresh: () => void; openWorld: (worldId: string) => void }) {
     const filtered = worlds.filter((world) => world.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
     return (
         <div>
             <TabToolbar count={worlds.length} search={search} setSearch={setSearch} refresh={refresh} placeholder="Search worlds" />
             <div className="flex flex-wrap items-start">
                 {filtered.map((world) => (
-                    <a key={world.id} href={`https://vrchat.com/home/world/${encodeURIComponent(world.id)}`} target="_blank" rel="noreferrer" className="flex w-[167px] items-center gap-2.5 rounded p-1.5 text-[13px] hover:bg-muted">
+                    <button key={world.id} type="button" onClick={() => openWorld(world.id)} className="flex w-[167px] items-center gap-2.5 rounded p-1.5 text-left text-[13px] hover:bg-muted">
                         {world.thumbnailImageUrl ? (
                             <img src={world.thumbnailImageUrl} alt="" className="size-9 rounded object-cover" />
                         ) : (
@@ -449,7 +449,7 @@ function WorldsTab({ worlds, search, setSearch, refresh }: { worlds: VrchatWorld
                             <span className="block truncate font-medium">{world.name}</span>
                             {world.occupants ? <span className="block text-[10px] text-muted-foreground">({world.occupants})</span> : null}
                         </span>
-                    </a>
+                    </button>
                 ))}
             </div>
             {!filtered.length ? <EmptyState /> : null}

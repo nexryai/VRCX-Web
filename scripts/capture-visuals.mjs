@@ -20,6 +20,7 @@ const captures = [
     { name: "favorite-friends-import", path: "/favorite/friends", readyText: "Import favorite friends", favoriteKind: "friend", favoriteDialog: "Import" },
     { name: "favorite-friends-export", path: "/favorite/friends", readyText: "Export favorite friends", favoriteKind: "friend", favoriteDialog: "Export" },
     { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
+    { name: "world-dialog", path: "/favorite/worlds", readyText: "World ID", favoriteKind: "world", worldDialog: true },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
@@ -110,6 +111,9 @@ for (const width of [360, 768, 1280, 1920]) {
         if (capture.favoriteDialog) {
             await page.getByLabel("Favorite card settings").click();
             await page.getByRole("button", { name: capture.favoriteDialog, exact: true }).click();
+        }
+        if (capture.worldDialog) {
+            await page.getByText("Favorite Moonlit World", { exact: true }).first().click();
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();

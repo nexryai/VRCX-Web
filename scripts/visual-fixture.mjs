@@ -121,7 +121,34 @@ const currentUser = {
     location: "wrld_00000000-0000-0000-0000-000000000010:12345",
     world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" },
 };
-const favoriteWorld = { id: "wrld_00000000-0000-0000-0000-000000000051", name: "Favorite Moonlit World", authorName: "Favorite World Author", occupants: 24 };
+const favoriteWorld = {
+    id: "wrld_00000000-0000-0000-0000-000000000051",
+    name: "Favorite Moonlit World",
+    description: "A quiet moonlit world used to verify the browser-compatible VRCX world details.",
+    authorId: "usr_00000000-0000-0000-0000-000000000031",
+    authorName: "Favorite World Author",
+    releaseStatus: "public",
+    capacity: 40,
+    recommendedCapacity: 24,
+    occupants: 24,
+    publicOccupants: 18,
+    privateOccupants: 6,
+    favorites: 12_430,
+    visits: 982_114,
+    heat: 7,
+    popularity: 8,
+    version: 42,
+    created_at: new Date(now.getTime() - 700 * 86_400_000).toISOString(),
+    labsPublicationDate: new Date(now.getTime() - 520 * 86_400_000).toISOString(),
+    publicationDate: new Date(now.getTime() - 500 * 86_400_000).toISOString(),
+    updated_at: new Date(now.getTime() - 4 * 86_400_000).toISOString(),
+    tags: ["content_featured", "author_tag_chill"],
+    unityPackages: [{ platform: "standalonewindows" }, { platform: "android" }, { platform: "ios" }],
+    instances: [
+        ["12345~region(us)", 18],
+        ["67890~region(jp)", 6],
+    ],
+};
 const favoriteAvatar = { id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" };
 
 await database.collection("app_settings").insertOne({
