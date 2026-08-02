@@ -46,3 +46,11 @@ export async function getCachedUser(ownerId: string, userId: string): Promise<Vr
     const document = await collections(await getMongoDatabase()).users.findOne({ _id: `${ownerId}:${userId}` });
     return document?.user ?? null;
 }
+
+export async function patchCachedUser(ownerId: string, userId: string, fields: Partial<VrchatUser>, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const updates = Object.fromEntries(Object.entries(fields).map(([key, value]) => [`user.${key}`, value]));
+    if (!Object.keys(updates).length) return;
+    const c = collections(await getMongoDatabase());
+    await Promise.all([c.users.updateOne({ _id: `${ownerId}:${userId}` }, { $set: { ...updates, updatedAt } }), c.friendSnapshots.updateOne({ _id: `${ownerId}:${userId}` }, { $set: { ...updates, updatedAt } })]);
+}

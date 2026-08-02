@@ -20,6 +20,7 @@ export const vrchatUserSchema = z
         last_login: z.string().optional(),
         last_activity: z.string().optional(),
         isFriend: z.boolean().optional(),
+        friendRequestStatus: z.string().optional(),
         note: z.string().optional(),
         pronouns: z.string().optional(),
         badges: z

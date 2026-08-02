@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarDays, Clipboard, ExternalLink, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
+import { useCurrentUser } from "@/components/current-user-provider";
 import { MemoField } from "@/components/memo-field";
 import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
 import { friendImage, locationLabel, statusColor } from "@/lib/friends";
@@ -35,7 +36,8 @@ function userLanguages(user: VrchatUser) {
 }
 
 export function UserDialog({ userId, onClose }: { userId: string; onClose: () => void }) {
-    const { friends, openUser, openWorld, openGroup, removeFriend } = useFriends();
+    const currentUser = useCurrentUser();
+    const { friends, openUser, openWorld, openGroup, removeFriend, refresh: refreshFriends } = useFriends();
     const [user, setUser] = useState<VrchatUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -58,6 +60,8 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
         const controller = new AbortController();
         setLoading(true);
         setError("");
+        setConfirming(false);
+        setRemoving(false);
         setActiveTab("Info");
         setTabLoaded(new Set(["Info", "JSON"]));
         setMutuals([]);
@@ -169,6 +173,41 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
         }
     }
 
+    async function sendFriendRequest() {
+        if (!user) return;
+        setRemoving(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/friends/${encodeURIComponent(user.id)}`, { method: "POST" });
+            const payload = (await response.json()) as { error?: string; outgoing?: boolean; success?: boolean };
+            if (!response.ok) throw new Error(payload.error || "The friend request could not be sent.");
+            setUser((current) => (current ? { ...current, isFriend: payload.success === true, friendRequestStatus: payload.outgoing ? "outgoing" : "" } : current));
+            if (payload.success) await refreshFriends();
+            setConfirming(false);
+        } catch (requestError) {
+            setError(requestError instanceof Error ? requestError.message : "The friend request could not be sent.");
+            setConfirming(false);
+        } finally {
+            setRemoving(false);
+        }
+    }
+
+    async function cancelFriendRequest() {
+        if (!user) return;
+        setRemoving(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/friends/${encodeURIComponent(user.id)}/request`, { method: "DELETE" });
+            const payload = (await response.json()) as { error?: string };
+            if (!response.ok) throw new Error(payload.error || "The friend request could not be cancelled.");
+            setUser((current) => (current ? { ...current, friendRequestStatus: "" } : current));
+        } catch (requestError) {
+            setError(requestError instanceof Error ? requestError.message : "The friend request could not be cancelled.");
+        } finally {
+            setRemoving(false);
+        }
+    }
+
     const isFriend = user?.isFriend === true || friends.some((friend) => friend.id === userId);
     const visibleTabs = tabs.filter((tab) => tab !== "Mutual" || isFriend);
     return (
@@ -191,7 +230,19 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                 {!loading && user ? (
                     <div className="flex min-h-0 flex-1 flex-col gap-2 md:flex-row">
                         <aside className="w-full shrink-0 overflow-y-auto md:w-[308px]">
-                            <UserSummary user={user} isFriend={isFriend} copied={copied} confirming={confirming} removing={removing} copyUserId={copyUserId} setConfirming={setConfirming} unfriend={unfriend} />
+                            <UserSummary
+                                user={user}
+                                isFriend={isFriend}
+                                isCurrentUser={user.id === currentUser.id}
+                                copied={copied}
+                                confirming={confirming}
+                                removing={removing}
+                                copyUserId={copyUserId}
+                                setConfirming={setConfirming}
+                                unfriend={unfriend}
+                                sendFriendRequest={sendFriendRequest}
+                                cancelFriendRequest={cancelFriendRequest}
+                            />
                         </aside>
                         <div className="flex min-h-[28rem] min-w-0 flex-1 flex-col md:min-h-0">
                             <div className="flex shrink-0 overflow-x-auto rounded-t-xl bg-card px-1" role="tablist" aria-label="User details">
@@ -220,7 +271,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                         <Loader2 className="size-5 animate-spin text-muted-foreground" aria-label={`Loading ${activeTab}`} />
                                     </div>
                                 ) : null}
-                                {!tabLoading && activeTab === "Info" ? <InfoTab user={user} /> : null}
+                                {!tabLoading && activeTab === "Info" ? <InfoTab user={user} onNoteChange={(note) => setUser((current) => (current ? { ...current, note } : current))} /> : null}
                                 {!tabLoading && activeTab === "Mutual" ? <MutualTab users={mutuals} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Mutual", true)} openUser={openUser} /> : null}
                                 {!tabLoading && activeTab === "Groups" ? <GroupsTab groups={groups} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Groups", true)} openGroup={openGroup} /> : null}
                                 {!tabLoading && activeTab === "Worlds" ? <WorldsTab worlds={worlds} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Worlds", true)} openWorld={openWorld} /> : null}
@@ -235,9 +286,21 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
     );
 }
 
-type SummaryProps = { user: VrchatUser; isFriend: boolean; copied: boolean; confirming: boolean; removing: boolean; copyUserId: () => Promise<void>; setConfirming: (value: boolean) => void; unfriend: () => Promise<void> };
+type SummaryProps = {
+    user: VrchatUser;
+    isFriend: boolean;
+    isCurrentUser: boolean;
+    copied: boolean;
+    confirming: boolean;
+    removing: boolean;
+    copyUserId: () => Promise<void>;
+    setConfirming: (value: boolean) => void;
+    unfriend: () => Promise<void>;
+    sendFriendRequest: () => Promise<void>;
+    cancelFriendRequest: () => Promise<void>;
+};
 
-function UserSummary({ user, isFriend, copied, confirming, removing, copyUserId, setConfirming, unfriend }: SummaryProps) {
+function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removing, copyUserId, setConfirming, unfriend, sendFriendRequest, cancelFriendRequest }: SummaryProps) {
     const image = friendImage(user);
     const bannerColor = user.bannerColor && /^[0-9a-f]{6}$/i.test(user.bannerColor) ? `#${user.bannerColor}` : undefined;
     return (
@@ -306,7 +369,7 @@ function UserSummary({ user, isFriend, copied, confirming, removing, copyUserId,
                         VRChat
                     </a>
                 </div>
-                {isFriend ? (
+                {!isCurrentUser && isFriend ? (
                     confirming ? (
                         <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs">
                             <p>Remove {user.displayName}?</p>
@@ -326,15 +389,100 @@ function UserSummary({ user, isFriend, copied, confirming, removing, copyUserId,
                         </button>
                     )
                 ) : null}
+                {!isCurrentUser && !isFriend && user.friendRequestStatus === "outgoing" ? (
+                    <button type="button" onClick={() => void cancelFriendRequest()} disabled={removing} className="inline-flex h-8 items-center justify-center gap-1 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-40">
+                        {removing ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />} Cancel Friend Request
+                    </button>
+                ) : null}
+                {!isCurrentUser && !isFriend && user.friendRequestStatus !== "outgoing" ? (
+                    confirming ? (
+                        <div className="rounded-md border border-primary/40 bg-primary/10 p-2 text-xs">
+                            <p>{user.friendRequestStatus === "incoming" ? `Accept ${user.displayName}'s friend request?` : `Send a friend request to ${user.displayName}?`}</p>
+                            <div className="mt-2 flex gap-2">
+                                <button type="button" onClick={() => setConfirming(false)} disabled={removing} className="h-8 flex-1 rounded bg-secondary">
+                                    Cancel
+                                </button>
+                                <button type="button" onClick={() => void sendFriendRequest()} disabled={removing} className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded bg-primary text-primary-foreground">
+                                    {removing ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                                    {user.friendRequestStatus === "incoming" ? "Accept" : "Send"}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button type="button" onClick={() => setConfirming(true)} className="inline-flex h-8 items-center justify-center gap-1 text-xs text-primary hover:bg-primary/10">
+                            <UserRound className="size-3.5" /> {user.friendRequestStatus === "incoming" ? "Accept Friend Request" : "Add Friend"}
+                        </button>
+                    )
+                ) : null}
             </div>
         </div>
     );
 }
 
-function InfoTab({ user }: { user: VrchatUser }) {
+function UserNoteField({ user, onNoteChange }: { user: VrchatUser; onNoteChange: (note: string) => void }) {
+    const [note, setNote] = useState(user.note || "");
+    const [savedNote, setSavedNote] = useState(user.note || "");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        setNote(user.note || "");
+        setSavedNote(user.note || "");
+        setError("");
+    }, [user.note]);
+
+    async function save() {
+        // VRChat notes are single-line even though VRCX presents a larger editor.
+        const cleaned = note.replace(/[\r\n]/g, "").trim();
+        setNote(cleaned);
+        if (cleaned === savedNote) return;
+        setSaving(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/users/${encodeURIComponent(user.id)}/note`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ note: cleaned }),
+            });
+            const payload = (await response.json()) as { error?: string; note?: string };
+            if (!response.ok) throw new Error(payload.error || "The user note could not be saved.");
+            const saved = payload.note || "";
+            setNote(saved);
+            setSavedNote(saved);
+            onNoteChange(saved);
+        } catch (saveError) {
+            setError(saveError instanceof Error ? saveError.message : "The user note could not be saved.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <label className="block w-full p-1.5 text-[13px]">
+            <span className="mb-1 flex items-center gap-1 font-medium leading-[18px]">Note {saving ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : null}</span>
+            <textarea
+                value={note}
+                onChange={(event) => setNote(event.target.value)}
+                onBlur={() => void save()}
+                disabled={saving}
+                maxLength={256}
+                rows={2}
+                placeholder="Add a VRChat note"
+                className="min-h-14 w-full resize-y rounded-md border border-input bg-background px-2 py-1.5 text-xs outline-none focus:border-ring disabled:opacity-50"
+            />
+            <span className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                <span>{error ? <span className="text-destructive">{error}</span> : "Saved to VRChat"}</span>
+                <span>{note.length}/256</span>
+            </span>
+        </label>
+    );
+}
+
+function InfoTab({ user, onNoteChange }: { user: VrchatUser; onNoteChange: (note: string) => void }) {
     return (
         <div className="space-y-2">
             <section className="rounded-xl bg-background p-1.5">
+                <UserNoteField key={user.id} user={user} onNoteChange={onNoteChange} />
                 <MemoField entityType="user" entityId={user.id} />
             </section>
             <section className="rounded-xl bg-background p-3">
@@ -350,12 +498,6 @@ function InfoTab({ user }: { user: VrchatUser }) {
                     {user.world?.thumbnailImageUrl ? <img src={user.world.thumbnailImageUrl} alt="" className="h-16 w-24 rounded-lg object-cover" loading="lazy" /> : null}
                 </div>
             </section>
-            {user.note ? (
-                <section className="rounded-xl bg-background p-3">
-                    <SectionTitle>Note</SectionTitle>
-                    <p className="whitespace-pre-wrap text-sm">{user.note}</p>
-                </section>
-            ) : null}
             <section className="rounded-xl bg-background p-3">
                 <SectionTitle>Bio</SectionTitle>
                 <p className="whitespace-pre-wrap text-sm text-foreground/90">{user.bio || "No bio provided."}</p>

@@ -65,6 +65,36 @@ describe("MongoDB application repositories", () => {
         expect(await getCachedUser(otherOwnerId, ownerId)).toBeNull();
     });
 
+    test("patches relationship and note fields in both user projections", async () => {
+        const { getMongoDatabase } = await import("./client");
+        const { getCachedUser, patchCachedUser, upsertCachedUser } = await import("./user-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000071";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000072";
+        const userId = "usr_00000000-0000-0000-0000-000000000073";
+        const user = { id: userId, displayName: "Relationship User", friendRequestStatus: "outgoing" };
+        await upsertCachedUser(ownerId, user, "lookup");
+        await upsertCachedUser(otherOwnerId, user, "lookup");
+        await (await getMongoDatabase()).collection("friend_snapshots").insertOne({
+            _id: `${ownerId}:${userId}`,
+            ownerId,
+            friendId: userId,
+            online: false,
+            user,
+            observedAt: new Date("2026-08-02T09:00:00.000Z"),
+            updatedAt: new Date("2026-08-02T09:00:00.000Z"),
+        });
+
+        const updatedAt = new Date("2026-08-02T09:30:00.000Z");
+        await patchCachedUser(ownerId, userId, { friendRequestStatus: "", isFriend: true, note: "Met at an event" }, updatedAt);
+
+        expect(await getCachedUser(ownerId, userId)).toMatchObject({ friendRequestStatus: "", isFriend: true, note: "Met at an event" });
+        const otherOwnerUser = await getCachedUser(otherOwnerId, userId);
+        expect(otherOwnerUser).toMatchObject({ friendRequestStatus: "outgoing" });
+        expect(otherOwnerUser?.isFriend).toBeUndefined();
+        expect(otherOwnerUser?.note).toBeUndefined();
+        expect(await (await getMongoDatabase()).collection("friend_snapshots").findOne({ ownerId, friendId: userId })).toMatchObject({ user: { friendRequestStatus: "", isFriend: true, note: "Met at an event" }, updatedAt });
+    });
+
     test("rejects stale cookie rotation after an active-account replacement", async () => {
         const { clearStoredVrchatSession, getStoredVrchatSession, saveAuthenticatedVrchatSession, updateStoredVrchatCookies } = await import("./session-repository");
         const firstOwnerId = "usr_00000000-0000-0000-0000-000000000010";
