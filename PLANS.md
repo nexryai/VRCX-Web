@@ -33,18 +33,29 @@ The initial web port is ready when:
 
 ## Feature Eligibility Inventory
 
-This table begins as a hypothesis. Verify each item against the current VRCX source before implementation and replace `Investigate` with a recorded decision.
+The initial source audit below records the production scope. A feature marked `Adaptable` is ported without the listed local-only subfeatures; it is not deferred indefinitely.
 
-| Area | Likely status | Web-port direction |
+| Area | Decision | Reference evidence and web-port direction |
 | --- | --- | --- |
-| Friends, groups, worlds, avatars, notifications, and remote user data | Investigate | Port when backed by supported remote VRChat requests |
-| Search, favorites, lists, notes, and remote profile actions | Investigate | Port remote/browser-safe behavior and confirm data source for each action |
-| Local game logs and game event history | Excluded | Do not port file-watching or log-derived behavior |
-| Launching VRChat, joining through the local client, and process control | Excluded | Do not show local launch/process controls |
-| OpenVR, OSC, Steam, registry, window, tray, and desktop notifications tied to Electron | Excluded or adaptable | Exclude native integration; evaluate standard browser notifications only if independently useful |
-| Local database, backups, and filesystem import/export | Investigate | Use browser-safe download/upload only when the workflow remains useful; do not reproduce arbitrary filesystem access |
-| Application updater and Electron settings | Excluded | Use normal web deployment; omit updater UI |
-| VRChat API login, two-factor challenge, session refresh, and logout | Required dependency | Implement only what supported remote features require; do not create an additional app identity layer |
+| Login, VRChat session, TOTP/OTP/email OTP, and logout | Web-compatible | Port `VRCX/src/views/Login`, `stores/auth.js`, `api/auth.js`, and the `auth/user` flow through server-only routes; omit saved passwords and custom endpoints initially |
+| Main layout, navigation, responsive friend sidebar, dialogs, themes, and supported settings | Adaptable | Port `views/Layout`, `views/Sidebar`, `components/nav-menu`, and `styles`; omit Electron window, updater, tray, local-game, VR, and native notification settings |
+| Friends Locations and remote friend presence | Adaptable | Port `views/FriendsLocations`, remote friend/location stores, and relevant dialogs; omit launch/attach controls and replace local-only favorites with browser-safe persistence where useful |
+| Search for users, worlds, groups, and avatars | Web-compatible | Port `views/Search` and its API-backed composables; keep all requests behind the allowlisted server boundary |
+| Favorite friends, worlds, and avatars | Adaptable | Port `views/Favorites` and remote favorite APIs; use browser-safe import/export and persistence, omitting arbitrary filesystem access and local avatar history derived from the desktop database |
+| Friend List | Web-compatible | Port `views/FriendList`, `api/friend.js`, and supported user details/actions |
+| Moderation | Web-compatible | Port `views/Moderation`, `api/playerModeration.js`, and supported moderation actions |
+| Notifications and invite responses | Web-compatible | Port `views/Notifications`, `api/notification.js`, and remote response flows; browser notifications are a separate optional adaptation |
+| My Avatars | Adaptable | Port remote avatar management and browser upload/crop flows from `views/MyAvatars`; omit desktop-database avatar history and filesystem-only operations |
+| Feed and Friend Log | Adaptable | Port remote events and history from `views/Feed` and `views/FriendLog` using web/server persistence; omit entries derived only from local VRChat logs |
+| Dashboard | Adaptable | Port `views/Dashboard` after supported widgets exist; do not expose widgets backed only by excluded local features |
+| Mutual Friends chart | Adaptable | Port the remote mutual-friends graph from `views/Charts/components/MutualFriends.vue`; replace desktop database caching with a web-safe store |
+| Instance Activity and Hot Worlds charts | Excluded in current form | Their source implementations read the desktop activity database populated by local observation; reconsider only if an equivalent remote-only data source is proven |
+| Game Log | Local-only | Exclude `views/GameLog`, `services/gameLog.js`, and local VRChat log watchers |
+| Player List and Photon data | Local-only | Exclude `views/PlayerList` and live local-game/photon processing |
+| Gallery and Screenshot Metadata | Local-only | Exclude screenshot-directory watching and arbitrary local-file metadata tooling |
+| VR overlay, OpenVR, OSC, Steam, registry, launch/attach, process, IPC, window, and tray integration | Local-only | Do not port these modules or show their controls |
+| Application updater | Local-only | Use normal web deployment and omit Electron updater UI |
+| Browser-safe application preferences and import/export | Web-compatible | Use protected browser/server storage and explicit browser downloads/uploads; never require arbitrary filesystem access |
 
 ## Delivery Strategy
 
@@ -56,8 +67,8 @@ Status: In progress
 
 - [x] Establish repository-wide contribution and porting rules in `AGENTS.md`.
 - [x] Establish the initial roadmap and constraints in `PLANS.md`.
-- [ ] Map VRCX navigation, views, stores, services, shared components, style tokens, icons, and localization resources.
-- [ ] Create a feature inventory with `Web-compatible`, `Adaptable`, `Local-only`, or `Unclear` decisions and evidence paths into `VRCX/`.
+- [x] Map the top-level VRCX routes, default navigation, views, API modules, service boundaries, style tokens, icons, and English localization resources.
+- [x] Create a feature inventory with `Web-compatible`, `Adaptable`, or `Local-only` decisions and evidence paths into `VRCX/`.
 - [ ] Define destination root source paths for ported views, shared UI, domain state, upstream API code, and reused assets; never import production modules from `./VRCX/`.
 - [ ] Identify code/assets intended for reuse and define where the VRCX MIT notice will be distributed.
 - [ ] Capture desktop visual references for the first supported screens.
@@ -157,7 +168,7 @@ Apply this checklist to every feature slice:
 - [ ] Keyboard, touch, focus, loading, empty, error, and disabled states work.
 - [ ] External data is typed and validated at its boundary.
 - [ ] Secrets and session data do not leak to client state or logs.
-- [ ] Relevant tests, `npm run lint`, and `npm run build` pass.
+- [ ] Relevant tests, `pnpm lint`, and `pnpm build` pass.
 - [ ] Non-obvious decisions have useful English comments.
 - [ ] Documentation and the feature inventory are current.
 - [ ] The change is committed as a small, focused commit with an English message.
@@ -200,7 +211,6 @@ Consequence: Responsive behavior is part of feature acceptance, not deferred pol
 
 ## Open Questions
 
-- Which remote-backed VRCX workflow should be the first vertical slice after the audit?
 - Which browser versions and deployment runtime are required?
 - Is browser notification support useful enough to port independently of Electron notifications?
 - Which VRCX localization resources should be reused in the first release?
