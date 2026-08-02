@@ -11,7 +11,10 @@ import { friendImage, statusColor } from "@/lib/friends";
 import type { VrchatUser } from "@/lib/vrchat/types";
 import { ThemeToggle } from "./theme-toggle";
 
-const navigation = [{ href: "/", label: "Friends Locations", icon: "ri-user-location-line" }];
+const navigation = [
+    { href: "/", label: "Friends Locations", icon: "ri-user-location-line" },
+    { href: "/search", label: "Search", icon: "ri-search-line" },
+];
 
 export function AppShell({ user, children, aside }: { user: VrchatUser; children: React.ReactNode; aside?: React.ReactNode }) {
     const pathname = usePathname();
@@ -42,6 +45,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
 
     const image = friendImage(user);
     const navWidth = collapsed ? "md:w-12" : "md:w-60";
+    const currentTitle = navigation.find((item) => item.href === pathname)?.label || "VRCX Web";
 
     return (
         <div className="flex h-dvh min-h-0 overflow-hidden bg-sidebar text-foreground">
@@ -108,7 +112,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                     <button type="button" onClick={() => setMobileOpen(true)} className="inline-flex size-9 items-center justify-center rounded-full hover:bg-sidebar-accent" aria-label="Open navigation">
                         <Menu aria-hidden="true" className="size-5" />
                     </button>
-                    <span className="text-sm font-semibold">Friends Locations</span>
+                    <span className="text-sm font-semibold">{currentTitle}</span>
                 </header>
                 <div className="flex min-h-0 flex-1">
                     <main className="m-0 min-w-0 flex-1 overflow-hidden border-border bg-background md:m-2 md:mr-0 md:rounded-lg md:border">{children}</main>

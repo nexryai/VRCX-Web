@@ -57,6 +57,23 @@ The initial source audit below records the production scope. A feature marked `A
 | Application updater | Local-only | Use normal web deployment and omit Electron updater UI |
 | Browser-safe application preferences and import/export | Web-compatible | Use protected browser/server storage and explicit browser downloads/uploads; never require arbitrary filesystem access |
 
+## Ported Feature Status
+
+| Feature slice | Status | Remaining parity work |
+| --- | --- | --- |
+| VRChat login/session | Implemented | Complete security review and add route-level integration tests |
+| Responsive VRCX shell and theme | Implemented | Add remaining navigation entries only as their screens become functional; expand appearance settings |
+| Friends Locations and friend sidebar | Implemented | Resolve world metadata more consistently and complete visual viewport comparisons |
+| User details | Implemented | Port additional remote-backed tabs such as mutual friends, groups, worlds, and avatars |
+| Search | Implemented for users, worlds, and groups | Add avatar-provider search when its optional remote-provider configuration is defined; replace external world/group links with full dialogs |
+| Favorites | Not started | Port remote friend/world/avatar favorite groups and browser-safe local groups |
+| Friend List | Not started | Port table/card modes and relationship actions |
+| Moderation | Not started | Port player and avatar moderation lists/actions |
+| Notifications | Not started | Port notification list and response actions |
+| My Avatars | Not started | Port remote management; omit desktop history |
+| Feed and Friend Log | Not started | Define web persistence for remote events |
+| Dashboard and Mutual Friends chart | Not started | Start after their supported source data is available |
+
 ## Delivery Strategy
 
 Each milestone should be split into small vertical slices. A normal slice starts by tracing the implementation in `./VRCX/`, then includes an eligibility decision, source-path notes, ported types/service logic, UI states, responsive behavior, verification, a plan update when needed, and a focused English commit.

@@ -58,6 +58,44 @@ export const vrchatUserSchema = z
 
 export type VrchatUser = z.infer<typeof vrchatUserSchema>;
 
+export const vrchatWorldSchema = z
+    .object({
+        id: z.string(),
+        name: z.string(),
+        description: z.string().optional(),
+        authorName: z.string().optional(),
+        thumbnailImageUrl: z.string().optional(),
+        imageUrl: z.string().optional(),
+        occupants: z.number().optional(),
+        capacity: z.number().optional(),
+        favorites: z.number().optional(),
+        visits: z.number().optional(),
+        releaseStatus: z.string().optional(),
+        publicationDate: z.string().optional(),
+        updated_at: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+    })
+    .passthrough();
+
+export type VrchatWorld = z.infer<typeof vrchatWorldSchema>;
+
+export const vrchatGroupSchema = z
+    .object({
+        id: z.string(),
+        name: z.string(),
+        shortCode: z.string().optional(),
+        description: z.string().optional(),
+        iconUrl: z.string().optional(),
+        bannerUrl: z.string().optional(),
+        memberCount: z.number().optional(),
+        joinState: z.string().optional(),
+        privacy: z.string().optional(),
+        languages: z.array(z.string()).optional(),
+    })
+    .passthrough();
+
+export type VrchatGroup = z.infer<typeof vrchatGroupSchema>;
+
 export const vrchatAuthResponseSchema = z
     .object({
         requiresTwoFactorAuth: z.array(z.string()).optional(),

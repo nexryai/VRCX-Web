@@ -24,7 +24,7 @@ function safeExternalUrl(value: string) {
 }
 
 export function UserDialog({ userId, onClose }: { userId: string; onClose: () => void }) {
-    const { removeFriend } = useFriends();
+    const { friends, removeFriend } = useFriends();
     const [user, setUser] = useState<VrchatUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -88,6 +88,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
 
     const image = user ? friendImage(user) : "";
     const profileUrl = `https://vrchat.com/home/user/${encodeURIComponent(userId)}`;
+    const isFriend = user?.isFriend === true || friends.some((friend) => friend.id === userId);
 
     return (
         <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-4" role="presentation">
@@ -148,7 +149,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                     VRChat
                                 </a>
                             </div>
-                            {user.isFriend !== false ? (
+                            {isFriend ? (
                                 confirming ? (
                                     <div className="mt-3 w-full rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-xs">
                                         <p>Remove {user.displayName} from your friends?</p>

@@ -7,7 +7,7 @@ import { extractVrchatCookies, serializeVrchatCookies, type VrchatCookies } from
 const VRCHAT_API_BASE = "https://api.vrchat.cloud/api/1/";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const allowedEndpoints = new Set(["config", "auth/user", "auth/user/friends", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"]);
+const allowedEndpoints = new Set(["config", "auth/user", "auth/user/friends", "users", "worlds", "groups", "auth/twofactorauth/otp/verify", "auth/twofactorauth/totp/verify", "auth/twofactorauth/emailotp/verify"]);
 const allowedEndpointPatterns = [/^users\/usr_[0-9a-f-]{36}$/i, /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i];
 
 const errorPayloadSchema = z
