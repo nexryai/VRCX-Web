@@ -12,6 +12,7 @@ const captures = [
     { name: "feed", path: "/feed", readyText: "Moved to wrld_00000000-0000-0000-0000-000000000010:12345" },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
+    { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
     { name: "game-log", path: "/game-log", readyText: "Midnight Rooftop" },
 ];
 
@@ -22,6 +23,9 @@ for (const width of [360, 768, 1280, 1920]) {
         const browser = await chromium.launch(executablePath ? { executablePath } : undefined);
         const page = await browser.newPage({ viewport: { width, height: 800 }, deviceScaleFactor: 1 });
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
+        if (capture.clickText) {
+            await page.getByText(capture.clickText, { exact: true }).first().click();
+        }
         await page.getByText(capture.readyText, { exact: true }).first().waitFor({ state: "attached" });
         await page.waitForTimeout(250);
         await page.screenshot({ path: `${output}/${capture.name}-${width}.png`, fullPage: true });

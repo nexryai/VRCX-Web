@@ -2,18 +2,39 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { getMongoDatabase } from "@/lib/mongodb/client";
+import { collections } from "@/lib/mongodb/collections";
+import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
-import { upsertCachedUser } from "@/lib/mongodb/user-repository";
+import { getCachedUser, upsertCachedUser } from "@/lib/mongodb/user-repository";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatUserSchema } from "@/lib/vrchat/types";
 
 const userIdSchema = z.string().regex(/^usr_[0-9a-f-]{36}$/i);
+const querySchema = z.object({
+    refresh: z
+        .enum(["true", "false"])
+        .default("false")
+        .transform((value) => value === "true"),
+});
 
-export async function GET(_request: NextRequest, context: RouteContext<"/api/users/[userId]">) {
+export async function GET(request: NextRequest, context: RouteContext<"/api/users/[userId]">) {
     const userId = userIdSchema.safeParse((await context.params).userId);
-    if (!userId.success) {
+    const query = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
+    if (!userId.success || !query.success) {
         return NextResponse.json({ error: "The VRChat user ID is invalid." }, { status: 400 });
+    }
+
+    if (!query.data.refresh) {
+        const ownerId = await requireActiveUserId();
+        await ensureMongoSchema();
+        const [cached, snapshot] = await Promise.all([getCachedUser(ownerId, userId.data), collections(await getMongoDatabase()).friendSnapshots.findOne({ ownerId, friendId: userId.data })]);
+        if (cached || snapshot) {
+            const response = NextResponse.json({ user: { ...cached, ...snapshot?.user } });
+            response.headers.set("Cache-Control", "private, no-store");
+            return response;
+        }
     }
 
     let expectedAuthCookie: string | undefined;

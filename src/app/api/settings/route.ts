@@ -33,6 +33,7 @@ const updateSchema = z
             .optional(),
         activityTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
         friendListTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
+        userDialogLastTab: z.enum(["Info", "Mutual", "Groups", "Worlds", "Activity", "JSON"]).optional(),
     })
     .refine((value) => Object.values(value).some((item) => item !== undefined));
 
@@ -55,6 +56,7 @@ export async function GET() {
         friendLogFilters: settings?.friendLogFilters ?? [],
         activityTablePageSize: settings?.activityTablePageSize ?? 20,
         friendListTablePageSize: settings?.friendListTablePageSize ?? 20,
+        userDialogLastTab: settings?.userDialogLastTab ?? "Info",
     });
     response.headers.set("Cache-Control", "private, no-store");
     return response;

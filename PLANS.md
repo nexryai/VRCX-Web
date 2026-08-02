@@ -192,6 +192,12 @@ VRCX-persisted type filters, favorite-only state, and page size are stored in th
 
 Join Count and Time Together remain omitted because VRCX derives them from local game logs. Note and Memo search are deferred until their MongoDB repositories and edit surfaces are ported, so they are not shown as nonfunctional filter choices. VRCX's historical friend number cannot be reconstructed exactly for identities first seen after this server port starts; the `No` column uses a stable current-projection fallback until prospectively observed relationship ordering exists. This difference must not be presented as an exact friendship-age claim. The wide source table scrolls within its content pane at narrow widths rather than dropping columns.
 
+## User Dialog Scope
+
+`VRCX/src/components/dialogs/UserDialog/UserDialog.vue`, `UserSummaryHeader.vue`, `UserDialogInfoTab.vue`, `UserDialogMutualFriendsTab.vue`, `UserDialogGroupsTab.vue`, `UserDialogWorldsTab.vue`, and `UserDialogActivityTab.vue` define the ported dialog structure. The web dialog keeps the fixed-width summary card, banner/avatar overlap, status and trust metadata, badges, relationship action, underline tabs, Mongo-backed last-active tab, and responsive stacked layout. The Info tab is built from the freshest Mongo friend projection merged with cached full-profile fields. Mutual friends, public groups, and authored worlds use typed, allowlisted VRChat routes and populate their Mongo caches. Activity renders a day/hour heatmap only from remotely observed Feed events, and labels the count accordingly. JSON is rendered as text and never includes server session material.
+
+Other-user Avatars remain absent because VRCX obtains them from its optional external avatar database rather than the VRChat API. Favorite Worlds and internal world/group detail navigation remain outstanding parity work; the current Groups and Worlds cards use safe VRChat web links until those maintained root dialogs exist. Activity cannot reproduce VRCX's local-log online-frequency precision and therefore must not imply uninterrupted presence between observations. Note display uses the remote VRChat field; editable Mongo memos remain part of the later memo repository slice.
+
 ## Delivery Plan
 
 ### Milestone 0 — Rebaseline and Reference Capture
@@ -246,7 +252,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
-- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, and Game Log states at 360, 768, 1280, and 1920 pixels.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations, Feed, Friend Log, Friend List, User Dialog, and Game Log states at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.
@@ -384,6 +390,6 @@ The 2026-08-02 documentation rebaseline passed `pnpm test` (5 files, 13 tests), 
 
 Authenticated VRChat behavior, long-running monitoring, restart recovery, MongoDB migrations, and matched-state VRCX screenshots remain required operator checks as those systems are implemented.
 
-The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 tests), `pnpm lint` (108 files), and `pnpm build` (21 generated pages). Friends Locations and Game Log were rendered from synthetic MongoDB projections at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. This found and fixed a status-clock hydration mismatch and narrow-layout clipping. The later Feed, Friend Log, and Friend List ports extended the same fixture to those screens and again passed all four overflow checks. Running-VRCX reference comparisons and authenticated operator smoke tests remain outstanding.
+The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 tests), `pnpm lint` (108 files), and `pnpm build` (21 generated pages). Friends Locations and Game Log were rendered from synthetic MongoDB projections at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. This found and fixed a status-clock hydration mismatch and narrow-layout clipping. The later Feed, Friend Log, Friend List, and User Dialog ports extended the same fixture to those screens and again passed all four overflow checks. Running-VRCX reference comparisons and authenticated operator smoke tests remain outstanding.
 
 The 2026-08-02 monitor-failover increment passed `pnpm test` (8 files, 26 tests), `pnpm lint` (109 files), and `pnpm build` (21 generated pages). Automated coverage now proves that a monitor with no browser connected closes its Pipeline socket when it loses the MongoDB lease, then performs a new HTTP baseline before reconnecting after lease reacquisition. A live authenticated process-restart soak remains an operator acceptance item.

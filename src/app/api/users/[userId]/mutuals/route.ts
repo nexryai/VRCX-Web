@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
+import { upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatUserSchema } from "@/lib/vrchat/types";
@@ -19,7 +21,9 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/user
         const cookies = await requireVrchatCookies();
         expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(`users/${userId.data}/mutuals/friends`, { cookies, query: { n: 100, offset: query.data.offset } });
-        const response = NextResponse.json({ mutuals: z.array(vrchatUserSchema).parse(upstream.data) });
+        const mutuals = z.array(vrchatUserSchema).parse(upstream.data);
+        await upsertCachedUsers(await requireActiveUserId(), mutuals, "lookup");
+        const response = NextResponse.json({ mutuals });
         await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;

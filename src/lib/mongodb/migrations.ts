@@ -193,6 +193,14 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ friendListTablePageSize: { $exists: false } }, { $set: { friendListTablePageSize: 20, updatedAt } });
         },
     },
+    {
+        version: 12,
+        name: "add-user-dialog-preference",
+        async apply(c) {
+            const updatedAt = new Date();
+            await c.appSettings.updateMany({ userDialogLastTab: { $exists: false } }, { $set: { userDialogLastTab: "Info", updatedAt } });
+        },
+    },
 ];
 
 async function applyMigrations() {
