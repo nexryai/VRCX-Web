@@ -9,6 +9,34 @@ export const vrchatUserSchema = z
         profilePicOverride: z.string().optional(),
         currentAvatarImageUrl: z.string().optional(),
         currentAvatarThumbnailImageUrl: z.string().optional(),
+        bio: z.string().optional(),
+        bioLinks: z.array(z.string()).optional(),
+        date_joined: z.string().optional(),
+        last_login: z.string().optional(),
+        last_activity: z.string().optional(),
+        isFriend: z.boolean().optional(),
+        note: z.string().optional(),
+        pronouns: z.string().optional(),
+        badges: z
+            .array(
+                z
+                    .object({
+                        badgeName: z.string().optional(),
+                        badgeDescription: z.string().optional(),
+                        badgeImageUrl: z.string().optional(),
+                    })
+                    .passthrough(),
+            )
+            .optional(),
+        representedGroup: z
+            .object({
+                groupId: z.string().optional(),
+                name: z.string().optional(),
+                shortCode: z.string().optional(),
+                iconUrl: z.string().optional(),
+            })
+            .passthrough()
+            .optional(),
         travelingToLocation: z.string().optional(),
         world: z
             .object({

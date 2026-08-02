@@ -3,12 +3,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import type { VrchatUser } from "@/lib/vrchat/types";
+import { UserDialog } from "./user-dialog";
 
 type FriendsContextValue = {
     friends: VrchatUser[];
     loading: boolean;
     error: string;
     refresh: () => Promise<void>;
+    openUser: (userId: string) => void;
+    removeFriend: (userId: string) => void;
 };
 
 const FriendsContext = createContext<FriendsContextValue | null>(null);
@@ -33,6 +36,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const [friends, setFriends] = useState<VrchatUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [selectedUserId, setSelectedUserId] = useState("");
     const controllerRef = useRef<AbortController | null>(null);
 
     const refresh = useCallback(async () => {
@@ -58,13 +62,22 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    const openUser = useCallback((userId: string) => setSelectedUserId(userId), []);
+    const closeUser = useCallback(() => setSelectedUserId(""), []);
+    const removeFriend = useCallback((userId: string) => setFriends((current) => current.filter((friend) => friend.id !== userId)), []);
+
     useEffect(() => {
         void refresh();
         return () => controllerRef.current?.abort();
     }, [refresh]);
 
-    const value = useMemo(() => ({ friends, loading, error, refresh }), [friends, loading, error, refresh]);
-    return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;
+    const value = useMemo(() => ({ friends, loading, error, refresh, openUser, removeFriend }), [friends, loading, error, refresh, openUser, removeFriend]);
+    return (
+        <FriendsContext.Provider value={value}>
+            {children}
+            {selectedUserId ? <UserDialog userId={selectedUserId} onClose={closeUser} /> : null}
+        </FriendsContext.Provider>
+    );
 }
 
 export function useFriends() {

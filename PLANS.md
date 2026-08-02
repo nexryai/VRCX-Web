@@ -113,7 +113,7 @@ Status: In progress — Friends Locations selected
 Select the first workflow after the inventory. Prefer a frequently used, clearly remote-backed workflow such as friend browsing and user details.
 
 - [x] Port the Friends Locations navigation entry and overview screen.
-- [ ] Port friend details and supported remote actions; search/filter and refresh are complete.
+- [x] Port friend details, profile links, copy-ID, unfriend, search/filter, and refresh behavior.
 - [x] Match the core VRCX friend-card, desktop shell, and sidebar layout using shared primitives.
 - [x] Design narrow-screen reflow without removing core friend data.
 - [x] Implement initial loading, empty, error, rate-limit, and expired-session states.

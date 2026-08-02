@@ -9,7 +9,7 @@ import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
 export function FriendsLocationsView() {
-    const { friends, loading, error, refresh } = useFriends();
+    const { friends, loading, error, refresh, openUser } = useFriends();
     const [search, setSearch] = useState("");
     const filtered = useMemo(() => {
         const query = search.trim().toLocaleLowerCase();
@@ -70,7 +70,7 @@ export function FriendsLocationsView() {
                             </div>
                             <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,220px),1fr))] gap-2.5">
                                 {group.members.map((friend) => (
-                                    <article key={friend.id} className="relative rounded-lg border border-border bg-card p-2 shadow-xs transition-colors hover:bg-muted">
+                                    <button type="button" key={friend.id} onClick={() => openUser(friend.id)} className="relative rounded-lg border border-border bg-card p-2 text-left shadow-xs transition-colors hover:bg-muted">
                                         <div className="flex min-w-0 items-center gap-2.5 pr-4">
                                             <FriendAvatar friend={friend} />
                                             <p className="truncate text-[13px] font-semibold" title={friend.displayName}>
@@ -82,7 +82,7 @@ export function FriendsLocationsView() {
                                             <span className="line-clamp-1">{friend.statusDescription || "\u00a0"}</span>
                                         </p>
                                         <p className="mt-1.5 line-clamp-2 min-h-7 rounded-md bg-muted/60 px-2 py-1.5 text-center text-xs text-zinc-300">{locationLabel(friend)}</p>
-                                    </article>
+                                    </button>
                                 ))}
                             </div>
                         </section>

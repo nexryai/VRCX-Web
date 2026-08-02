@@ -9,7 +9,7 @@ import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
 export function FriendsSidebar() {
-    const { friends, loading, refresh } = useFriends();
+    const { friends, loading, refresh, openUser } = useFriends();
     const [search, setSearch] = useState("");
     const visibleFriends = useMemo(() => {
         const query = search.trim().toLocaleLowerCase();
@@ -31,13 +31,13 @@ export function FriendsSidebar() {
                 <p className="px-2 py-1.5 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Online — {visibleFriends.length}</p>
                 <div className="space-y-0.5">
                     {visibleFriends.map((friend) => (
-                        <div key={friend.id} className="flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5 hover:bg-sidebar-accent">
+                        <button type="button" key={friend.id} onClick={() => openUser(friend.id)} className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-sidebar-accent">
                             <FriendAvatar friend={friend} size="sm" />
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-xs font-medium">{friend.displayName}</p>
                                 <p className="truncate text-[10px] text-muted-foreground">{locationLabel(friend)}</p>
                             </div>
-                        </div>
+                        </button>
                     ))}
                 </div>
             </div>
