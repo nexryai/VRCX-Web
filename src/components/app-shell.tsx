@@ -12,6 +12,7 @@ import type { VrchatUser } from "@/lib/vrchat/types";
 import { ThemeToggle } from "./theme-toggle";
 
 const navigation = [
+    { href: "/dashboard", label: "Dashboard", icon: "ri-dashboard-line" },
     { href: "/", label: "Friends Locations", icon: "ri-user-location-line" },
     { href: "/favorite/friends", label: "Favorites", icon: "ri-star-line" },
     { href: "/avatars", label: "My Avatars", icon: "ri-user-smile-line" },
