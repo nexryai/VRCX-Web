@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
+import { GroupDialog } from "@/components/groups/group-dialog";
 import { WorldDialog } from "@/components/worlds/world-dialog";
 import { fetchAllFriends } from "@/lib/friends-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
@@ -16,6 +17,7 @@ type FriendsContextValue = {
     reload: () => Promise<void>;
     openUser: (userId: string) => void;
     openWorld: (worldId: string) => void;
+    openGroup: (groupId: string) => void;
     removeFriend: (userId: string) => void;
 };
 
@@ -28,6 +30,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const [error, setError] = useState("");
     const [selectedUserId, setSelectedUserId] = useState("");
     const [selectedWorldId, setSelectedWorldId] = useState("");
+    const [selectedGroupId, setSelectedGroupId] = useState("");
     const controllerRef = useRef<AbortController | null>(null);
 
     const load = useCallback(async (reconcile: boolean) => {
@@ -66,14 +69,22 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
 
     const openUser = useCallback((userId: string) => {
         setSelectedWorldId("");
+        setSelectedGroupId("");
         setSelectedUserId(userId);
     }, []);
     const closeUser = useCallback(() => setSelectedUserId(""), []);
     const openWorld = useCallback((worldId: string) => {
         setSelectedUserId("");
+        setSelectedGroupId("");
         setSelectedWorldId(worldId);
     }, []);
     const closeWorld = useCallback(() => setSelectedWorldId(""), []);
+    const openGroup = useCallback((groupId: string) => {
+        setSelectedUserId("");
+        setSelectedWorldId("");
+        setSelectedGroupId(groupId);
+    }, []);
+    const closeGroup = useCallback(() => setSelectedGroupId(""), []);
     const removeFriend = useCallback((userId: string) => {
         setFriends((current) => current.filter((friend) => friend.id !== userId));
         setAllFriends((current) => current.filter((friend) => friend.id !== userId));
@@ -90,12 +101,13 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         };
     }, [load]);
 
-    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, reload, openUser, openWorld, removeFriend }), [friends, allFriends, loading, error, refresh, reload, openUser, openWorld, removeFriend]);
+    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, removeFriend }), [friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, removeFriend]);
     return (
         <FriendsContext.Provider value={value}>
             {children}
             {selectedUserId ? <UserDialog userId={selectedUserId} onClose={closeUser} /> : null}
             {selectedWorldId ? <WorldDialog worldId={selectedWorldId} friends={allFriends} openUser={openUser} onClose={closeWorld} /> : null}
+            {selectedGroupId ? <GroupDialog groupId={selectedGroupId} friends={allFriends} openUser={openUser} onClose={closeGroup} /> : null}
         </FriendsContext.Provider>
     );
 }

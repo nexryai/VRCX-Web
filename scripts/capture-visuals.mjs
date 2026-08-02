@@ -21,6 +21,7 @@ const captures = [
     { name: "favorite-friends-export", path: "/favorite/friends", readyText: "Export favorite friends", favoriteKind: "friend", favoriteDialog: "Export" },
     { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
     { name: "world-dialog", path: "/favorite/worlds", readyText: "World ID", favoriteKind: "world", worldDialog: true },
+    { name: "group-dialog", path: "/", readyText: "Group ID", groupDialog: true },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
@@ -114,6 +115,10 @@ for (const width of [360, 768, 1280, 1920]) {
         }
         if (capture.worldDialog) {
             await page.getByText("Favorite Moonlit World", { exact: true }).first().click();
+        }
+        if (capture.groupDialog) {
+            await page.getByRole("tab", { name: /^Groups/ }).click();
+            await page.getByText("VRCX Test Group", { exact: true }).first().click();
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();

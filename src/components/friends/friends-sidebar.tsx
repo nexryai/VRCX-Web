@@ -16,7 +16,7 @@ type SidebarTab = "friends" | "groups";
 
 export function FriendsSidebar() {
     const currentUser = useCurrentUser();
-    const { friends, allFriends, loading, refresh, openUser } = useFriends();
+    const { friends, allFriends, loading, refresh, openUser, openGroup } = useFriends();
     const [search, setSearch] = useState("");
     const [searchOpen, setSearchOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
@@ -164,7 +164,7 @@ export function FriendsSidebar() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
                 {tab === "groups" ? (
-                    <GroupList groups={groups} search={search} />
+                    <GroupList groups={groups} search={search} openGroup={openGroup} />
                 ) : (
                     <>
                         <SidebarSection label="Me" section="me" count={1} collapsed={collapsed.has("me")} toggle={toggleSection}>
@@ -236,19 +236,19 @@ function groupFriends(friends: VrchatUser[]) {
     return [...groups].map(([location, members]) => ({ location, friends: members })).toSorted((a, b) => a.location.localeCompare(b.location));
 }
 
-function GroupList({ groups, search }: { groups: VrchatGroup[]; search: string }) {
+function GroupList({ groups, search, openGroup }: { groups: VrchatGroup[]; search: string; openGroup: (groupId: string) => void }) {
     const query = search.trim().toLocaleLowerCase();
     const visible = groups.filter((group) => !query || `${group.name} ${group.shortCode || ""} ${group.description || ""}`.toLocaleLowerCase().includes(query));
     return (
         <div className="pt-2">
             {visible.map((group) => (
-                <div key={group.id} className="flex items-center gap-2 rounded-lg p-1.5 text-[13px] hover:bg-muted/50">
+                <button key={group.id} type="button" onClick={() => openGroup(group.id)} className="flex w-full items-center gap-2 rounded-lg p-1.5 text-left text-[13px] hover:bg-muted/50">
                     <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">{group.iconUrl ? <img src={group.iconUrl} alt="" className="size-full object-cover" /> : <User className="size-4 text-muted-foreground" />}</span>
                     <span className="min-w-0">
                         <span className="block truncate font-medium">{group.name}</span>
                         <span className="block truncate text-xs text-muted-foreground">{group.shortCode || `${group.memberCount ?? 0} members`}</span>
                     </span>
-                </div>
+                </button>
             ))}
         </div>
     );

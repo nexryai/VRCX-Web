@@ -34,6 +34,11 @@ export async function upsertCachedGroups(ownerId: string, groups: VrchatGroup[],
     );
 }
 
+export async function getCachedGroup(ownerId: string, groupId: string) {
+    await ensureMongoSchema();
+    return (await collections(await getMongoDatabase()).groups.findOne({ _id: `${ownerId}:${groupId}` }))?.group || null;
+}
+
 export async function replaceGroupMemberships(ownerId: string, groups: VrchatGroup[], observedAt = new Date()) {
     await ensureMongoSchema();
     const collection = collections(await getMongoDatabase()).groups;

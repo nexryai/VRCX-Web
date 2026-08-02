@@ -34,7 +34,7 @@ function userLanguages(user: VrchatUser) {
 }
 
 export function UserDialog({ userId, onClose }: { userId: string; onClose: () => void }) {
-    const { friends, openUser, openWorld, removeFriend } = useFriends();
+    const { friends, openUser, openWorld, openGroup, removeFriend } = useFriends();
     const [user, setUser] = useState<VrchatUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -221,7 +221,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                 ) : null}
                                 {!tabLoading && activeTab === "Info" ? <InfoTab user={user} /> : null}
                                 {!tabLoading && activeTab === "Mutual" ? <MutualTab users={mutuals} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Mutual", true)} openUser={openUser} /> : null}
-                                {!tabLoading && activeTab === "Groups" ? <GroupsTab groups={groups} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Groups", true)} /> : null}
+                                {!tabLoading && activeTab === "Groups" ? <GroupsTab groups={groups} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Groups", true)} openGroup={openGroup} /> : null}
                                 {!tabLoading && activeTab === "Worlds" ? <WorldsTab worlds={worlds} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Worlds", true)} openWorld={openWorld} /> : null}
                                 {!tabLoading && activeTab === "Activity" ? <ActivityTab entries={activity} refresh={() => void loadTab("Activity", true)} /> : null}
                                 {!tabLoading && activeTab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(user, null, 2)}</pre> : null}
@@ -409,20 +409,20 @@ function MutualTab({ users, search, setSearch, refresh, openUser }: { users: Vrc
     );
 }
 
-function GroupsTab({ groups, search, setSearch, refresh }: { groups: VrchatGroup[]; search: string; setSearch: (value: string) => void; refresh: () => void }) {
+function GroupsTab({ groups, search, setSearch, refresh, openGroup }: { groups: VrchatGroup[]; search: string; setSearch: (value: string) => void; refresh: () => void; openGroup: (groupId: string) => void }) {
     const filtered = groups.filter((group) => group.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
     return (
         <div>
             <TabToolbar count={groups.length} search={search} setSearch={setSearch} refresh={refresh} placeholder="Search groups" />
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((group) => (
-                    <a key={group.id} href={`https://vrchat.com/home/group/${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg bg-background p-2 hover:bg-muted">
+                    <button key={group.id} type="button" onClick={() => openGroup(group.id)} className="flex items-center gap-2 rounded-lg bg-background p-2 text-left hover:bg-muted">
                         {group.iconUrl ? <img src={group.iconUrl} alt="" className="size-9 rounded object-cover" /> : <ShieldCheck className="size-5 text-primary" />}
                         <span className="min-w-0">
                             <span className="block truncate text-xs font-medium">{group.name}</span>
                             <span className="text-[10px] text-muted-foreground">{group.shortCode || group.memberCount || ""}</span>
                         </span>
-                    </a>
+                    </button>
                 ))}
             </div>
             {!filtered.length ? <EmptyState /> : null}

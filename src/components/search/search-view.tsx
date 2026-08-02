@@ -40,7 +40,7 @@ function resolvedWorldHeading(row?: WorldRow): WorldSortHeading {
 }
 
 export function SearchView() {
-    const { openUser, openWorld } = useFriends();
+    const { openUser, openWorld, openGroup } = useFriends();
     const [type, setType] = useState<SearchType>("users");
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<Record<SearchType, SearchResult[]>>(emptyResults);
@@ -242,7 +242,7 @@ export function SearchView() {
                 {!loading && !visible.length ? <div className="flex h-full min-h-64 items-center justify-center text-xs text-muted-foreground">No data</div> : null}
                 {!loading && type === "users" && visible.length ? <UserResults users={visible as VrchatUser[]} openUser={openUser} /> : null}
                 {!loading && type === "worlds" && visible.length ? <WorldResults worlds={visible as VrchatWorld[]} openWorld={openWorld} /> : null}
-                {!loading && type === "groups" && visible.length ? <GroupResults groups={visible as VrchatGroup[]} /> : null}
+                {!loading && type === "groups" && visible.length ? <GroupResults groups={visible as VrchatGroup[]} openGroup={openGroup} /> : null}
             </div>
 
             {paginationVisible ? <SearchPagination previousDisabled={offset === 0} nextDisabled={visible.length < 10} onPrevious={() => void runSearch(Math.max(0, offset - 10))} onNext={() => void runSearch(offset + 10)} /> : null}
@@ -298,11 +298,11 @@ function WorldResults({ worlds, openWorld }: { worlds: VrchatWorld[]; openWorld:
     );
 }
 
-function GroupResults({ groups }: { groups: VrchatGroup[] }) {
+function GroupResults({ groups, openGroup }: { groups: VrchatGroup[]; openGroup: (groupId: string) => void }) {
     return (
         <div>
             {groups.map((group) => (
-                <a key={group.id} href={`https://vrchat.com/home/group/${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer" className="flex min-w-0 cursor-pointer items-center gap-3 rounded-none px-3 py-2 hover:bg-muted">
+                <button key={group.id} type="button" onClick={() => openGroup(group.id)} className="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-none px-3 py-2 text-left hover:bg-muted">
                     <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted text-muted-foreground">
                         {group.iconUrl ? <img src={group.iconUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <Users className="size-5" aria-hidden="true" />}
                     </span>
@@ -316,7 +316,7 @@ function GroupResults({ groups }: { groups: VrchatGroup[] }) {
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">{group.description || ""}</span>
                     </span>
-                </a>
+                </button>
             ))}
         </div>
     );

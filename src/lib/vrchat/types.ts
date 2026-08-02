@@ -175,15 +175,46 @@ export const vrchatGroupSchema = z
     .object({
         id: z.string(),
         name: z.string(),
+        ownerId: z.string().optional(),
         shortCode: z.string().optional(),
         discriminator: z.string().optional(),
         description: z.string().optional(),
+        rules: z.string().optional(),
         iconUrl: z.string().optional(),
         bannerUrl: z.string().optional(),
         memberCount: z.number().optional(),
+        onlineMemberCount: z.number().optional(),
         joinState: z.string().optional(),
         privacy: z.string().optional(),
+        membershipStatus: z.string().optional(),
+        isVerified: z.boolean().optional(),
+        createdAt: z.string().optional(),
+        links: z.array(z.string()).optional(),
         languages: z.array(z.string()).optional(),
+        roles: z
+            .array(
+                z
+                    .object({
+                        id: z.string(),
+                        name: z.string(),
+                        description: z.string().optional(),
+                        permissions: z.array(z.string()).optional(),
+                    })
+                    .passthrough(),
+            )
+            .optional(),
+        myMember: z
+            .object({
+                membershipStatus: z.string().optional(),
+                visibility: z.string().optional(),
+                isRepresenting: z.boolean().optional(),
+                isSubscribedToAnnouncements: z.boolean().optional(),
+                isSubscribedToEventAnnouncements: z.boolean().optional(),
+                roleIds: z.array(z.string()).optional(),
+                bannedAt: z.string().nullable().optional(),
+            })
+            .passthrough()
+            .optional(),
     })
     .passthrough();
 
