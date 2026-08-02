@@ -18,7 +18,7 @@ function time(value?: string) {
 
 export function MonitorStatusBar() {
     const [status, setStatus] = useState<MonitorStatus>({ status: "idle", pipelineConnected: false });
-    const [now, setNow] = useState(() => new Date());
+    const [now, setNow] = useState<Date | null>(null);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -31,6 +31,7 @@ export function MonitorStatusBar() {
             }
         }
         void refresh();
+        setNow(new Date());
         const statusTimer = window.setInterval(() => void refresh(), 10_000);
         const clockTimer = window.setInterval(() => setNow(new Date()), 1_000);
         return () => {
@@ -64,8 +65,8 @@ export function MonitorStatusBar() {
                     </div>
                 ) : null}
             </div>
-            <time className="ml-auto h-[22px] shrink-0 border-l border-border px-2 leading-[22px] text-foreground" dateTime={now.toISOString()}>
-                {new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(now)}
+            <time className="ml-auto h-[22px] min-w-[5.75rem] shrink-0 border-l border-border px-2 text-center leading-[22px] text-foreground" dateTime={now?.toISOString()}>
+                {now ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(now) : "--:--:--"}
             </time>
         </footer>
     );

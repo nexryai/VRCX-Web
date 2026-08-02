@@ -195,7 +195,7 @@ function SidebarSection({ label, section, count, collapsed, toggle, children }: 
             <button type="button" onClick={() => toggle(section)} className="flex w-full items-center pt-4 pb-1.5 text-xs">
                 <ChevronDown className={`size-4 transition-transform ${collapsed ? "-rotate-90" : ""}`} />
                 <span className="ml-1.5">
-                    {label} &horbar; {count}
+                    {label} ― {count}
                 </span>
             </button>
             {collapsed ? null : children}

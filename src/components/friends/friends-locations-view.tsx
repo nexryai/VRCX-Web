@@ -98,9 +98,9 @@ export function FriendsLocationsView() {
     }
 
     return (
-        <section className="grid h-full min-h-0 grid-rows-[auto_1fr] gap-4 overflow-hidden p-2" aria-labelledby="friends-locations-heading">
-            <div className="flex items-center gap-5 px-0.5 pt-2 max-lg:flex-wrap max-lg:gap-2">
-                <div className="flex max-w-full shrink-0 items-center overflow-x-auto rounded-md bg-muted p-1" role="tablist" aria-label="Friend presence group">
+        <section className="grid h-full min-h-0 min-w-0 grid-rows-[auto_1fr] gap-4 overflow-hidden p-2" aria-labelledby="friends-locations-heading">
+            <div className="flex min-w-0 items-center gap-5 px-0.5 pt-2 max-lg:flex-col max-lg:items-stretch max-lg:gap-2">
+                <div className="flex min-w-0 max-w-full shrink-0 items-center overflow-x-auto rounded-md bg-muted p-1 max-lg:w-full" role="tablist" aria-label="Friend presence group">
                     {visibleSegments.map((option) => (
                         <button
                             key={option.value}
@@ -114,8 +114,8 @@ export function FriendsLocationsView() {
                         </button>
                     ))}
                 </div>
-                <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-3">
-                    <label className="relative w-60 min-w-40 max-sm:w-full">
+                <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-3 max-lg:ml-0 max-lg:w-full">
+                    <label className="relative w-60 min-w-40 max-sm:min-w-0 max-sm:flex-1">
                         <Search aria-hidden="true" className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                         <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} className="h-8 w-full rounded-md border border-input bg-transparent pr-2 pl-8 text-sm outline-none focus:border-ring" placeholder="Search friends" />
                     </label>

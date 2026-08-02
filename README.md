@@ -65,6 +65,16 @@ pnpm lint
 pnpm build
 ```
 
+For deterministic responsive screenshots, start the development-only MongoDB fixture in one terminal and capture the two ported reference screens in another:
+
+```bash
+pnpm exec playwright install chromium
+pnpm visual:fixture
+pnpm visual:capture
+```
+
+The capture command writes ignored images under `.visual/` for Friends Locations and Game Log at 360, 768, 1280, and 1920 pixels wide, and fails on page-level horizontal overflow. The fixture uses only synthetic records and disables the always-on monitor in development; production startup cannot use this bypass. These images make the current port reproducible but do not replace matched screenshots from the running VRCX reference application.
+
 MongoDB migrations are versioned in `schema_migrations` and run automatically and idempotently when the application first accesses the database. `GET /api/health` is the deployment health probe; it returns HTTP 503 without exposing driver details when MongoDB is unavailable.
 
 Production must run as a persistent Node.js process:

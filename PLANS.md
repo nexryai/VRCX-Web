@@ -198,7 +198,7 @@ Exit criteria: the scope inventory, visual fixtures, persistence map, and remote
 
 Status: In progress
 
-- [ ] Add the MongoDB driver, validated environment configuration, connection lifecycle, health check, and test database strategy.
+- [x] Add the MongoDB driver, validated environment configuration, connection lifecycle, health check, and test database strategy.
 - [ ] Define versioned migrations, indexes, repository boundaries, retention, backup, and restore behavior.
 - [x] Implement singleton settings and active-identity records.
 - [ ] Move current durable browser state into MongoDB with an explicit one-time migration/import path.
@@ -231,6 +231,7 @@ Status: In progress
 - [ ] Build shared React primitives only from observed VRCX patterns.
 - [x] Remove navigation and settings entries for confirmed Local-VRChat-only and Dashboard features from the current shell.
 - [ ] Add matched-viewport screenshot tests for the shell's significant states.
+- [x] Add a deterministic MongoDB-backed capture harness for current-port Friends Locations and Game Log states at 360, 768, 1280, and 1920 pixels.
 - [ ] Verify narrow layouts without introducing a separate visual design.
 
 Exit criteria: the root shell is visually indistinguishable from VRCX within documented browser rendering tolerances.
@@ -367,3 +368,5 @@ Before this rebaseline, the browser-session prototype passed its existing unit t
 The 2026-08-02 documentation rebaseline passed `pnpm test` (5 files, 13 tests), `pnpm lint` (74 files), and `pnpm build` (28 generated routes).
 
 Authenticated VRChat behavior, long-running monitoring, restart recovery, MongoDB migrations, and matched-state VRCX screenshots remain required operator checks as those systems are implemented.
+
+The 2026-08-02 MongoDB visual-fixture increment passed `pnpm test` (7 files, 23 tests), `pnpm lint` (108 files), and `pnpm build` (21 generated pages). Friends Locations and Game Log were rendered from synthetic MongoDB projections at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow. This found and fixed a status-clock hydration mismatch and narrow-layout clipping. Running-VRCX reference comparisons and authenticated operator smoke tests remain outstanding.

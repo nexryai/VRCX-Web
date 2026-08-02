@@ -67,7 +67,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     useEffect(() => {
-        void refresh();
+        void load(false);
         // This timer only refreshes the rendered MongoDB projection. Durable
         // VRChat observation is owned by the server monitor.
         const interval = window.setInterval(() => void load(false), 30_000);
@@ -75,7 +75,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
             window.clearInterval(interval);
             controllerRef.current?.abort();
         };
-    }, [load, refresh]);
+    }, [load]);
 
     const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, openUser, removeFriend }), [friends, allFriends, loading, error, refresh, openUser, removeFriend]);
     return (

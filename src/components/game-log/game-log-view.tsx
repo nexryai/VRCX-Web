@@ -26,17 +26,31 @@ function SessionSegment({ session, latest }: { session: GameSessionDto; latest: 
     const duration = formatDuration(session);
     return (
         <section className="border-b border-border last:border-b-0">
-            <button type="button" className="sticky top-0 z-[5] flex w-full cursor-pointer items-center gap-2 border-none border-b border-border bg-muted/80 px-3 py-2 text-left backdrop-blur-sm transition-colors hover:bg-muted" onClick={() => setCollapsed((value) => !value)} aria-expanded={!collapsed}>
+            <button
+                type="button"
+                className="sticky top-0 z-[5] flex w-full cursor-pointer flex-wrap items-center gap-2 border-none border-b border-border bg-muted/80 px-3 py-2 text-left backdrop-blur-sm transition-colors hover:bg-muted sm:flex-nowrap"
+                onClick={() => setCollapsed((value) => !value)}
+                aria-expanded={!collapsed}
+            >
                 <ChevronRight aria-hidden="true" className={`size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`} />
                 <MapPin aria-hidden="true" className="size-4 shrink-0 text-primary" />
-                <span className="min-w-0 truncate text-sm">{session.worldName || session.worldId || session.location}</span>
-                {session.groupName ? <span className="min-w-0 truncate text-xs text-muted-foreground">({session.groupName})</span> : null}
-                <span className="shrink-0 text-[0.6875rem] text-muted-foreground">{formatDate(session.startedAt)}</span>
+                <span className="min-w-0 flex-1 truncate text-sm sm:flex-none">{session.worldName || session.worldId || session.location}</span>
+                {session.groupName ? <span className="min-w-0 truncate text-xs text-muted-foreground max-sm:hidden">({session.groupName})</span> : null}
+                <span className="shrink-0 text-[0.6875rem] text-muted-foreground max-sm:hidden">{formatDate(session.startedAt)}</span>
                 {duration ? <span className="h-4 rounded border border-border px-1 font-mono text-[0.625rem] leading-[0.875rem]">{duration}</span> : null}
-                {!duration && latest && session.current ? <span className="h-4 rounded border border-border px-1 text-[0.625rem] leading-[0.875rem]">Current session</span> : null}
+                {!duration && latest && session.current ? (
+                    <span className="h-4 rounded border border-border px-1 text-[0.625rem] leading-[0.875rem]">
+                        <span className="sm:hidden">Current</span>
+                        <span className="max-sm:hidden">Current session</span>
+                    </span>
+                ) : null}
+                <span className="flex w-full min-w-0 items-center gap-2 pl-[3.75rem] text-[0.6875rem] text-muted-foreground sm:hidden">
+                    {session.groupName ? <span className="min-w-0 truncate">({session.groupName})</span> : null}
+                    <span className="ml-auto shrink-0">{formatDate(session.startedAt)}</span>
+                </span>
             </button>
             {!collapsed ? (
-                <div className="grid gap-1 px-8 py-2 text-[0.75rem] text-muted-foreground sm:grid-cols-2">
+                <div className="grid gap-1 px-8 py-2 text-[0.75rem] text-muted-foreground lg:grid-cols-2">
                     <span className="truncate" title={session.location}>
                         {session.location}
                     </span>
