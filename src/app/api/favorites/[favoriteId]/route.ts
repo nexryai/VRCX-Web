@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { deactivateFavorite } from "@/lib/mongodb/projection-repository";
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
@@ -16,6 +18,7 @@ export async function DELETE(request: NextRequest, context: RouteContext<"/api/f
     try {
         const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>(`favorites/${favoriteId.data}`, { method: "DELETE", cookies });
+        await deactivateFavorite(await requireActiveUserId(), favoriteId.data);
         const response = NextResponse.json({ success: true });
         await persistRotatedVrchatCookies(upstream.cookies);
         response.headers.set("Cache-Control", "private, no-store");

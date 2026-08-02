@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Collection, Db } from "mongodb";
 
-import type { VrchatAvatar, VrchatGroup, VrchatNotification, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
     algorithm: "aes-256-gcm";
@@ -150,6 +150,39 @@ export type NotificationDocument = {
     updatedAt: Date;
 };
 
+export type FavoriteDocument = {
+    _id: string;
+    ownerId: string;
+    recordId: string;
+    objectId: string;
+    favoriteType: string;
+    favorite: VrchatFavorite;
+    active: boolean;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type FavoriteGroupDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    group: VrchatFavoriteGroup;
+    active: boolean;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type ModerationDocument = {
+    _id: string;
+    ownerId: string;
+    targetUserId: string;
+    moderationType: string;
+    moderation: VrchatPlayerModeration;
+    active: boolean;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
 export type SchemaMigrationDocument = {
     _id: number;
     name: string;
@@ -168,6 +201,9 @@ export type Collections = {
     activityEvents: Collection<ActivityEventDocument>;
     gameSessions: Collection<GameSessionDocument>;
     notifications: Collection<NotificationDocument>;
+    favorites: Collection<FavoriteDocument>;
+    favoriteGroups: Collection<FavoriteGroupDocument>;
+    moderations: Collection<ModerationDocument>;
     schemaMigrations: Collection<SchemaMigrationDocument>;
     mutualGraph: Collection<MutualGraphDocument>;
 };
@@ -185,6 +221,9 @@ export function collections(db: Db): Collections {
         activityEvents: db.collection<ActivityEventDocument>("activity_events"),
         gameSessions: db.collection<GameSessionDocument>("game_sessions"),
         notifications: db.collection<NotificationDocument>("notifications"),
+        favorites: db.collection<FavoriteDocument>("favorites"),
+        favoriteGroups: db.collection<FavoriteGroupDocument>("favorite_groups"),
+        moderations: db.collection<ModerationDocument>("moderations"),
         schemaMigrations: db.collection<SchemaMigrationDocument>("schema_migrations"),
         mutualGraph: db.collection<MutualGraphDocument>("mutual_graph"),
     };

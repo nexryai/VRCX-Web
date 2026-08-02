@@ -7,11 +7,13 @@ import { observeGameSession } from "@/lib/game-log/session-repository";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { type ActivityEventDocument, collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
+import { replaceFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection } from "@/lib/mongodb/projection-repository";
 import { updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
 import { upsertCachedUser, upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
 import { requestVrchat, type VrchatCookies } from "@/lib/vrchat/client";
-import { type VrchatNotification, type VrchatUser, vrchatNotificationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
+import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
+import { resolveLocationMetadata } from "./location-metadata";
 
 import { createHash } from "node:crypto";
 
@@ -64,16 +66,46 @@ async function fetchAllNotifications(cookies: VrchatCookies, source: Notificatio
     return { notifications, cookies: currentCookies };
 }
 
+async function fetchFavoriteState(cookies: VrchatCookies): Promise<{ favorites: VrchatFavorite[]; groups: VrchatFavoriteGroup[]; moderations: VrchatPlayerModeration[]; cookies: VrchatCookies }> {
+    const favorites: VrchatFavorite[] = [];
+    let currentCookies = cookies;
+    for (let offset = 0; offset < 5_000; offset += 100) {
+        const response = await requestVrchat<unknown>("favorites", { cookies: currentCookies, query: { n: 100, offset } });
+        currentCookies = { ...currentCookies, ...response.cookies };
+        const page = z.array(vrchatFavoriteSchema).parse(response.data);
+        favorites.push(...page);
+        if (page.length < 100) break;
+    }
+
+    const groups: VrchatFavoriteGroup[] = [];
+    for (let offset = 0; offset < 500; offset += 50) {
+        const response = await requestVrchat<unknown>("favorite/groups", { cookies: currentCookies, query: { n: 50, offset } });
+        currentCookies = { ...currentCookies, ...response.cookies };
+        const page = z.array(vrchatFavoriteGroupSchema).parse(response.data);
+        groups.push(...page);
+        if (page.length < 50) break;
+    }
+
+    const moderationResponse = await requestVrchat<unknown>("auth/user/playermoderations", { cookies: currentCookies });
+    currentCookies = { ...currentCookies, ...moderationResponse.cookies };
+    return { favorites, groups, moderations: z.array(vrchatPlayerModerationSchema).parse(moderationResponse.data), cookies: currentCookies };
+}
+
 export async function reconcileRemoteState(cookies: VrchatCookies): Promise<{ user: VrchatUser; cookies: VrchatCookies }> {
     await ensureMongoSchema();
     const currentResponse = await requestVrchat<unknown>("auth/user", { cookies });
     const user = vrchatUserSchema.parse(currentResponse.data);
     let currentCookies = { ...cookies, ...currentResponse.cookies };
 
+    const location = user.location || user.travelingToLocation;
+    const locationMetadata = await resolveLocationMetadata(user.id, location, currentCookies);
+    currentCookies = locationMetadata.cookies;
+
     await observeGameSession({
         ownerId: user.id,
-        location: user.location || user.travelingToLocation,
-        worldName: user.world?.name,
+        location,
+        worldName: user.world?.name || locationMetadata.worldName,
+        groupName: locationMetadata.groupName,
         observedAt: new Date(),
         provenance: "reconciliation",
     });
@@ -89,6 +121,8 @@ export async function reconcileRemoteState(cookies: VrchatCookies): Promise<{ us
     currentCookies = v2Notifications.cookies;
     const hiddenNotifications = await fetchAllNotifications(currentCookies, "hidden");
     currentCookies = hiddenNotifications.cookies;
+    const favoriteState = await fetchFavoriteState(currentCookies);
+    currentCookies = favoriteState.cookies;
     await updateStoredVrchatCookies(currentCookies);
 
     const onlineIds = new Set(online.users.map((friend) => friend.id));
@@ -112,6 +146,9 @@ export async function reconcileRemoteState(cookies: VrchatCookies): Promise<{ us
         replaceActiveNotifications(user.id, "legacy", legacyNotifications.notifications, observedAt),
         replaceActiveNotifications(user.id, "v2", v2Notifications.notifications, observedAt),
         replaceActiveNotifications(user.id, "hidden", hiddenNotifications.notifications, observedAt),
+        replaceFavoriteProjection(user.id, favoriteState.favorites, observedAt),
+        replaceFavoriteGroupProjection(user.id, favoriteState.groups, observedAt),
+        replaceModerationProjection(user.id, favoriteState.moderations, observedAt),
     ]);
     const changes = previous.length ? diffFriendSnapshots(previous, current, observedAt.toISOString()) : [];
     const snapshotOperations = combined.map((friend) => {

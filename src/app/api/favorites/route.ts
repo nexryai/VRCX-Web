@@ -2,13 +2,17 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { getMongoDatabase } from "@/lib/mongodb/client";
+import { collections } from "@/lib/mongodb/collections";
 import { upsertCachedAvatars, upsertCachedWorlds } from "@/lib/mongodb/entity-repository";
+import { ensureMongoSchema } from "@/lib/mongodb/migrations";
+import { upsertFavoriteProjection } from "@/lib/mongodb/projection-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import type { VrchatCookies } from "@/lib/vrchat/protocol";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
-import { vrchatAvatarSchema, vrchatFavoriteGroupSchema, vrchatFavoriteLimitsSchema, vrchatFavoriteSchema, vrchatWorldSchema } from "@/lib/vrchat/types";
+import { vrchatAvatarSchema, vrchatFavoriteLimitsSchema, vrchatFavoriteSchema, vrchatWorldSchema } from "@/lib/vrchat/types";
 
 const querySchema = z.discriminatedUnion("section", [
     z.object({ section: z.literal("records"), offset: z.coerce.number().int().min(0).max(5_000).default(0) }),
@@ -29,15 +33,29 @@ export async function GET(request: NextRequest) {
     if (!query.success) return NextResponse.json({ error: "The favorites query is invalid." }, { status: 400 });
 
     try {
-        const cookies = await requireVrchatCookies();
         if (query.data.section === "records") {
-            const upstream = await requestVrchat<unknown>("favorites", { cookies, query: { n: 100, offset: query.data.offset } });
-            return await favoriteResponse({ favorites: z.array(vrchatFavoriteSchema).parse(upstream.data) }, upstream.cookies);
+            const ownerId = await requireActiveUserId();
+            await ensureMongoSchema();
+            const documents = await collections(await getMongoDatabase())
+                .favorites.find({ ownerId, active: true })
+                .sort({ updatedAt: -1 })
+                .skip(query.data.offset)
+                .limit(100)
+                .toArray();
+            return favoriteDatabaseResponse({ favorites: documents.map((document) => document.favorite) });
         }
         if (query.data.section === "groups") {
-            const upstream = await requestVrchat<unknown>("favorite/groups", { cookies, query: { n: 50, offset: query.data.offset } });
-            return await favoriteResponse({ groups: z.array(vrchatFavoriteGroupSchema).parse(upstream.data) }, upstream.cookies);
+            const ownerId = await requireActiveUserId();
+            await ensureMongoSchema();
+            const documents = await collections(await getMongoDatabase())
+                .favoriteGroups.find({ ownerId, active: true })
+                .sort({ "group.type": 1, "group.name": 1 })
+                .skip(query.data.offset)
+                .limit(50)
+                .toArray();
+            return favoriteDatabaseResponse({ groups: documents.map((document) => document.group) });
         }
+        const cookies = await requireVrchatCookies();
         if (query.data.section === "limits") {
             const upstream = await requestVrchat<unknown>("auth/user/favoritelimits", { cookies });
             return await favoriteResponse({ limits: vrchatFavoriteLimitsSchema.parse(upstream.data) }, upstream.cookies);
@@ -67,10 +85,18 @@ export async function POST(request: NextRequest) {
     try {
         const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>("favorites", { method: "POST", cookies, body: body.data });
-        return await favoriteResponse({ favorite: vrchatFavoriteSchema.parse(upstream.data) }, upstream.cookies);
+        const favorite = vrchatFavoriteSchema.parse(upstream.data);
+        await upsertFavoriteProjection(await requireActiveUserId(), favorite);
+        return await favoriteResponse({ favorite }, upstream.cookies);
     } catch (error) {
         return await favoriteError(error, "The favorite could not be added.");
     }
+}
+
+function favoriteDatabaseResponse(payload: object) {
+    const response = NextResponse.json(payload);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
 }
 
 async function favoriteResponse(payload: object, cookies: VrchatCookies) {

@@ -112,6 +112,20 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 5,
+        name: "add-favorite-and-moderation-projection-indexes",
+        async apply(c) {
+            await Promise.all([
+                c.favorites.createIndex({ ownerId: 1, recordId: 1 }, { unique: true, name: "owner_record_unique" }),
+                c.favorites.createIndex({ ownerId: 1, favoriteType: 1, active: 1, updatedAt: -1 }, { name: "owner_type_active_updated" }),
+                c.favoriteGroups.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }),
+                c.favoriteGroups.createIndex({ ownerId: 1, active: 1, "group.type": 1 }, { name: "owner_active_type" }),
+                c.moderations.createIndex({ ownerId: 1, targetUserId: 1, moderationType: 1 }, { unique: true, name: "owner_target_type_unique" }),
+                c.moderations.createIndex({ ownerId: 1, active: 1, updatedAt: -1 }, { name: "owner_active_updated" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

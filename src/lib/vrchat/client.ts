@@ -35,6 +35,8 @@ const allowedEndpointPatterns = [
     /^avatars\/avtr_[0-9a-f-]{36}\/select$/i,
     /^avatars\/avtr_[0-9a-f-]{36}\/impostor\/enqueue$/i,
     /^users\/usr_[0-9a-f-]{36}$/i,
+    /^worlds\/wrld_[0-9a-f-]{36}$/i,
+    /^groups\/grp_[0-9a-f-]{36}$/i,
     /^users\/usr_[0-9a-f-]{36}\/mutuals\/friends$/i,
     /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i,
     /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i,

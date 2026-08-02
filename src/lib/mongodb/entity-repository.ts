@@ -45,3 +45,11 @@ export async function removeCachedAvatar(ownerId: string, avatarId: string) {
     await ensureMongoSchema();
     await collections(await getMongoDatabase()).avatars.deleteOne({ _id: `${ownerId}:${avatarId}` });
 }
+
+export async function getFreshCachedLocationMetadata(ownerId: string, worldId: string, groupId?: string, maxAgeMs = 6 * 60 * 60 * 1_000): Promise<{ worldName?: string; groupName?: string }> {
+    await ensureMongoSchema();
+    const c = collections(await getMongoDatabase());
+    const updatedAfter = new Date(Date.now() - maxAgeMs);
+    const [world, group] = await Promise.all([c.worlds.findOne({ _id: `${ownerId}:${worldId}`, updatedAt: { $gte: updatedAfter } }), groupId ? c.groups.findOne({ _id: `${ownerId}:${groupId}`, updatedAt: { $gte: updatedAfter } }) : null]);
+    return { worldName: world?.world.name, groupName: group?.group.name };
+}

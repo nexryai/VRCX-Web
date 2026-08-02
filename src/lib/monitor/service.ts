@@ -9,6 +9,7 @@ import { applyPipelineNotificationState, upsertPipelineNotification } from "@/li
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { vrchatNotificationSchema } from "@/lib/vrchat/types";
 import { acquireMonitorLease, updateMonitorHealth } from "./lease";
+import { resolveLocationMetadata } from "./location-metadata";
 import { reconcileRemoteState } from "./reconcile";
 
 import { randomUUID } from "node:crypto";
@@ -65,6 +66,7 @@ class AlwaysOnMonitor {
                 return;
             }
             if (!this.cookies || this.ownerId !== stored.activeUserId) await this.loadSessionAndStart(stored);
+            else if (!this.socket && !this.reconnectTimer) await this.connectPipeline();
         } catch {
             await this.safeHealth({ status: "error", pipelineConnected: false, lastError: "Monitor leadership or startup failed." });
         }
@@ -117,7 +119,12 @@ class AlwaysOnMonitor {
             this.reconnectAttempt = 0;
             void this.safeHealth({ status: "healthy", pipelineConnected: true, lastError: "" });
         });
-        socket.on("message", (data) => void this.handlePipelineMessage(data.toString()));
+        socket.on("message", (data) => {
+            void this.handlePipelineMessage(data.toString()).catch(async () => {
+                await this.safeHealth({ status: "error", lastError: "A Pipeline event could not be processed." });
+                void this.reconcile();
+            });
+        });
         socket.on("error", () => socket.close());
         socket.on("close", () => {
             if (this.socket === socket) this.socket = undefined;
@@ -147,9 +154,15 @@ class AlwaysOnMonitor {
         await this.safeHealth({ status: "healthy", pipelineConnected: true, lastPipelineEventAt: now });
         const content = z.record(z.string(), z.unknown()).safeParse(parsedContent);
         if (envelope.data.type === "user-location" && this.ownerId && content.success && content.data.userId === this.ownerId) {
+            const location = typeof content.data.location === "string" ? content.data.location : undefined;
+            const metadata = this.cookies ? await resolveLocationMetadata(this.ownerId, location, this.cookies) : { cookies: this.cookies ?? {} };
+            this.cookies = metadata.cookies;
+            await updateStoredVrchatCookies(metadata.cookies);
             await observeGameSession({
                 ownerId: this.ownerId,
-                location: typeof content.data.location === "string" ? content.data.location : undefined,
+                location,
+                worldName: metadata.worldName,
+                groupName: metadata.groupName,
                 observedAt: now,
                 provenance: "pipeline",
             });

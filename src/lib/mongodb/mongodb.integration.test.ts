@@ -25,7 +25,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5]);
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner"]);
         expect(sessionIndexes).toBe(true);
     });
@@ -77,5 +77,22 @@ describe("MongoDB application repositories", () => {
         expect(sessions[0]).toMatchObject({ location: firstLocation, current: false, closeReason: "location-change" });
         expect(sessions[1]).toMatchObject({ location: secondLocation, current: false, closeReason: "private" });
         expect(sessions[0]?.endedAt).toEqual(new Date("2026-08-02T11:10:00.000Z"));
+    });
+
+    test("retains inactive favorite and moderation projections for history", async () => {
+        const { replaceFavoriteProjection, replaceModerationProjection } = await import("./projection-repository");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000001";
+        const favorite = { id: "fvrt_1", favoriteId: "wrld_00000000-0000-0000-0000-000000000010", type: "world", tags: ["world1"] };
+        const moderation = { type: "block", sourceUserId: ownerId, targetUserId: "usr_00000000-0000-0000-0000-000000000003" };
+
+        await replaceFavoriteProjection(ownerId, [favorite]);
+        await replaceModerationProjection(ownerId, [moderation]);
+        await replaceFavoriteProjection(ownerId, []);
+        await replaceModerationProjection(ownerId, []);
+
+        const database = await getMongoDatabase();
+        expect(await database.collection("favorites").findOne({ ownerId, recordId: favorite.id })).toMatchObject({ active: false, objectId: favorite.favoriteId });
+        expect(await database.collection("moderations").findOne({ ownerId, targetUserId: moderation.targetUserId })).toMatchObject({ active: false, moderationType: "block" });
     });
 });
