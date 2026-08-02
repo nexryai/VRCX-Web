@@ -2,9 +2,13 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { getMongoDatabase } from "@/lib/mongodb/client";
+import { collections } from "@/lib/mongodb/collections";
+import { ensureMongoSchema } from "@/lib/mongodb/migrations";
+import { updateNotificationProjection } from "@/lib/notifications/repository";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
-import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
+import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 
 const notificationIdSchema = z.string().regex(/^not_[a-z0-9_-]+$/i);
 const actionSchema = z.union([
@@ -20,9 +24,6 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/not
     if (!notificationId.success || !body.success) {
         return NextResponse.json({ error: "The notification action is invalid." }, { status: 400 });
     }
-
-    const cookies = readVrchatCookies(request.cookies);
-    if (!cookies.auth) return NextResponse.json({ error: "Sign in to update notifications." }, { status: 401 });
 
     let endpoint: string;
     let method: "DELETE" | "POST" | "PUT";
@@ -50,16 +51,22 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/not
     }
 
     try {
+        const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>(endpoint, { method, cookies, body: requestBody });
         const response = NextResponse.json({ success: true });
-        applyVrchatCookies(response, upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies);
+        await ensureMongoSchema();
+        const settings = await collections(await getMongoDatabase()).appSettings.findOne({ _id: "singleton" });
+        if (settings?.activeUserId) {
+            await updateNotificationProjection(settings.activeUserId, notificationId.data, body.data.source, body.data.action);
+        }
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
         const message = error instanceof VrchatApiError ? error.message : "The notification could not be updated.";
         const status = error instanceof VrchatApiError ? error.status : 502;
         const response = NextResponse.json({ error: message }, { status });
-        if (status === 401) clearVrchatCookies(response);
+        if (status === 401) await clearVrchatSession();
         return response;
     }
 }

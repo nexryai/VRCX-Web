@@ -4,10 +4,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
     title: {
-        default: "VRCX Web",
-        template: "%s · VRCX Web",
+        default: "VRCX",
+        template: "%s · VRCX",
     },
-    description: "A browser-based port of VRCX for remote VRChat features.",
+    description: "A continuously monitored, single-user Next.js port of VRCX.",
     icons: {
         icon: "/vrcx.png",
         apple: "/vrcx.png",

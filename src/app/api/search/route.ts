@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
-import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
+import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatGroupSchema, vrchatUserSchema, vrchatWorldSchema } from "@/lib/vrchat/types";
 
 const searchSchema = z.object({
@@ -18,27 +18,23 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Enter a valid search query." }, { status: 400 });
     }
 
-    const cookies = readVrchatCookies(request.cookies);
-    if (!cookies.auth) {
-        return NextResponse.json({ error: "Sign in to search VRChat." }, { status: 401 });
-    }
-
     const { type, q, offset } = search.data;
     const query = type === "users" ? { n: 10, offset, search: q, customFields: "displayName", sort: "relevance" } : type === "worlds" ? { n: 10, offset, search: q, sort: "relevance", order: "descending", tag: "system_approved" } : { n: 10, offset, query: q };
 
     try {
+        const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>(type, { cookies, query });
         const schema = type === "users" ? vrchatUserSchema : type === "worlds" ? vrchatWorldSchema : vrchatGroupSchema;
         const results = z.array(schema).parse(upstream.data);
         const response = NextResponse.json({ type, results, offset, pageSize: 10 });
-        applyVrchatCookies(response, upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
         const message = error instanceof VrchatApiError ? error.message : "The VRChat search response was not valid.";
         const status = error instanceof VrchatApiError ? error.status : 502;
         const response = NextResponse.json({ error: message }, { status });
-        if (status === 401) clearVrchatCookies(response);
+        if (status === 401) await clearVrchatSession();
         return response;
     }
 }

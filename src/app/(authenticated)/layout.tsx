@@ -1,14 +1,15 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { CurrentUserProvider } from "@/components/current-user-provider";
 import { FriendsProvider } from "@/components/friends/friends-provider";
 import { FriendsSidebar } from "@/components/friends/friends-sidebar";
-import { fetchVrchatSession, readVrchatCookies } from "@/lib/vrchat/session";
+import { fetchVrchatSession } from "@/lib/vrchat/session";
+
+export const dynamic = "force-dynamic";
 
 export default async function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
-    const session = await fetchVrchatSession(readVrchatCookies(await cookies()));
+    const session = await fetchVrchatSession();
     if (session.status !== "authenticated") {
         redirect("/login");
     }

@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { createBasicAuthorization, requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
-import { applyVrchatCookies, clearVrchatCookies, parseSessionPayload } from "@/lib/vrchat/session";
+import { clearLegacyVrchatCookies, parseSessionPayload, persistAuthenticatedVrchatSession, persistPendingVrchatSession } from "@/lib/vrchat/session";
 
 const loginSchema = z.object({
     username: z.string().trim().min(1).max(256),
@@ -32,9 +32,14 @@ export async function POST(request: NextRequest) {
         const upstream = await requestVrchat<unknown>("auth/user", {
             authorization: createBasicAuthorization(parsed.data.username, parsed.data.password),
         });
-        const response = NextResponse.json(parseSessionPayload(upstream.data));
-        clearVrchatCookies(response);
-        applyVrchatCookies(response, upstream.cookies);
+        const snapshot = parseSessionPayload(upstream.data);
+        if (snapshot.status === "authenticated") {
+            await persistAuthenticatedVrchatSession(upstream.cookies, snapshot.user.id);
+        } else {
+            await persistPendingVrchatSession(upstream.cookies);
+        }
+        const response = NextResponse.json(snapshot);
+        clearLegacyVrchatCookies(response);
         response.headers.set("Cache-Control", "no-store");
         return response;
     } catch (error) {

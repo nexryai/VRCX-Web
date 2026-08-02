@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
-import { applyVrchatCookies, parseSessionPayload, readVrchatCookies } from "@/lib/vrchat/session";
+import { getVrchatCookies, parseSessionPayload, persistAuthenticatedVrchatSession, persistRotatedVrchatCookies } from "@/lib/vrchat/session";
 import type { TwoFactorMethod } from "@/lib/vrchat/types";
 
 const verificationSchema = z.object({
@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Enter a valid verification code." }, { status: 400 });
     }
 
-    const existingCookies = readVrchatCookies(request.cookies);
-    if (!existingCookies.auth) {
+    const existingCookies = await getVrchatCookies();
+    if (!existingCookies?.auth) {
         return NextResponse.json({ error: "The login session expired. Sign in again." }, { status: 401 });
     }
 
@@ -46,8 +46,11 @@ export async function POST(request: NextRequest) {
         });
         const combinedCookies = { ...existingCookies, ...verification.cookies };
         const currentUser = await requestVrchat<unknown>("auth/user", { cookies: combinedCookies });
-        const response = NextResponse.json(parseSessionPayload(currentUser.data));
-        applyVrchatCookies(response, { ...combinedCookies, ...currentUser.cookies });
+        const snapshot = parseSessionPayload(currentUser.data);
+        const rotatedCookies = { ...combinedCookies, ...currentUser.cookies };
+        await persistRotatedVrchatCookies(rotatedCookies);
+        if (snapshot.status === "authenticated") await persistAuthenticatedVrchatSession(rotatedCookies, snapshot.user.id);
+        const response = NextResponse.json(snapshot);
         response.headers.set("Cache-Control", "no-store");
         return response;
     } catch (error) {

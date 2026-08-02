@@ -22,35 +22,6 @@ export type FriendSnapshot = {
     bio: string;
 };
 
-export const ACTIVITY_UPDATED_EVENT = "vrcx-web-activity-updated";
-const MAX_ACTIVITY_ENTRIES = 2_000;
-
-function snapshotKey(userId: string) {
-    return `vrcx-web:friend-snapshot:${userId}`;
-}
-
-function activityKey(userId: string) {
-    return `vrcx-web:friend-activity:${userId}`;
-}
-
-function readJson<T>(key: string, fallback: T): T {
-    try {
-        const value = window.localStorage.getItem(key);
-        return value ? (JSON.parse(value) as T) : fallback;
-    } catch {
-        return fallback;
-    }
-}
-
-function writeJson(key: string, value: unknown) {
-    try {
-        window.localStorage.setItem(key, JSON.stringify(value));
-        return true;
-    } catch {
-        return false;
-    }
-}
-
 export function toFriendSnapshots(allFriends: VrchatUser[], onlineIds: Set<string>): FriendSnapshot[] {
     return allFriends.map((friend) => ({
         id: friend.id,
@@ -88,37 +59,4 @@ export function diffFriendSnapshots(previous: FriendSnapshot[], current: FriendS
         if (!after.has(friend.id)) add("Unfriend", friend);
     }
     return entries;
-}
-
-export function captureFriendActivity(userId: string, allFriends: VrchatUser[], onlineFriends: VrchatUser[]) {
-    const next = toFriendSnapshots(allFriends, new Set(onlineFriends.map((friend) => friend.id)));
-    const key = snapshotKey(userId);
-    const previous = readJson<FriendSnapshot[]>(key, []);
-    if (!writeJson(key, next)) return;
-    // The first successful refresh establishes a baseline and must not create a false flood of friend events.
-    if (!previous.length) return;
-    const changes = diffFriendSnapshots(previous, next);
-    if (!changes.length) return;
-    const entries = [...changes.toReversed(), ...readActivityLog(userId)].slice(0, MAX_ACTIVITY_ENTRIES);
-    if (!writeJson(activityKey(userId), entries)) return;
-    window.dispatchEvent(new CustomEvent(ACTIVITY_UPDATED_EVENT));
-}
-
-export function readActivityLog(userId: string) {
-    return readJson<FriendActivity[]>(activityKey(userId), []);
-}
-
-export function deleteActivityEntry(userId: string, entryId: string) {
-    const next = readActivityLog(userId).filter((entry) => entry.id !== entryId);
-    writeJson(activityKey(userId), next);
-    window.dispatchEvent(new CustomEvent(ACTIVITY_UPDATED_EVENT));
-}
-
-export function clearActivityLog(userId: string) {
-    try {
-        window.localStorage.removeItem(activityKey(userId));
-    } catch {
-        return;
-    }
-    window.dispatchEvent(new CustomEvent(ACTIVITY_UPDATED_EVENT));
 }

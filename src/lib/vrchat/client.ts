@@ -3,11 +3,13 @@ import "server-only";
 import { z } from "zod";
 
 import { extractVrchatCookies, serializeVrchatCookies, type VrchatCookies } from "./protocol";
+import { observeVrchatRateLimit, waitForVrchatRequestBudget } from "./rate-limit";
 
 const VRCHAT_API_BASE = "https://api.vrchat.cloud/api/1/";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 const allowedEndpoints = [
+    "auth",
     "avatars/favorites",
     "auth/user/favoritelimits",
     "auth/user",
@@ -147,6 +149,7 @@ export async function requestVrchat<T>(endpoint: string, options: VrchatRequestO
 
     let response: Response;
     try {
+        await waitForVrchatRequestBudget();
         response = await fetch(url, {
             method: options.method || "GET",
             headers,
@@ -161,6 +164,8 @@ export async function requestVrchat<T>(endpoint: string, options: VrchatRequestO
         }
         throw new VrchatApiError("VRChat is currently unreachable.", 502);
     }
+
+    observeVrchatRateLimit(response.headers, response.status);
 
     const data = parseJson(await response.text());
     if (!response.ok) {

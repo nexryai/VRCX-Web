@@ -4,7 +4,8 @@ import { z } from "zod";
 
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
-import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
+import type { VrchatCookies } from "@/lib/vrchat/protocol";
+import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema, vrchatFavoriteGroupSchema, vrchatFavoriteLimitsSchema, vrchatFavoriteSchema, vrchatWorldSchema } from "@/lib/vrchat/types";
 
 const querySchema = z.discriminatedUnion("section", [
@@ -25,58 +26,55 @@ export async function GET(request: NextRequest) {
     const query = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!query.success) return NextResponse.json({ error: "The favorites query is invalid." }, { status: 400 });
 
-    const cookies = readVrchatCookies(request.cookies);
-    if (!cookies.auth) return NextResponse.json({ error: "Sign in to view favorites." }, { status: 401 });
-
     try {
+        const cookies = await requireVrchatCookies();
         if (query.data.section === "records") {
             const upstream = await requestVrchat<unknown>("favorites", { cookies, query: { n: 100, offset: query.data.offset } });
-            return favoriteResponse({ favorites: z.array(vrchatFavoriteSchema).parse(upstream.data) }, upstream.cookies);
+            return await favoriteResponse({ favorites: z.array(vrchatFavoriteSchema).parse(upstream.data) }, upstream.cookies);
         }
         if (query.data.section === "groups") {
             const upstream = await requestVrchat<unknown>("favorite/groups", { cookies, query: { n: 50, offset: query.data.offset } });
-            return favoriteResponse({ groups: z.array(vrchatFavoriteGroupSchema).parse(upstream.data) }, upstream.cookies);
+            return await favoriteResponse({ groups: z.array(vrchatFavoriteGroupSchema).parse(upstream.data) }, upstream.cookies);
         }
         if (query.data.section === "limits") {
             const upstream = await requestVrchat<unknown>("auth/user/favoritelimits", { cookies });
-            return favoriteResponse({ limits: vrchatFavoriteLimitsSchema.parse(upstream.data) }, upstream.cookies);
+            return await favoriteResponse({ limits: vrchatFavoriteLimitsSchema.parse(upstream.data) }, upstream.cookies);
         }
 
         const endpoint = query.data.type === "world" ? "worlds/favorites" : "avatars/favorites";
         const schema = query.data.type === "world" ? vrchatWorldSchema : vrchatAvatarSchema;
         const upstream = await requestVrchat<unknown>(endpoint, { cookies, query: { n: 100, offset: 0, tag: query.data.tag } });
-        return favoriteResponse({ items: z.array(schema).parse(upstream.data) }, upstream.cookies);
+        return await favoriteResponse({ items: z.array(schema).parse(upstream.data) }, upstream.cookies);
     } catch (error) {
-        return favoriteError(error, "The VRChat favorites response was not valid.");
+        return await favoriteError(error, "The VRChat favorites response was not valid.");
     }
 }
 
 export async function POST(request: NextRequest) {
     if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
-    const cookies = readVrchatCookies(request.cookies);
-    if (!cookies.auth) return NextResponse.json({ error: "Sign in to update favorites." }, { status: 401 });
     const body = addSchema.safeParse(await request.json().catch(() => null));
     if (!body.success) return NextResponse.json({ error: "The favorite request is invalid." }, { status: 400 });
 
     try {
+        const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>("favorites", { method: "POST", cookies, body: body.data });
-        return favoriteResponse({ favorite: vrchatFavoriteSchema.parse(upstream.data) }, upstream.cookies);
+        return await favoriteResponse({ favorite: vrchatFavoriteSchema.parse(upstream.data) }, upstream.cookies);
     } catch (error) {
-        return favoriteError(error, "The favorite could not be added.");
+        return await favoriteError(error, "The favorite could not be added.");
     }
 }
 
-function favoriteResponse(payload: object, cookies: Parameters<typeof applyVrchatCookies>[1]) {
+async function favoriteResponse(payload: object, cookies: VrchatCookies) {
     const response = NextResponse.json(payload);
-    applyVrchatCookies(response, cookies);
+    await persistRotatedVrchatCookies(cookies);
     response.headers.set("Cache-Control", "private, no-store");
     return response;
 }
 
-function favoriteError(error: unknown, fallback: string) {
+async function favoriteError(error: unknown, fallback: string) {
     const message = error instanceof VrchatApiError ? error.message : fallback;
     const status = error instanceof VrchatApiError ? error.status : 502;
     const response = NextResponse.json({ error: message }, { status });
-    if (status === 401) clearVrchatCookies(response);
+    if (status === 401) await clearVrchatSession();
     return response;
 }

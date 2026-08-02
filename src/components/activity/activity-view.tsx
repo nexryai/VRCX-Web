@@ -4,9 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Activity, MapPin, Search, Trash2, UserMinus, Users, X } from "lucide-react";
 
-import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
-import { ACTIVITY_UPDATED_EVENT, clearActivityLog, deleteActivityEntry, type FriendActivity, readActivityLog } from "@/lib/activity-log";
+import type { FriendActivity } from "@/lib/activity-log";
 
 type ActivityMode = "feed" | "friend-log";
 
@@ -39,22 +38,25 @@ function activityDescription(entry: FriendActivity) {
 }
 
 export function ActivityView({ mode }: { mode: ActivityMode }) {
-    const currentUser = useCurrentUser();
     const { openUser } = useFriends();
     const [entries, setEntries] = useState<FriendActivity[]>([]);
     const [search, setSearch] = useState("");
     const [typeFilter, setTypeFilter] = useState("all");
     const [confirmClear, setConfirmClear] = useState(false);
 
-    const reload = useCallback(() => setEntries(readActivityLog(currentUser.id)), [currentUser.id]);
+    const reload = useCallback(async () => {
+        const response = await fetch("/api/activity?limit=2000", { cache: "no-store" });
+        const payload = (await response.json()) as { entries?: FriendActivity[]; error?: string };
+        if (response.status === 401) {
+            window.location.assign("/login");
+            return;
+        }
+        if (response.ok && payload.entries) setEntries(payload.entries);
+    }, []);
     useEffect(() => {
-        reload();
-        window.addEventListener(ACTIVITY_UPDATED_EVENT, reload);
-        window.addEventListener("storage", reload);
-        return () => {
-            window.removeEventListener(ACTIVITY_UPDATED_EVENT, reload);
-            window.removeEventListener("storage", reload);
-        };
+        void reload();
+        const interval = window.setInterval(() => void reload(), 30_000);
+        return () => window.clearInterval(interval);
     }, [reload]);
 
     const allowedTypes = modeTypes[mode];
@@ -67,15 +69,15 @@ export function ActivityView({ mode }: { mode: ActivityMode }) {
         });
     }, [allowedTypes, entries, search, typeFilter]);
 
-    function removeEntry(entryId: string) {
-        deleteActivityEntry(currentUser.id, entryId);
-        reload();
+    async function removeEntry(entryId: string) {
+        await fetch("/api/activity", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: entryId }) });
+        await reload();
     }
 
-    function clearEntries() {
-        clearActivityLog(currentUser.id);
+    async function clearEntries() {
+        await fetch("/api/activity", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) });
         setConfirmClear(false);
-        reload();
+        await reload();
     }
 
     const title = mode === "feed" ? "Feed" : "Friend Log";
@@ -99,7 +101,7 @@ export function ActivityView({ mode }: { mode: ActivityMode }) {
                         <button type="button" onClick={() => setConfirmClear(false)} className="inline-flex size-9 items-center justify-center rounded-md bg-secondary" aria-label="Cancel clear">
                             <X aria-hidden="true" className="size-4" />
                         </button>
-                        <button type="button" onClick={clearEntries} className="h-9 rounded-md bg-destructive px-3 text-xs text-white">
+                        <button type="button" onClick={() => void clearEntries()} className="h-9 rounded-md bg-destructive px-3 text-xs text-white">
                             Clear history
                         </button>
                     </span>
@@ -122,12 +124,12 @@ export function ActivityView({ mode }: { mode: ActivityMode }) {
                 {!filtered.length ? (
                     <div className="flex min-h-64 flex-col items-center justify-center gap-2 text-center text-muted-foreground">
                         {mode === "feed" ? <MapPin aria-hidden="true" className="size-8" /> : <UserMinus aria-hidden="true" className="size-8" />}
-                        <p className="max-w-md text-sm">Events appear after the browser observes a change during periodic VRChat API refreshes.</p>
+                        <p className="max-w-md text-sm">Events appear as the server continuously observes changes through the VRChat APIs.</p>
                     </div>
                 ) : null}
                 <div className="space-y-2 md:hidden">
                     {filtered.map((entry) => (
-                        <ActivityCard key={entry.id} entry={entry} onOpen={() => openUser(entry.userId)} onDelete={() => removeEntry(entry.id)} />
+                        <ActivityCard key={entry.id} entry={entry} onOpen={() => openUser(entry.userId)} onDelete={() => void removeEntry(entry.id)} />
                     ))}
                 </div>
                 {filtered.length ? (
@@ -156,7 +158,7 @@ export function ActivityView({ mode }: { mode: ActivityMode }) {
                                         </td>
                                         <td className="border-t border-border px-3 py-2 text-muted-foreground">{activityDescription(entry)}</td>
                                         <td className="border-t border-border px-3 py-2">
-                                            <button type="button" onClick={() => removeEntry(entry.id)} className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Delete event">
+                                            <button type="button" onClick={() => void removeEntry(entry.id)} className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Delete event">
                                                 <Trash2 aria-hidden="true" className="size-3.5" />
                                             </button>
                                         </td>

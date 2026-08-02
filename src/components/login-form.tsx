@@ -87,8 +87,8 @@ export function LoginForm({ initialSession }: { initialSession: SessionSnapshot 
                 <div className="mb-4 flex items-center justify-center gap-3">
                     <Image src="/vrcx.png" alt="VRCX" width={44} height={44} className="rounded-xl shadow-lg" priority />
                     <div>
-                        <p className="text-lg font-bold leading-tight">VRCX Web</p>
-                        <p className="text-xs text-muted-foreground">Browser port</p>
+                        <p className="text-lg font-bold leading-tight">VRCX</p>
+                        <p className="text-xs text-muted-foreground">Next.js port</p>
                     </div>
                 </div>
                 <section className="rounded-xl border border-border bg-card p-5 shadow-xl sm:p-6" aria-labelledby="login-heading">
@@ -196,7 +196,7 @@ export function LoginForm({ initialSession }: { initialSession: SessionSnapshot 
                     </p>
                     <p>© 2019–2026 pypy and individual VRCX contributors.</p>
                     <p>VRCX is not endorsed by VRChat Inc. or any of its affiliates.</p>
-                    <p>Your credentials are sent directly to VRChat through this server and are not saved.</p>
+                    <p>Your password is not saved. The resulting VRChat session is encrypted in MongoDB for continuous monitoring.</p>
                 </div>
             </div>
         </main>

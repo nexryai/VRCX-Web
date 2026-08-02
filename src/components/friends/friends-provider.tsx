@@ -2,10 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-import { captureFriendActivity } from "@/lib/activity-log";
 import { fetchAllFriends } from "@/lib/friends-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
-import { useCurrentUser } from "../current-user-provider";
 import { UserDialog } from "./user-dialog";
 
 type FriendsContextValue = {
@@ -21,7 +19,6 @@ type FriendsContextValue = {
 const FriendsContext = createContext<FriendsContextValue | null>(null);
 
 export function FriendsProvider({ children }: { children: React.ReactNode }) {
-    const currentUser = useCurrentUser();
     const [friends, setFriends] = useState<VrchatUser[]>([]);
     const [allFriends, setAllFriends] = useState<VrchatUser[]>([]);
     const [loading, setLoading] = useState(true);
@@ -29,7 +26,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const [selectedUserId, setSelectedUserId] = useState("");
     const controllerRef = useRef<AbortController | null>(null);
 
-    const refresh = useCallback(async () => {
+    const load = useCallback(async (reconcile: boolean) => {
         controllerRef.current?.abort();
         const nextController = new AbortController();
         controllerRef.current = nextController;
@@ -37,19 +34,30 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         setError("");
 
         try {
+            if (reconcile) {
+                const reconciliation = await fetch("/api/monitor/reconcile", { method: "POST", signal: nextController.signal });
+                if (reconciliation.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!reconciliation.ok) {
+                    const payload = (await reconciliation.json()) as { error?: string };
+                    throw new Error(payload.error || "VRChat state could not be refreshed.");
+                }
+            }
             const [online, offline] = await Promise.all([fetchAllFriends(false, nextController.signal), fetchAllFriends(true, nextController.signal)]);
             const onlineIds = new Set(online.map((friend) => friend.id));
             const combined = [...online, ...offline.filter((friend) => !onlineIds.has(friend.id))];
             setFriends(online);
             setAllFriends(combined);
-            captureFriendActivity(currentUser.id, combined, online);
         } catch (refreshError) {
             if (refreshError instanceof DOMException && refreshError.name === "AbortError") return;
             setError(refreshError instanceof Error ? refreshError.message : "The friend list could not be loaded.");
         } finally {
             if (!nextController.signal.aborted) setLoading(false);
         }
-    }, [currentUser.id]);
+    }, []);
+    const refresh = useCallback(() => load(true), [load]);
 
     const openUser = useCallback((userId: string) => setSelectedUserId(userId), []);
     const closeUser = useCallback(() => setSelectedUserId(""), []);
@@ -60,12 +68,14 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         void refresh();
-        const interval = window.setInterval(() => void refresh(), 120_000);
+        // This timer only refreshes the rendered MongoDB projection. Durable
+        // VRChat observation is owned by the server monitor.
+        const interval = window.setInterval(() => void load(false), 30_000);
         return () => {
             window.clearInterval(interval);
             controllerRef.current?.abort();
         };
-    }, [refresh]);
+    }, [load, refresh]);
 
     const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, openUser, removeFriend }), [friends, allFriends, loading, error, refresh, openUser, removeFriend]);
     return (

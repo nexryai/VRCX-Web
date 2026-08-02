@@ -1,14 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { VrchatApiError } from "@/lib/vrchat/client";
-import { clearVrchatCookies, fetchVrchatSession, readVrchatCookies } from "@/lib/vrchat/session";
+import { clearLegacyVrchatCookies, fetchVrchatSession } from "@/lib/vrchat/session";
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
     try {
-        const session = await fetchVrchatSession(readVrchatCookies(request.cookies));
+        const session = await fetchVrchatSession();
         const response = NextResponse.json(session);
         if (session.status === "anonymous") {
-            clearVrchatCookies(response);
+            clearLegacyVrchatCookies(response);
         }
         response.headers.set("Cache-Control", "no-store");
         return response;

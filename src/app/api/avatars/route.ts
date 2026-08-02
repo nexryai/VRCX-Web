@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
-import { applyVrchatCookies, clearVrchatCookies, readVrchatCookies } from "@/lib/vrchat/session";
+import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema } from "@/lib/vrchat/types";
 
 const querySchema = z.object({
@@ -14,10 +14,8 @@ export async function GET(request: NextRequest) {
     const query = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
     if (!query.success) return NextResponse.json({ error: "The avatar query is invalid." }, { status: 400 });
 
-    const cookies = readVrchatCookies(request.cookies);
-    if (!cookies.auth) return NextResponse.json({ error: "Sign in to view avatars." }, { status: 401 });
-
     try {
+        const cookies = await requireVrchatCookies();
         const upstream = await requestVrchat<unknown>("avatars", {
             cookies,
             query: {
@@ -30,14 +28,14 @@ export async function GET(request: NextRequest) {
             },
         });
         const response = NextResponse.json({ avatars: z.array(vrchatAvatarSchema).parse(upstream.data) });
-        applyVrchatCookies(response, upstream.cookies);
+        await persistRotatedVrchatCookies(upstream.cookies);
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {
         const message = error instanceof VrchatApiError ? error.message : "The VRChat avatar response was not valid.";
         const status = error instanceof VrchatApiError ? error.status : 502;
         const response = NextResponse.json({ error: message }, { status });
-        if (status === 401) clearVrchatCookies(response);
+        if (status === 401) await clearVrchatSession();
         return response;
     }
 }

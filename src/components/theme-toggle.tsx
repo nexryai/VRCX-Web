@@ -8,16 +8,22 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
     const [theme, setTheme] = useState<"dark" | "light">("dark");
 
     useEffect(() => {
-        const saved = window.localStorage.getItem("vrcx-theme");
-        const nextTheme = saved === "light" || saved === "dark" ? saved : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        document.documentElement.dataset.theme = nextTheme;
-        setTheme(nextTheme);
+        const controller = new AbortController();
+        void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
+            .then((response) => response.json() as Promise<{ theme?: "dark" | "light" }>)
+            .then((settings) => {
+                const nextTheme = settings.theme === "light" ? "light" : "dark";
+                document.documentElement.dataset.theme = nextTheme;
+                setTheme(nextTheme);
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
     }, []);
 
     function toggleTheme() {
         const nextTheme = theme === "dark" ? "light" : "dark";
         document.documentElement.dataset.theme = nextTheme;
-        window.localStorage.setItem("vrcx-theme", nextTheme);
+        void fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: nextTheme }) });
         setTheme(nextTheme);
     }
 

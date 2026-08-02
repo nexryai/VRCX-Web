@@ -51,8 +51,14 @@ export function MyAvatarsView() {
     const controllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
-        const saved = window.localStorage.getItem("vrcx-my-avatars-view");
-        if (saved === "grid" || saved === "table") setViewMode(saved);
+        const controller = new AbortController();
+        void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
+            .then((response) => response.json() as Promise<{ myAvatarsView?: ViewMode }>)
+            .then((settings) => {
+                if (settings.myAvatarsView === "grid" || settings.myAvatarsView === "table") setViewMode(settings.myAvatarsView);
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
     }, []);
 
     const loadAvatars = useCallback(async () => {
@@ -93,7 +99,7 @@ export function MyAvatarsView() {
 
     function changeView(mode: ViewMode) {
         setViewMode(mode);
-        window.localStorage.setItem("vrcx-my-avatars-view", mode);
+        void fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ myAvatarsView: mode }) });
     }
 
     async function runAction(avatar: VrchatAvatar, action: ConfirmAction) {

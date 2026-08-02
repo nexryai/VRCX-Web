@@ -12,28 +12,6 @@ import type { VrchatUser } from "@/lib/vrchat/types";
 
 const VISUAL_NODE_LIMIT = 80;
 
-function graphKey(userId: string) {
-    return `vrcx-web:mutual-graph:${userId}`;
-}
-
-function readSnapshot(userId: string): MutualGraphSnapshot | null {
-    try {
-        const value = window.localStorage.getItem(graphKey(userId));
-        return value ? (JSON.parse(value) as MutualGraphSnapshot) : null;
-    } catch {
-        return null;
-    }
-}
-
-function saveSnapshot(userId: string, snapshot: MutualGraphSnapshot) {
-    try {
-        window.localStorage.setItem(graphKey(userId), JSON.stringify(snapshot));
-        return true;
-    } catch {
-        return false;
-    }
-}
-
 function delay(milliseconds: number) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
@@ -66,9 +44,16 @@ export function MutualFriendsView() {
     const controllerRef = useRef<AbortController | null>(null);
 
     useEffect(() => {
-        setSnapshot(readSnapshot(currentUser.id));
-        return () => controllerRef.current?.abort();
-    }, [currentUser.id]);
+        const controller = new AbortController();
+        void fetch("/api/mutual-graph", { cache: "no-store", signal: controller.signal })
+            .then((response) => response.json() as Promise<{ snapshot?: MutualGraphSnapshot | null }>)
+            .then((payload) => setSnapshot(payload.snapshot || null))
+            .catch(() => undefined);
+        return () => {
+            controller.abort();
+            controllerRef.current?.abort();
+        };
+    }, []);
 
     const friendById = useMemo(() => new Map(allFriends.map((friend) => [friend.id, friend])), [allFriends]);
     const edges = useMemo(() => buildMutualEdges(snapshot?.relationships || {}), [snapshot]);
@@ -113,7 +98,8 @@ export function MutualFriendsView() {
             }
             const next = { relationships, optedOut, updatedAt: new Date().toISOString() };
             setSnapshot(next);
-            if (!saveSnapshot(currentUser.id, next)) setCacheNotice("The graph is ready, but this browser could not persist the full snapshot.");
+            const saveResponse = await fetch("/api/mutual-graph", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(next), signal: controller.signal });
+            if (!saveResponse.ok) setCacheNotice("The graph is ready, but MongoDB could not persist the full snapshot.");
         } catch (fetchError) {
             if (!(fetchError instanceof DOMException && fetchError.name === "AbortError")) setError(fetchError instanceof Error ? fetchError.message : "The mutual graph could not be loaded.");
         } finally {
