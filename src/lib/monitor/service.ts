@@ -9,11 +9,11 @@ import { applyPipelineNotificationState, upsertPipelineNotification } from "@/li
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { vrchatNotificationSchema } from "@/lib/vrchat/types";
 import { applyPipelineFriendEvent, isPipelineFriendEventType } from "./friend-events";
-import { acquireMonitorLease, updateMonitorHealth } from "./lease";
+import { acquireMonitorLease, advanceMonitorPipelineCursor, prepareMonitorIdentity, updateMonitorHealth } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
 import { reconcileRemoteState } from "./reconcile";
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 const PIPELINE_URL = "wss://pipeline.vrchat.cloud/";
 const LEASE_RENEWAL_MS = 20_000;
@@ -95,12 +95,15 @@ export class AlwaysOnMonitor {
     }
 
     private async loadSessionAndStart(stored: NonNullable<Awaited<ReturnType<typeof getStoredVrchatSession>>>) {
+        if (!stored.activeUserId) return;
         // Account replacement and lease reacquisition both require a fresh
         // baseline before accepting realtime events from a new socket.
         this.disconnect();
         this.cookies = stored.cookies;
-        this.ownerId = stored.activeUserId;
-        await this.safeHealth({ ownerId: this.ownerId, status: "starting", pipelineConnected: false, lastError: "" });
+        const ownerId = stored.activeUserId;
+        this.ownerId = ownerId;
+        await prepareMonitorIdentity(this.leaderId, ownerId);
+        await this.safeHealth({ ownerId, status: "starting", pipelineConnected: false, lastError: "" });
         const priorReconciliation = this.reconciliationPromise;
         if (priorReconciliation) await priorReconciliation;
         await this.reconcile();
@@ -116,13 +119,14 @@ export class AlwaysOnMonitor {
         const cookies = this.cookies;
         const ownerId = this.ownerId;
         const generation = this.pipelineGeneration;
-        const reconciliation = this.performReconciliation(cookies, ownerId, generation);
+        const reconciliation = this.pipelineTail.then(() => this.performReconciliation(cookies, ownerId, generation));
         const tracked = reconciliation.finally(() => {
             if (this.reconciliationPromise === tracked) {
                 this.reconciliationPromise = undefined;
             }
         });
         this.reconciliationPromise = tracked;
+        this.pipelineTail = tracked.catch(() => undefined);
         return tracked;
     }
 
@@ -208,10 +212,21 @@ export class AlwaysOnMonitor {
         }
 
         const now = receivedAt;
-        await this.safeHealth({ status: "healthy", pipelineConnected: true, lastPipelineEventAt: now });
+        await this.safeHealth({ status: "healthy", pipelineConnected: true });
         if (generation !== this.pipelineGeneration || ownerId !== this.ownerId || !this.hasLeadership) return;
+        await this.applyPipelineEvent(envelope.data.type, parsedContent, now, generation, ownerId);
+        if (generation !== this.pipelineGeneration || ownerId !== this.ownerId || !this.hasLeadership) return;
+        await advanceMonitorPipelineCursor(this.leaderId, {
+            ownerId,
+            key: createHash("sha256").update(`${ownerId}\u0000${envelope.data.type}\u0000${raw}`).digest("hex"),
+            type: envelope.data.type,
+            observedAt: now,
+        });
+    }
+
+    private async applyPipelineEvent(type: string, parsedContent: unknown, now: Date, generation: number, ownerId: string) {
         const content = z.record(z.string(), z.unknown()).safeParse(parsedContent);
-        if (envelope.data.type === "user-location" && content.success && content.data.userId === ownerId) {
+        if (type === "user-location" && content.success && content.data.userId === ownerId) {
             const location = typeof content.data.location === "string" ? content.data.location : undefined;
             await observeGameSession({ ownerId, location, observedAt: now, provenance: "pipeline" });
             const expectedAuthCookie = this.cookies?.auth;
@@ -223,42 +238,42 @@ export class AlwaysOnMonitor {
             return;
         }
 
-        if (this.ownerId && content.success && (envelope.data.type === "notification" || envelope.data.type === "notification-v2")) {
+        if (this.ownerId && content.success && (type === "notification" || type === "notification-v2")) {
             const notification = vrchatNotificationSchema.safeParse(content.data);
             if (notification.success) {
-                await upsertPipelineNotification(this.ownerId, envelope.data.type === "notification-v2" ? "v2" : "legacy", notification.data, now);
+                await upsertPipelineNotification(this.ownerId, type === "notification-v2" ? "v2" : "legacy", notification.data, now);
             }
             return;
         }
 
-        if (this.ownerId && content.success && envelope.data.type === "notification-v2-delete") {
+        if (this.ownerId && content.success && type === "notification-v2-delete") {
             const ids = z.array(z.string()).safeParse(content.data.ids);
             if (ids.success) await applyPipelineNotificationState(this.ownerId, ids.data, "v2", "hidden", now);
             return;
         }
 
-        if (this.ownerId && envelope.data.type === "see-notification") {
+        if (this.ownerId && type === "see-notification") {
             const id = typeof parsedContent === "string" ? parsedContent : content.success && typeof content.data.id === "string" ? content.data.id : undefined;
             if (id) await applyPipelineNotificationState(this.ownerId, [id], "legacy", "seen", now);
             return;
         }
 
-        if (this.ownerId && envelope.data.type === "hide-notification") {
+        if (this.ownerId && type === "hide-notification") {
             const id = typeof parsedContent === "string" ? parsedContent : content.success && typeof content.data.id === "string" ? content.data.id : undefined;
             if (id) await applyPipelineNotificationState(this.ownerId, [id], "legacy", "hidden", now);
             return;
         }
 
-        if (this.ownerId && content.success && envelope.data.type === "response-notification" && typeof content.data.notificationId === "string") {
+        if (this.ownerId && content.success && type === "response-notification" && typeof content.data.notificationId === "string") {
             await applyPipelineNotificationState(this.ownerId, [content.data.notificationId], "legacy", "hidden", now);
             return;
         }
 
-        if (this.ownerId && content.success && isPipelineFriendEventType(envelope.data.type)) {
-            if (await applyPipelineFriendEvent(this.ownerId, envelope.data.type, content.data, now)) return;
+        if (this.ownerId && content.success && isPipelineFriendEventType(type)) {
+            if (await applyPipelineFriendEvent(this.ownerId, type, content.data, now)) return;
         }
 
-        if (envelope.data.type.startsWith("friend-") || envelope.data.type.startsWith("group-") || envelope.data.type === "notification-v2-update" || envelope.data.type === "user-update") {
+        if (type.startsWith("friend-") || type.startsWith("group-") || type === "notification-v2-update" || type === "user-update") {
             // Reconciliation applies the same typed projection path and
             // deduplicates results, while coalescing noisy Pipeline bursts.
             void this.reconcile();

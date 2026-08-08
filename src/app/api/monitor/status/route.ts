@@ -7,11 +7,17 @@ import { getVrchatRateLimitSnapshot } from "@/lib/vrchat/rate-limit";
 
 export async function GET() {
     await ensureMongoSchema();
-    const state = await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }, { projection: { leaderId: 0 } });
+    const state = await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }, { projection: { leaderId: 0, lastPipelineEventKey: 0 } });
     const rateLimit = getVrchatRateLimitSnapshot();
     const response = NextResponse.json({
         status: state?.status ?? "idle",
         pipelineConnected: state?.pipelineConnected ?? false,
+        pipelineCursor: state
+            ? {
+                  sequence: state.pipelineSequence,
+                  type: state.lastPipelineEventType,
+              }
+            : undefined,
         lastPipelineEventAt: state?.lastPipelineEventAt?.toISOString(),
         lastReconciledAt: state?.lastReconciledAt?.toISOString(),
         lastError: state?.lastError || undefined,

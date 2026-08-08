@@ -1,6 +1,9 @@
 import { MongoMemoryServer } from "mongodb-memory-server";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
+import type { FriendActivity } from "@/lib/activity-log";
+import type { FriendSnapshotDocument } from "./collections";
+
 let server: MongoMemoryServer;
 
 beforeAll(async () => {
@@ -19,13 +22,14 @@ afterAll(async () => {
 describe("MongoDB application repositories", () => {
     test("runs versioned migrations idempotently and creates required indexes", async () => {
         const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
         const { ensureMongoSchema } = await import("./migrations");
         await ensureMongoSchema();
         await ensureMongoSchema();
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
         expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -48,6 +52,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
+        expect(await collections(database).monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
     });
 
     test("stores encrypted session material and isolates cached users by owner", async () => {
@@ -58,10 +63,12 @@ describe("MongoDB application repositories", () => {
         const user = { id: ownerId, displayName: "Mongo User" };
 
         await saveAuthenticatedVrchatSession({ auth: "auth-cookie", twoFactorAuth: "two-factor-cookie" }, ownerId);
-        await upsertCachedUser(ownerId, user, "auth");
+        await upsertCachedUser(ownerId, user, "auth", new Date("2026-08-02T08:00:00.000Z"));
+        await upsertCachedUser(ownerId, { ...user, displayName: "Fresh Mongo User" }, "friends", new Date("2026-08-02T08:10:00.000Z"));
+        await upsertCachedUser(ownerId, { ...user, displayName: "Stale Mongo User" }, "friends", new Date("2026-08-02T08:05:00.000Z"));
 
         expect(await getStoredVrchatSession()).toMatchObject({ status: "authenticated", activeUserId: ownerId, cookies: { auth: "auth-cookie", twoFactorAuth: "two-factor-cookie" } });
-        expect(await getCachedUser(ownerId, ownerId)).toMatchObject(user);
+        expect(await getCachedUser(ownerId, ownerId)).toMatchObject({ ...user, displayName: "Fresh Mongo User" });
         expect(await getCachedUser(otherOwnerId, ownerId)).toBeNull();
     });
 
@@ -97,15 +104,20 @@ describe("MongoDB application repositories", () => {
 
     test("rejects stale cookie rotation after an active-account replacement", async () => {
         const { clearStoredVrchatSession, getStoredVrchatSession, saveAuthenticatedVrchatSession, updateStoredVrchatCookies } = await import("./session-repository");
+        const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
         const firstOwnerId = "usr_00000000-0000-0000-0000-000000000010";
         const secondOwnerId = "usr_00000000-0000-0000-0000-000000000011";
         await saveAuthenticatedVrchatSession({ auth: "first-auth" }, firstOwnerId);
+        await collections(await getMongoDatabase()).monitorState.updateOne({ _id: "singleton" }, { $set: { ownerId: firstOwnerId, pipelineSequence: 7, lastPipelineEventKey: "first-event", lastPipelineEventType: "friend-online", lastPipelineEventAt: new Date() } });
         await saveAuthenticatedVrchatSession({ auth: "second-auth" }, secondOwnerId);
 
         expect(await updateStoredVrchatCookies({ twoFactorAuth: "stale-cookie" }, { activeUserId: firstOwnerId, authCookie: "first-auth" })).toBe(false);
         expect(await clearStoredVrchatSession({ activeUserId: firstOwnerId, authCookie: "first-auth" })).toBe(false);
         expect(await getStoredVrchatSession()).toMatchObject({ activeUserId: secondOwnerId, cookies: { auth: "second-auth" } });
         expect((await getStoredVrchatSession())?.cookies.twoFactorAuth).toBeUndefined();
+        expect(await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" })).toMatchObject({ ownerId: secondOwnerId, pipelineSequence: 0, status: "starting", pipelineConnected: false });
+        expect((await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }))?.lastPipelineEventKey).toBeUndefined();
     });
 
     test("serializes reconciliation across server processes", async () => {
@@ -119,12 +131,23 @@ describe("MongoDB application repositories", () => {
     });
 
     test("allows monitor leadership only after the previous lease expires", async () => {
-        const { acquireMonitorLease } = await import("@/lib/monitor/lease");
-        const firstTick = new Date("2026-08-02T10:00:00.000Z");
+        const { acquireMonitorLease, advanceMonitorPipelineCursor, prepareMonitorIdentity, updateMonitorHealth } = await import("@/lib/monitor/lease");
+        const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
+        const firstTick = new Date();
         expect(await acquireMonitorLease("monitor-a", firstTick)).toBe(true);
         expect(await acquireMonitorLease("monitor-b", firstTick)).toBe(false);
+        const monitorState = collections(await getMongoDatabase()).monitorState;
+        await monitorState.updateOne({ _id: "singleton" }, { $set: { ownerId: "usr_previous", pipelineSequence: 9, lastPipelineEventKey: "previous-event" } });
+        await prepareMonitorIdentity("monitor-a", "usr_00000000-0000-0000-0000-000000000001");
+        expect(await monitorState.findOne({ _id: "singleton" })).toMatchObject({ ownerId: "usr_00000000-0000-0000-0000-000000000001", pipelineSequence: 0 });
+        expect((await monitorState.findOne({ _id: "singleton" }))?.lastPipelineEventKey).toBeUndefined();
+        await updateMonitorHealth("monitor-a", { ownerId: "usr_00000000-0000-0000-0000-000000000001" });
+        expect(await advanceMonitorPipelineCursor("monitor-a", { ownerId: "usr_00000000-0000-0000-0000-000000000001", key: "event-key", type: "friend-online", observedAt: new Date(firstTick.getTime() + 1_000) })).toBe(true);
+        expect(await monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 1, lastPipelineEventKey: "event-key", lastPipelineEventType: "friend-online" });
         expect(await acquireMonitorLease("monitor-b", new Date(firstTick.getTime() + 60_001))).toBe(true);
         expect(await acquireMonitorLease("monitor-a", new Date(firstTick.getTime() + 60_002))).toBe(false);
+        expect(await advanceMonitorPipelineCursor("monitor-a", { ownerId: "usr_00000000-0000-0000-0000-000000000001", key: "stale-key", type: "friend-offline", observedAt: new Date(firstTick.getTime() + 63_000) })).toBe(false);
     });
 
     test("keeps notification history while updating the active projection", async () => {
@@ -302,6 +325,7 @@ describe("MongoDB application repositories", () => {
 
         expect(await applyPipelineFriendEvent(ownerId, "friend-add", { userId: friendId, user: { id: friendId, displayName: "Pipeline Friend", state: "online", location: "wrld_00000000-0000-0000-0000-000000000010:11111" } }, addedAt)).toBe(true);
         expect(await applyPipelineFriendEvent(ownerId, "friend-location", { userId: friendId, location: "wrld_00000000-0000-0000-0000-000000000011:22222" }, movedAt)).toBe(true);
+        expect(await applyPipelineFriendEvent(ownerId, "friend-location", { userId: friendId, location: "wrld_00000000-0000-0000-0000-000000000011:22222" }, movedAt)).toBe(true);
         expect(await applyPipelineFriendEvent(ownerId, "friend-offline", { userId: friendId }, offlineAt)).toBe(true);
         expect(await applyPipelineFriendEvent(ownerId, "friend-online", { userId: friendId, location: "wrld_00000000-0000-0000-0000-000000000010:stale" }, movedAt)).toBe(true);
 
@@ -309,10 +333,47 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("friend_snapshots").findOne({ ownerId, friendId })).toMatchObject({ online: false, user: { state: "offline" }, updatedAt: offlineAt });
         const activity = await database.collection("activity_events").find({ ownerId }).toArray();
         expect(activity.map((event) => event.type)).toEqual(expect.arrayContaining(["Friend", "GPS", "Offline"]));
+        expect(activity.filter((event) => event.type === "GPS")).toHaveLength(1);
         expect(activity.every((event) => event.provenance === "pipeline")).toBe(true);
 
         expect(await applyPipelineFriendEvent(ownerId, "friend-delete", { userId: friendId }, new Date("2026-08-02T13:15:00.000Z"))).toBe(true);
         expect(await database.collection("friend_snapshots").findOne({ ownerId, friendId })).toBeNull();
         expect(await database.collection("activity_events").findOne({ ownerId, type: "Unfriend" })).not.toBeNull();
+    });
+
+    test("deduplicates interrupted friend transitions across Pipeline and reconciliation", async () => {
+        const { persistActivityTransitions } = await import("@/lib/monitor/activity-events");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000091";
+        const friendId = "usr_00000000-0000-0000-0000-000000000092";
+        const initialFriend: FriendActivity = { id: "initial", type: "Friend", userId: friendId, displayName: "Retry Friend", createdAt: "2026-08-02T15:00:00.000Z" };
+
+        await persistActivityTransitions({ ownerId, events: [initialFriend], previousDocuments: [], observedAt: new Date("2026-08-02T15:00:00.000Z"), provenance: "pipeline" });
+        await persistActivityTransitions({ ownerId, events: [{ ...initialFriend, id: "reconciled", createdAt: "2026-08-02T15:00:10.000Z" }], previousDocuments: [], observedAt: new Date("2026-08-02T15:00:10.000Z"), provenance: "reconciliation" });
+
+        const previous: FriendSnapshotDocument = {
+            _id: `${ownerId}:${friendId}`,
+            ownerId,
+            friendId,
+            online: true,
+            user: { id: friendId, displayName: "Retry Friend", state: "online", location: "wrld_00000000-0000-0000-0000-000000000010:11111" },
+            observedAt: new Date("2026-08-02T15:00:00.000Z"),
+            updatedAt: new Date("2026-08-02T15:00:00.000Z"),
+        };
+        const moved: FriendActivity = { id: "move", type: "GPS", userId: friendId, displayName: "Retry Friend", previous: "wrld_00000000-0000-0000-0000-000000000010:11111", current: "wrld_00000000-0000-0000-0000-000000000011:22222", createdAt: "2026-08-02T15:05:00.000Z" };
+        await persistActivityTransitions({ ownerId, events: [moved], previousDocuments: [previous], observedAt: new Date(moved.createdAt), provenance: "pipeline" });
+        await persistActivityTransitions({ ownerId, events: [{ ...moved, id: "move-retry", createdAt: "2026-08-02T15:05:10.000Z" }], previousDocuments: [previous], observedAt: new Date("2026-08-02T15:05:10.000Z"), provenance: "reconciliation" });
+
+        const database = await getMongoDatabase();
+        expect(await database.collection("activity_events").countDocuments({ ownerId, type: "Friend" })).toBe(1);
+        expect(await database.collection("activity_events").countDocuments({ ownerId, type: "GPS" })).toBe(1);
+        expect(await database.collection("activity_events").findOne({ ownerId, type: "GPS" })).toMatchObject({ provenance: "pipeline", observedAt: new Date("2026-08-02T15:05:00.000Z") });
+
+        const unfriended: FriendActivity = { id: "unfriend", type: "Unfriend", userId: friendId, displayName: "Retry Friend", createdAt: "2026-08-02T15:10:00.000Z" };
+        await persistActivityTransitions({ ownerId, events: [unfriended], previousDocuments: [previous], observedAt: new Date(unfriended.createdAt), provenance: "pipeline" });
+        const readded: FriendActivity = { ...initialFriend, id: "readded", createdAt: "2026-08-02T15:15:00.000Z" };
+        await persistActivityTransitions({ ownerId, events: [readded], previousDocuments: [], observedAt: new Date(readded.createdAt), provenance: "pipeline" });
+        await persistActivityTransitions({ ownerId, events: [{ ...readded, id: "readded-retry", createdAt: "2026-08-02T15:15:10.000Z" }], previousDocuments: [], observedAt: new Date("2026-08-02T15:15:10.000Z"), provenance: "reconciliation" });
+        expect(await database.collection("activity_events").countDocuments({ ownerId, type: "Friend" })).toBe(2);
     });
 });

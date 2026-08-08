@@ -8,37 +8,32 @@ import { ensureMongoSchema } from "./migrations";
 type UserSource = UserDocument["source"];
 
 export async function upsertCachedUser(ownerId: string, user: VrchatUser, source: UserSource, observedAt = new Date()) {
-    await ensureMongoSchema();
-    const document: UserDocument = {
-        _id: `${ownerId}:${user.id}`,
-        ownerId,
-        userId: user.id,
-        user,
-        source,
-        observedAt,
-        updatedAt: observedAt,
-    };
-    await collections(await getMongoDatabase()).users.updateOne({ _id: document._id }, { $set: document }, { upsert: true });
+    await upsertCachedUsers(ownerId, [user], source, observedAt);
 }
 
 export async function upsertCachedUsers(ownerId: string, users: VrchatUser[], source: UserSource, observedAt = new Date()) {
     if (!users.length) return;
     await ensureMongoSchema();
-    await collections(await getMongoDatabase()).users.bulkWrite(
-        users.map((user) => {
-            const document: UserDocument = {
-                _id: `${ownerId}:${user.id}`,
-                ownerId,
-                userId: user.id,
-                user,
-                source,
-                observedAt,
-                updatedAt: observedAt,
-            };
-            return { updateOne: { filter: { _id: document._id }, update: { $set: document }, upsert: true } };
-        }),
-        { ordered: false },
-    );
+    const collection = collections(await getMongoDatabase()).users;
+    const uniqueUsers = [...new Map(users.map((user) => [user.id, user])).values()];
+    const ids = uniqueUsers.map((user) => `${ownerId}:${user.id}`);
+    const existing = await collection.find({ _id: { $in: ids } }, { projection: { _id: 1, updatedAt: 1 } }).toArray();
+    const existingById = new Map(existing.map((document) => [document._id, document.updatedAt]));
+    const operations = uniqueUsers.flatMap((user) => {
+        const document: UserDocument = {
+            _id: `${ownerId}:${user.id}`,
+            ownerId,
+            userId: user.id,
+            user,
+            source,
+            observedAt,
+            updatedAt: observedAt,
+        };
+        const previousVersion = existingById.get(document._id);
+        if (previousVersion && previousVersion > observedAt) return [];
+        return [{ updateOne: { filter: previousVersion ? { _id: document._id, updatedAt: previousVersion } : { _id: document._id }, update: previousVersion ? { $set: document } : { $setOnInsert: document }, upsert: !previousVersion } }];
+    });
+    if (operations.length) await collection.bulkWrite(operations, { ordered: false });
 }
 
 export async function getCachedUser(ownerId: string, userId: string): Promise<VrchatUser | null> {

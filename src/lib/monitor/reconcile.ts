@@ -5,7 +5,7 @@ import { z } from "zod";
 import { diffFriendSnapshots, toFriendSnapshots } from "@/lib/activity-log";
 import { enrichGameSession, observeGameSession } from "@/lib/game-log/session-repository";
 import { getMongoDatabase } from "@/lib/mongodb/client";
-import { type ActivityEventDocument, collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
+import { collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
 import { replaceGroupMemberships } from "@/lib/mongodb/entity-repository";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { replaceFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection } from "@/lib/mongodb/projection-repository";
@@ -14,16 +14,11 @@ import { upsertCachedUser, upsertCachedUsers } from "@/lib/mongodb/user-reposito
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatGroupSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
+import { persistActivityTransitions } from "./activity-events";
 import { acquireReconciliationLease, releaseReconciliationLease } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
 
-import { createHash, randomUUID } from "node:crypto";
-
-function activityId(ownerId: string, event: { type: string; userId: string; createdAt: string; previous?: string; current?: string }): string {
-    return createHash("sha256")
-        .update(`${ownerId}\u0000${event.type}\u0000${event.userId}\u0000${event.createdAt}\u0000${event.previous ?? ""}\u0000${event.current ?? ""}`)
-        .digest("hex");
-}
+import { randomUUID } from "node:crypto";
 
 async function fetchAllFriends(cookies: VrchatCookies, offline: boolean): Promise<{ users: VrchatUser[]; cookies: VrchatCookies }> {
     const users: VrchatUser[] = [];
@@ -95,6 +90,7 @@ async function fetchFavoriteState(cookies: VrchatCookies): Promise<{ favorites: 
 
 async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwnerId?: string): Promise<{ user: VrchatUser; cookies: VrchatCookies }> {
     await ensureMongoSchema();
+    const reconciliationStartedAt = new Date();
     const currentResponse = await requestVrchat<unknown>("auth/user", { cookies });
     const user = vrchatUserSchema.parse(currentResponse.data);
     if (expectedOwnerId && user.id !== expectedOwnerId) {
@@ -138,9 +134,13 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
     const combined = [...online.users, ...offline.users.filter((friend) => !remotelyPresentIds.has(friend.id))];
     const onlineIds = new Set(online.users.filter((friend) => friend.state !== "active" && friend.state !== "offline").map((friend) => friend.id));
     const c = collections(await getMongoDatabase());
-    const previousDocuments = await c.friendSnapshots.find({ ownerId: user.id }).toArray();
+    const allPreviousDocuments = await c.friendSnapshots.find({ ownerId: user.id }).toArray();
+    const protectedFriendIds = new Set(allPreviousDocuments.filter((document) => document.updatedAt > reconciliationStartedAt).map((document) => document.friendId));
+    const previousDocuments = allPreviousDocuments.filter((document) => !protectedFriendIds.has(document.friendId));
+    const previousByFriendId = new Map(previousDocuments.map((document) => [document.friendId, document]));
+    const reconciledFriends = combined.filter((friend) => !protectedFriendIds.has(friend.id));
     const previous = previousDocuments.flatMap((document) => toFriendSnapshots([document.user], document.online ? new Set([document.friendId]) : new Set()));
-    const current = toFriendSnapshots(combined, onlineIds);
+    const current = toFriendSnapshots(reconciledFriends, onlineIds);
     const observedAt = new Date();
     await Promise.all([
         upsertCachedUser(user.id, user, "auth", observedAt),
@@ -154,7 +154,7 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
         replaceModerationProjection(user.id, favoriteState.moderations, observedAt),
     ]);
     const changes = previous.length ? diffFriendSnapshots(previous, current, observedAt.toISOString()) : [];
-    const snapshotOperations = combined.map((friend) => {
+    const snapshotOperations = reconciledFriends.map((friend) => {
         const document: FriendSnapshotDocument = {
             _id: `${user.id}:${friend.id}`,
             ownerId: user.id,
@@ -164,36 +164,20 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
             observedAt,
             updatedAt: observedAt,
         };
+        const prior = previousByFriendId.get(friend.id);
         return {
             updateOne: {
-                filter: { _id: document._id },
-                update: { $set: document },
-                upsert: true,
+                filter: prior ? { _id: document._id, updatedAt: prior.updatedAt } : { _id: document._id },
+                update: prior ? { $set: document } : { $setOnInsert: document },
+                upsert: !prior,
             },
         };
     });
+    await persistActivityTransitions({ ownerId: user.id, events: changes, previousDocuments, observedAt, provenance: "reconciliation" });
     if (snapshotOperations.length) await c.friendSnapshots.bulkWrite(snapshotOperations, { ordered: false });
 
-    const currentIds = new Set(combined.map((friend) => friend.id));
-    await c.friendSnapshots.deleteMany({ ownerId: user.id, friendId: { $nin: [...currentIds] } });
-    if (changes.length) {
-        const activityOperations = changes.map((event) => {
-            const document: ActivityEventDocument = {
-                _id: activityId(user.id, event),
-                ownerId: user.id,
-                type: event.type,
-                subjectUserId: event.userId,
-                displayName: event.displayName,
-                ...(event.previous !== undefined ? { previous: event.previous } : {}),
-                ...(event.current !== undefined ? { current: event.current } : {}),
-                occurredAt: new Date(event.createdAt),
-                observedAt,
-                provenance: "reconciliation",
-            };
-            return { updateOne: { filter: { _id: document._id }, update: { $setOnInsert: document }, upsert: true } };
-        });
-        await c.activityEvents.bulkWrite(activityOperations, { ordered: false });
-    }
+    const currentIds = new Set(reconciledFriends.map((friend) => friend.id));
+    await c.friendSnapshots.deleteMany({ ownerId: user.id, updatedAt: { $lte: reconciliationStartedAt }, friendId: { $nin: [...currentIds] } });
 
     return { user, cookies: currentCookies };
 }

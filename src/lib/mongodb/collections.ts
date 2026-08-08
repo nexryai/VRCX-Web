@@ -69,6 +69,9 @@ export type MonitorStateDocument = {
     reconciliationLeaseExpiresAt?: Date;
     status: "idle" | "starting" | "healthy" | "reconnecting" | "authentication-required" | "error";
     pipelineConnected: boolean;
+    pipelineSequence: number;
+    lastPipelineEventKey?: string;
+    lastPipelineEventType?: string;
     lastPipelineEventAt?: Date;
     lastReconciledAt?: Date;
     lastError?: string;

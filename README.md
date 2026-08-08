@@ -36,7 +36,7 @@ The final deployment requires:
 - outbound access to the approved VRChat API and realtime endpoints;
 - a trusted private network, preferably behind HTTPS.
 
-One monitor leader owns the active VRChat session, realtime connection, background reconciliation, and retention jobs. MongoDB-backed leadership prevents duplicate monitoring if more than one application process exists.
+One monitor leader owns the active VRChat session, realtime connection, background reconciliation, and retention jobs. MongoDB-backed leadership prevents duplicate monitoring if more than one application process exists. Pipeline events and scheduled reconciliation are serialized through the leader, normalized history is written before current-state projections advance, and a MongoDB commit sequence records only successfully processed events. Because VRChat Pipeline has no replayable durable cursor, startup and reconnect recovery always reconcile authoritative HTTP snapshots before resuming realtime monitoring.
 
 ## Security Boundary
 

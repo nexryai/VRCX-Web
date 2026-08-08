@@ -295,6 +295,13 @@ const migrations: Migration[] = [
             await Promise.all([c.entityMemos.createIndex({ ownerId: 1, entityType: 1, entityId: 1 }, { unique: true, name: "owner_type_entity_unique" }), c.entityMemos.createIndex({ ownerId: 1, entityType: 1, updatedAt: -1 }, { name: "owner_type_updated" })]);
         },
     },
+    {
+        version: 22,
+        name: "add-monitor-pipeline-cursor",
+        async apply(c) {
+            await c.monitorState.updateOne({ _id: "singleton", pipelineSequence: { $exists: false } }, { $set: { pipelineSequence: 0, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

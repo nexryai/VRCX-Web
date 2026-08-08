@@ -74,7 +74,8 @@ export async function saveAuthenticatedVrchatSession(cookies: VrchatCookies, use
     const c = collections(await getMongoDatabase());
     const now = new Date();
     const previous = await c.appSettings.findOne({ _id: "singleton" }, { projection: { activeUserId: 1 } });
-    if (previous?.activeUserId && previous.activeUserId !== userId) {
+    const identityChanged = previous?.activeUserId !== userId;
+    if (previous?.activeUserId && identityChanged) {
         await c.gameSessions.updateMany(
             { ownerId: previous.activeUserId, current: true },
             {
@@ -106,6 +107,17 @@ export async function saveAuthenticatedVrchatSession(cookies: VrchatCookies, use
             { upsert: true },
         ),
         c.appSettings.updateOne({ _id: "singleton" }, { $set: { activeUserId: userId, updatedAt: now } }),
+        ...(identityChanged
+            ? [
+                  c.monitorState.updateOne(
+                      { _id: "singleton" },
+                      {
+                          $set: { ownerId: userId, pipelineSequence: 0, status: "starting", pipelineConnected: false, updatedAt: now },
+                          $unset: { lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastError: "" },
+                      },
+                  ),
+              ]
+            : []),
     ]);
 }
 
@@ -160,9 +172,10 @@ export async function clearStoredVrchatSession(expected: { activeUserId?: string
                 $set: {
                     status: "authentication-required",
                     pipelineConnected: false,
+                    pipelineSequence: 0,
                     updatedAt: new Date(),
                 },
-                $unset: { ownerId: "", lastError: "" },
+                $unset: { ownerId: "", lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastError: "" },
             },
         ),
     ]);

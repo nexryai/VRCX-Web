@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
     updateStoredVrchatCookies: vi.fn(async () => true),
     reconcileRemoteState: vi.fn(async () => ({ user: { id: "usr_00000000-0000-0000-0000-000000000001", displayName: "Monitor User" }, cookies: { auth: "auth-cookie" } })),
     requestVrchat: vi.fn(async () => ({ data: { ok: true, token: "pipeline-token" }, cookies: {} })),
+    advanceMonitorPipelineCursor: vi.fn(async () => true),
+    prepareMonitorIdentity: vi.fn(async () => undefined),
+    observeGameSession: vi.fn(async (): Promise<void> => undefined),
+    resolveLocationMetadata: vi.fn(async () => ({ cookies: { auth: "auth-cookie" } })),
     sockets: [] as FakeWebSocket[],
 }));
 
@@ -28,6 +32,11 @@ class FakeWebSocket {
         return this;
     }
 
+    emit(event: string, ...args: unknown[]) {
+        if (event === "open") this.readyState = FakeWebSocket.OPEN;
+        for (const listener of this.listeners.get(event) ?? []) listener(...args);
+    }
+
     close() {
         this.closed = true;
         for (const listener of this.listeners.get("close") ?? []) listener();
@@ -37,10 +46,12 @@ class FakeWebSocket {
 vi.mock("ws", () => ({ default: FakeWebSocket }));
 vi.mock("./lease", () => ({
     acquireMonitorLease: mocks.acquireMonitorLease,
+    advanceMonitorPipelineCursor: mocks.advanceMonitorPipelineCursor,
+    prepareMonitorIdentity: mocks.prepareMonitorIdentity,
     updateMonitorHealth: mocks.updateMonitorHealth,
 }));
 vi.mock("./reconcile", () => ({ reconcileRemoteState: mocks.reconcileRemoteState }));
-vi.mock("./location-metadata", () => ({ resolveLocationMetadata: vi.fn() }));
+vi.mock("./location-metadata", () => ({ resolveLocationMetadata: mocks.resolveLocationMetadata }));
 vi.mock("./friend-events", () => ({ applyPipelineFriendEvent: vi.fn(), isPipelineFriendEventType: vi.fn(() => false) }));
 vi.mock("@/lib/mongodb/session-repository", () => ({
     clearStoredVrchatSession: vi.fn(),
@@ -48,7 +59,7 @@ vi.mock("@/lib/mongodb/session-repository", () => ({
     updateStoredVrchatCookies: mocks.updateStoredVrchatCookies,
 }));
 vi.mock("@/lib/notifications/repository", () => ({ applyPipelineNotificationState: vi.fn(), upsertPipelineNotification: vi.fn() }));
-vi.mock("@/lib/game-log/session-repository", () => ({ enrichGameSession: vi.fn(), observeGameSession: vi.fn() }));
+vi.mock("@/lib/game-log/session-repository", () => ({ enrichGameSession: vi.fn(), observeGameSession: mocks.observeGameSession }));
 vi.mock("@/lib/vrchat/client", () => ({
     requestVrchat: mocks.requestVrchat,
     VrchatApiError: class VrchatApiError extends Error {
@@ -66,6 +77,8 @@ beforeEach(() => {
     mocks.hasLease = true;
     mocks.sockets.length = 0;
     mocks.acquireMonitorLease.mockImplementation(async () => mocks.hasLease);
+    mocks.observeGameSession.mockResolvedValue(undefined);
+    mocks.resolveLocationMetadata.mockResolvedValue({ cookies: { auth: "auth-cookie" } });
 });
 
 afterEach(() => vi.useRealTimers());
@@ -88,6 +101,41 @@ describe("AlwaysOnMonitor leadership lifecycle", () => {
         await vi.advanceTimersByTimeAsync(20_000);
         expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(2);
         expect(mocks.sockets).toHaveLength(2);
+        monitor.stop();
+    });
+
+    test("serializes periodic reconciliation behind successful Pipeline ingestion", async () => {
+        vi.useFakeTimers();
+        let releaseObservation: () => void = () => undefined;
+        const observationGate = new Promise<void>((resolve) => {
+            releaseObservation = resolve;
+        });
+        mocks.observeGameSession.mockImplementationOnce(() => observationGate);
+        const { AlwaysOnMonitor } = await import("./service");
+        const monitor = new AlwaysOnMonitor();
+
+        await monitor.start();
+        expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(1);
+        const socket = mocks.sockets[0];
+        expect(socket).toBeDefined();
+        socket?.emit("open");
+        socket?.emit(
+            "message",
+            JSON.stringify({
+                type: "user-location",
+                content: JSON.stringify({ userId: "usr_00000000-0000-0000-0000-000000000001", location: "wrld_00000000-0000-0000-0000-000000000010:12345" }),
+            }),
+        );
+        await vi.advanceTimersByTimeAsync(0);
+        expect(mocks.observeGameSession).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(1);
+
+        releaseObservation();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(mocks.advanceMonitorPipelineCursor).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ ownerId: "usr_00000000-0000-0000-0000-000000000001", type: "user-location" }));
+        expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(2);
         monitor.stop();
     });
 });

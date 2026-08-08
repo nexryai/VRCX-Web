@@ -33,6 +33,38 @@ export async function updateMonitorHealth(leaderId: string, update: { ownerId?: 
     await collections(await getMongoDatabase()).monitorState.updateOne({ _id: "singleton", leaderId, leaseExpiresAt: { $gt: now } }, { $set: set });
 }
 
+export async function prepareMonitorIdentity(leaderId: string, ownerId: string): Promise<void> {
+    await ensureMongoSchema();
+    const now = new Date();
+    await collections(await getMongoDatabase()).monitorState.updateOne(
+        { _id: "singleton", leaderId, leaseExpiresAt: { $gt: now }, ownerId: { $ne: ownerId } },
+        {
+            $set: { ownerId, pipelineSequence: 0, status: "starting", pipelineConnected: false, updatedAt: now },
+            $unset: { lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastError: "" },
+        },
+    );
+}
+
+export async function advanceMonitorPipelineCursor(leaderId: string, event: { ownerId: string; key: string; type: string; observedAt: Date }): Promise<boolean> {
+    await ensureMongoSchema();
+    const committedAt = new Date();
+    const result = await collections(await getMongoDatabase()).monitorState.updateOne(
+        { _id: "singleton", leaderId, leaseExpiresAt: { $gt: committedAt }, ownerId: event.ownerId },
+        {
+            $inc: { pipelineSequence: 1 },
+            $set: {
+                lastPipelineEventKey: event.key,
+                lastPipelineEventType: event.type,
+                lastPipelineEventAt: event.observedAt,
+                status: "healthy",
+                pipelineConnected: true,
+                updatedAt: committedAt,
+            },
+        },
+    );
+    return result.modifiedCount === 1;
+}
+
 export async function acquireReconciliationLease(owner: string, now = new Date()): Promise<boolean> {
     await ensureMongoSchema();
     const result = await collections(await getMongoDatabase()).monitorState.findOneAndUpdate(
