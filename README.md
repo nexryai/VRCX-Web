@@ -93,6 +93,19 @@ mongorestore --uri="$MONGODB_URI" --nsInclude="$MONGODB_DATABASE.*" --archive=vr
 
 Test restores against a separate database before relying on them. Stop application writers or otherwise take a consistent database snapshot during recovery. Never commit archives, environment files, or encryption keys.
 
+### Authenticated monitor restart proof
+
+An operator acceptance harness verifies the production startup path without opening or requesting a browser page. It starts the built Next.js server, waits for a completed HTTP baseline and healthy Pipeline connection in MongoDB, sends `SIGKILL`, immediately starts a fresh server process, and verifies a new leader completes another baseline while preserving the active identity and monotonic Pipeline commit sequence.
+
+Run this only against an isolated authenticated test deployment. The command deliberately terminates both server processes that it owns, may wait for the 60-second leader lease to expire, and must not be pointed at the database used by another running application process.
+
+```bash
+pnpm build
+pnpm monitor:restart-smoke
+```
+
+The command requires `MONGODB_URI`, `MONGODB_DATABASE` when the database is not named `vrcx`, and the existing `VRCHAT_SESSION_ENCRYPTION_KEY`. The database must already contain the encrypted authenticated VRChat session being tested. `VRCX_RESTART_SMOKE_PORT` defaults to `3100`, and `VRCX_RESTART_SMOKE_TIMEOUT_MS` defaults to `180000`. Successful execution is the evidence needed before marking the live restart acceptance item complete; unit tests validate the evidence predicate but do not replace this authenticated run.
+
 ## Visual Acceptance
 
 The running VRCX application is the primary visual fixture. Screens must be compared at matching desktop content viewport sizes, including approximately 1280 and 1920 pixels wide, across populated, empty, loading, selected, dialog, menu, error, and disabled states. Suitable VRCX code, styles, localization, icons, and assets should be reused or closely translated when that improves fidelity. Narrow layouts at approximately 360 and 768 pixels must remain usable and recognizably VRCX rather than becoming a separate web design.
