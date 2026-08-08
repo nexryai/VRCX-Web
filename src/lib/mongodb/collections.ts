@@ -56,6 +56,7 @@ export type AppSettingsDocument = {
     mutualGraphEdgeCurvature: number;
     mutualGraphCommunitySeparation: number;
     mutualGraphExcludedFriendIds: string[];
+    avatarAutoCleanupDays: 0 | 30 | 90 | 180 | 365;
     updatedAt: Date;
 };
 
@@ -74,6 +75,10 @@ export type MonitorStateDocument = {
     lastPipelineEventType?: string;
     lastPipelineEventAt?: Date;
     lastReconciledAt?: Date;
+    lastAvatarCleanupAt?: Date;
+    lastAvatarAutoCleanupAt?: Date;
+    lastAvatarCleanupDeleted?: number;
+    lastAvatarCleanupError?: string;
     lastError?: string;
     updatedAt: Date;
 };

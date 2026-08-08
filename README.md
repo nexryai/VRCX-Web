@@ -77,6 +77,8 @@ The capture command writes ignored images under `.visual/` for Friends Locations
 
 MongoDB migrations are versioned in `schema_migrations` and run automatically and idempotently when the application first accesses the database. `GET /api/health` is the deployment health probe; it returns HTTP 503 without exposing driver details when MongoDB is unavailable.
 
+VRCX's Avatar Feed cleanup is available under Settings → System → Database cleanup. Automatic cleanup can be disabled or retain 30, 90, 180, or 365 days of avatar-change history; the monitor checks the per-identity schedule weekly without requiring a browser. Manual cleanup supports 180, 365, or 730 days and all avatar-change history. Both paths delete only owner-scoped Avatar Feed events—other Feed types, Friend Log, Game Log, current projections, favorites, tags, and memos are retained. Back up MongoDB before manual purge because deletion cannot be undone.
+
 Production must run as a persistent Node.js process:
 
 ```bash

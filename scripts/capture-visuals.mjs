@@ -33,6 +33,7 @@ const captures = [
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
     { name: "mutual-friends", path: "/charts/mutual", readyText: "Aoi Sample" },
     { name: "settings", path: "/settings", readyText: "Application data" },
+    { name: "settings-avatar-purge", path: "/settings", readyText: "This action cannot be undone.", avatarPurgeDialog: true },
     { name: "settings-interface", path: "/settings", readyText: "Sort favorites by", clickText: "Interface" },
 ];
 
@@ -121,6 +122,15 @@ for (const width of widths) {
         if (capture.favoriteDialog) {
             await page.getByLabel("Favorite card settings").click();
             await page.getByRole("button", { name: capture.favoriteDialog, exact: true }).click();
+        }
+        if (capture.avatarPurgeDialog) {
+            const purgeButton = page.getByRole("button", { name: "Purge", exact: true });
+            await purgeButton.click();
+            await page.getByRole("dialog", { name: "Purge Avatar Feed Data" }).waitFor();
+            await page.keyboard.press("Escape");
+            await page.getByRole("dialog", { name: "Purge Avatar Feed Data" }).waitFor({ state: "detached" });
+            if (!(await purgeButton.evaluate((element) => document.activeElement === element))) throw new Error("Avatar purge dialog did not restore focus after Escape.");
+            await purgeButton.click();
         }
         if (capture.worldDialog) {
             await page.getByText("Favorite Moonlit World", { exact: true }).first().click();

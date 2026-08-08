@@ -9,6 +9,7 @@ describe("application settings boundary", () => {
             navigationCollapsed: false,
             favoriteSortByDate: false,
             activityTablePageSize: 20,
+            avatarAutoCleanupDays: 0,
             mutualGraphLayoutIterations: 800,
             mutualGraphExcludedFriendIds: [],
         });
@@ -17,6 +18,7 @@ describe("application settings boundary", () => {
     it("rejects unknown and server-owned fields", () => {
         expect(appSettingsUpdateSchema.safeParse({ theme: "light", activeUserId: "usr_00000000-0000-0000-0000-000000000001" }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ theme: "light", encryptedCookies: "secret" }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ avatarAutoCleanupDays: 7 }).success).toBe(false);
     });
 
     it("accepts only the versioned settings backup format", () => {

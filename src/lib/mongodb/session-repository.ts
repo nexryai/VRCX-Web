@@ -113,7 +113,7 @@ export async function saveAuthenticatedVrchatSession(cookies: VrchatCookies, use
                       { _id: "singleton" },
                       {
                           $set: { ownerId: userId, pipelineSequence: 0, status: "starting", pipelineConnected: false, updatedAt: now },
-                          $unset: { lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastError: "" },
+                          $unset: { lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastAvatarCleanupAt: "", lastAvatarAutoCleanupAt: "", lastAvatarCleanupDeleted: "", lastAvatarCleanupError: "", lastError: "" },
                       },
                   ),
               ]
@@ -175,7 +175,7 @@ export async function clearStoredVrchatSession(expected: { activeUserId?: string
                     pipelineSequence: 0,
                     updatedAt: new Date(),
                 },
-                $unset: { ownerId: "", lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastError: "" },
+                $unset: { ownerId: "", lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastAvatarCleanupAt: "", lastAvatarAutoCleanupAt: "", lastAvatarCleanupDeleted: "", lastAvatarCleanupError: "", lastError: "" },
             },
         ),
     ]);

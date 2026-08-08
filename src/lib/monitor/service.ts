@@ -8,6 +8,7 @@ import { clearStoredVrchatSession, getStoredVrchatSession, updateStoredVrchatCoo
 import { applyPipelineNotificationState, upsertPipelineNotification } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { vrchatNotificationSchema } from "@/lib/vrchat/types";
+import { runAvatarAutoCleanup } from "./avatar-cleanup";
 import { applyPipelineFriendEvent, isPipelineFriendEventType } from "./friend-events";
 import { acquireMonitorLease, advanceMonitorPipelineCursor, prepareMonitorIdentity, updateMonitorHealth } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
@@ -18,6 +19,7 @@ import { createHash, randomUUID } from "node:crypto";
 const PIPELINE_URL = "wss://pipeline.vrchat.cloud/";
 const LEASE_RENEWAL_MS = 20_000;
 const RECONCILIATION_MS = 120_000;
+const CLEANUP_CHECK_MS = 24 * 60 * 60 * 1_000;
 const RECONNECT_BASE_MS = 5_000;
 const RECONNECT_MAX_MS = 60_000;
 
@@ -36,6 +38,7 @@ export class AlwaysOnMonitor {
     private readonly leaderId = `${process.pid}:${randomUUID()}`;
     private leaseTimer?: NodeJS.Timeout;
     private reconciliationTimer?: NodeJS.Timeout;
+    private cleanupTimer?: NodeJS.Timeout;
     private reconnectTimer?: NodeJS.Timeout;
     private socket?: WebSocket;
     private pipelineGeneration = 0;
@@ -45,6 +48,7 @@ export class AlwaysOnMonitor {
     private started = false;
     private hasLeadership = false;
     private reconciliationPromise?: Promise<void>;
+    private cleanupPromise?: Promise<void>;
     private pipelineTail: Promise<void> = Promise.resolve();
 
     start(): Promise<void> {
@@ -108,9 +112,29 @@ export class AlwaysOnMonitor {
         if (priorReconciliation) await priorReconciliation;
         await this.reconcile();
         if (!this.cookies || !this.ownerId || !this.hasLeadership) return;
+        const priorCleanup = this.cleanupPromise;
+        if (priorCleanup) await priorCleanup;
+        await this.cleanup();
+        if (!this.cookies || !this.ownerId || !this.hasLeadership) return;
         await this.connectPipeline();
         this.reconciliationTimer ??= setInterval(() => void this.reconcile(), RECONCILIATION_MS);
         this.reconciliationTimer.unref();
+        this.cleanupTimer ??= setInterval(() => void this.cleanup(), CLEANUP_CHECK_MS);
+        this.cleanupTimer.unref();
+    }
+
+    private cleanup(): Promise<void> {
+        if (!this.hasLeadership || !this.ownerId) return Promise.resolve();
+        if (this.cleanupPromise) return this.cleanupPromise;
+        const ownerId = this.ownerId;
+        const cleanup = runAvatarAutoCleanup(ownerId).then(() => undefined);
+        const tracked = cleanup
+            .catch(() => undefined)
+            .finally(() => {
+                if (this.cleanupPromise === tracked) this.cleanupPromise = undefined;
+            });
+        this.cleanupPromise = tracked;
+        return tracked;
     }
 
     private reconcile(): Promise<void> {
@@ -299,6 +323,8 @@ export class AlwaysOnMonitor {
         this.socket = undefined;
         if (this.reconciliationTimer) clearInterval(this.reconciliationTimer);
         this.reconciliationTimer = undefined;
+        if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+        this.cleanupTimer = undefined;
     }
 
     private async safeHealth(update: Parameters<typeof updateMonitorHealth>[1]) {

@@ -20,6 +20,14 @@ export async function GET() {
             : undefined,
         lastPipelineEventAt: state?.lastPipelineEventAt?.toISOString(),
         lastReconciledAt: state?.lastReconciledAt?.toISOString(),
+        avatarCleanup:
+            state?.lastAvatarCleanupAt || state?.lastAvatarCleanupError
+                ? {
+                      lastRunAt: state.lastAvatarCleanupAt?.toISOString(),
+                      deleted: state.lastAvatarCleanupDeleted ?? 0,
+                      error: state.lastAvatarCleanupError || undefined,
+                  }
+                : undefined,
         lastError: state?.lastError || undefined,
         rateLimit: {
             remaining: rateLimit.remaining,

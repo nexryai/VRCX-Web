@@ -302,6 +302,14 @@ const migrations: Migration[] = [
             await c.monitorState.updateOne({ _id: "singleton", pipelineSequence: { $exists: false } }, { $set: { pipelineSequence: 0, updatedAt: new Date() } });
         },
     },
+    {
+        version: 23,
+        name: "add-avatar-feed-retention",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([c.activityEvents.createIndex({ ownerId: 1, type: 1, occurredAt: 1 }, { name: "owner_type_occurred" }), c.appSettings.updateMany({ avatarAutoCleanupDays: { $exists: false } }, { $set: { avatarAutoCleanupDays: 0, updatedAt } })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

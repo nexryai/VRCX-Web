@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { AlertCircle, CheckCircle2, Download, ExternalLink, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, ExternalLink, Trash2, TriangleAlert, Upload } from "lucide-react";
 
 import type { AppSettingsPayload } from "@/lib/app-settings";
 
 type Tab = "Interface" | "System";
 type PageSizeKey = "activityTablePageSize" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "notificationTablePageSize";
-type SettingsState = Required<Pick<AppSettingsPayload, "activityTablePageSize" | "favoriteSortByDate" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "navigationCollapsed" | "notificationTablePageSize" | "theme">>;
+type SettingsState = Required<Pick<AppSettingsPayload, "activityTablePageSize" | "avatarAutoCleanupDays" | "favoriteSortByDate" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "navigationCollapsed" | "notificationTablePageSize" | "theme">>;
+type AvatarPurgeDays = 180 | 365 | 730 | "all";
 
 const defaults: SettingsState = {
     theme: "dark",
@@ -19,6 +20,7 @@ const defaults: SettingsState = {
     notificationTablePageSize: 20,
     moderationTablePageSize: 20,
     myAvatarsTablePageSize: 20,
+    avatarAutoCleanupDays: 0,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -81,6 +83,20 @@ export function SettingsView({ version }: { version: string }) {
         }
     }
 
+    async function purgeAvatarFeed(days: AvatarPurgeDays) {
+        setMessage(null);
+        try {
+            const response = await fetch("/api/settings/avatar-cleanup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ days }) });
+            const payload = (await response.json()) as { deleted?: number; error?: string };
+            if (!response.ok || payload.deleted === undefined) throw new Error(payload.error || "Avatar data could not be purged.");
+            setMessage({ error: false, text: `${payload.deleted} avatar feed ${payload.deleted === 1 ? "entry" : "entries"} purged.` });
+            return true;
+        } catch (error) {
+            setMessage({ error: true, text: error instanceof Error ? error.message : "Avatar data could not be purged." });
+            return false;
+        }
+    }
+
     return (
         <section className="flex h-full min-h-0 flex-col overflow-hidden p-2" aria-labelledby="settings-heading">
             <h1 id="settings-heading" className="shrink-0 p-1.5 text-lg font-semibold">
@@ -101,14 +117,75 @@ export function SettingsView({ version }: { version: string }) {
                             {message.text}
                         </div>
                     ) : null}
-                    {loading ? <div className="h-32 animate-pulse rounded-lg border border-border bg-card" /> : tab === "System" ? <SystemSettings version={version} fileInput={fileInput} importSettings={importSettings} /> : <InterfaceSettings settings={settings} change={change} />}
+                    {loading ? (
+                        <div className="h-32 animate-pulse rounded-lg border border-border bg-card" />
+                    ) : tab === "System" ? (
+                        <SystemSettings version={version} fileInput={fileInput} importSettings={importSettings} settings={settings} change={change} purgeAvatarFeed={purgeAvatarFeed} />
+                    ) : (
+                        <InterfaceSettings settings={settings} change={change} />
+                    )}
                 </div>
             </div>
         </section>
     );
 }
 
-function SystemSettings({ version, fileInput, importSettings }: { version: string; fileInput: React.RefObject<HTMLInputElement | null>; importSettings: (file: File) => Promise<void> }) {
+function SystemSettings({
+    version,
+    fileInput,
+    importSettings,
+    settings,
+    change,
+    purgeAvatarFeed,
+}: {
+    version: string;
+    fileInput: React.RefObject<HTMLInputElement | null>;
+    importSettings: (file: File) => Promise<void>;
+    settings: SettingsState;
+    change: (patch: Partial<SettingsState>) => Promise<void>;
+    purgeAvatarFeed: (days: AvatarPurgeDays) => Promise<boolean>;
+}) {
+    const [purgeOpen, setPurgeOpen] = useState(false);
+    const [purgeDays, setPurgeDays] = useState<AvatarPurgeDays>(180);
+    const [purging, setPurging] = useState(false);
+    const purgingRef = useRef(false);
+    const purgeDialog = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!purgeOpen) return;
+        const previous = document.activeElement;
+        purgeDialog.current?.focus();
+        const handleDialogKey = (event: KeyboardEvent) => {
+            if (event.key === "Escape" && !purgingRef.current) setPurgeOpen(false);
+            if (event.key !== "Tab" || !purgeDialog.current) return;
+            const focusable = [...purgeDialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')];
+            const first = focusable[0];
+            const last = focusable.at(-1);
+            if (!first || !last) return;
+            if (event.shiftKey && (document.activeElement === first || document.activeElement === purgeDialog.current)) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        window.addEventListener("keydown", handleDialogKey);
+        return () => {
+            window.removeEventListener("keydown", handleDialogKey);
+            if (previous instanceof HTMLElement) previous.focus();
+        };
+    }, [purgeOpen]);
+
+    async function confirmPurge() {
+        purgingRef.current = true;
+        setPurging(true);
+        const success = await purgeAvatarFeed(purgeDays);
+        purgingRef.current = false;
+        setPurging(false);
+        if (success) setPurgeOpen(false);
+    }
+
     return (
         <>
             <SettingsGroup title="General">
@@ -138,6 +215,27 @@ function SystemSettings({ version, fileInput, importSettings }: { version: strin
                     </button>
                 </SettingsRow>
             </SettingsGroup>
+            <SettingsGroup title="Database cleanup">
+                <SettingsRow label="Auto-Cleanup Avatar Data Older Than" description="Checked once per week by the server monitor.">
+                    <select
+                        aria-label="Auto-Cleanup Avatar Data Older Than"
+                        value={settings.avatarAutoCleanupDays}
+                        onChange={(event) => void change({ avatarAutoCleanupDays: Number(event.target.value) as SettingsState["avatarAutoCleanupDays"] })}
+                        className="h-8 w-36 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                        <option value={0}>Off</option>
+                        <option value={30}>30 days</option>
+                        <option value={90}>90 days</option>
+                        <option value={180}>6 months</option>
+                        <option value={365}>1 year</option>
+                    </select>
+                </SettingsRow>
+                <SettingsRow label="Purge Avatar Feed Data">
+                    <button type="button" onClick={() => setPurgeOpen(true)} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 text-xs hover:bg-muted">
+                        <Trash2 className="size-4" /> Purge
+                    </button>
+                </SettingsRow>
+            </SettingsGroup>
             <SettingsGroup title="Legal notice">
                 <div className="space-y-2 text-sm text-muted-foreground">
                     <p>Copyright © 2019–2026 pypy and individual VRCX contributors.</p>
@@ -147,6 +245,51 @@ function SystemSettings({ version, fileInput, importSettings }: { version: strin
                     </a>
                 </div>
             </SettingsGroup>
+            {purgeOpen ? (
+                <div
+                    className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3"
+                    onMouseDown={(event) => {
+                        if (event.target === event.currentTarget && !purging) setPurgeOpen(false);
+                    }}
+                >
+                    <div ref={purgeDialog} role="dialog" aria-modal="true" aria-labelledby="avatar-purge-title" tabIndex={-1} className="w-full max-w-md rounded-lg border border-border bg-popover p-5 shadow-2xl outline-none">
+                        <h2 id="avatar-purge-title" className="text-base font-semibold">
+                            Purge Avatar Feed Data
+                        </h2>
+                        <div className="mt-4 flex gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200">
+                            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                            <span>It is strongly recommended to back up MongoDB before proceeding.</span>
+                        </div>
+                        <div className="mt-4 space-y-1 text-sm text-muted-foreground">
+                            <p>This permanently deletes avatar change records from the database.</p>
+                            <p>This action cannot be undone.</p>
+                            <p>Other Feed, Friend Log, Game Log, current projections, memos, tags, and favorites are not deleted.</p>
+                        </div>
+                        <label className="mt-5 flex items-center justify-between gap-4 text-sm">
+                            <span>Delete Avatar Data Older Than</span>
+                            <select
+                                value={purgeDays}
+                                onChange={(event) => setPurgeDays(event.target.value === "all" ? "all" : (Number(event.target.value) as Exclude<AvatarPurgeDays, "all">))}
+                                disabled={purging}
+                                className="h-8 w-36 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                <option value={180}>6 months</option>
+                                <option value={365}>1 year</option>
+                                <option value={730}>2 years</option>
+                                <option value="all">All data</option>
+                            </select>
+                        </label>
+                        <div className="mt-6 flex justify-end gap-2">
+                            <button type="button" disabled={purging} onClick={() => setPurgeOpen(false)} className="h-8 rounded-md border border-input px-3 text-xs hover:bg-muted disabled:opacity-50">
+                                Cancel
+                            </button>
+                            <button type="button" disabled={purging} onClick={() => void confirmPurge()} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-destructive px-3 text-xs text-destructive-foreground hover:brightness-110 disabled:opacity-50">
+                                <Trash2 className="size-4" /> {purging ? "Purging…" : "Purge"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </>
     );
 }

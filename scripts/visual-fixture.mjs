@@ -204,10 +204,11 @@ await database.collection("app_settings").insertOne({
     mutualGraphEdgeCurvature: 0.1,
     mutualGraphCommunitySeparation: 0,
     mutualGraphExcludedFriendIds: [],
+    avatarAutoCleanupDays: 90,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
-await database.collection("monitor_state").insertOne({ _id: "singleton", schemaVersion: 1, ownerId, status: "healthy", pipelineConnected: true, lastPipelineEventAt: now, lastReconciledAt: now, updatedAt: now });
+await database.collection("monitor_state").insertOne({ _id: "singleton", schemaVersion: 1, ownerId, status: "healthy", pipelineConnected: true, pipelineSequence: 12, lastPipelineEventAt: now, lastReconciledAt: now, updatedAt: now });
 await database.collection("users").insertOne({ _id: `${ownerId}:${ownerId}`, ownerId, userId: ownerId, user: currentUser, source: "auth", observedAt: now, updatedAt: now });
 await database.collection("friend_snapshots").insertMany(friends.map((user) => ({ _id: `${ownerId}:${user.id}`, ownerId, friendId: user.id, online: user.state === "online", user, observedAt: now, updatedAt: now })));
 await database.collection("favorites").insertMany([

@@ -40,7 +40,7 @@ export async function prepareMonitorIdentity(leaderId: string, ownerId: string):
         { _id: "singleton", leaderId, leaseExpiresAt: { $gt: now }, ownerId: { $ne: ownerId } },
         {
             $set: { ownerId, pipelineSequence: 0, status: "starting", pipelineConnected: false, updatedAt: now },
-            $unset: { lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastError: "" },
+            $unset: { lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastAvatarCleanupAt: "", lastAvatarAutoCleanupAt: "", lastAvatarCleanupDeleted: "", lastAvatarCleanupError: "", lastError: "" },
         },
     );
 }

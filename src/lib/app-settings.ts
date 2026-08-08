@@ -45,6 +45,7 @@ export const appSettingsUpdateSchema = z
             .array(z.string().regex(/^usr_[0-9a-f-]{36}$/i))
             .max(10_000)
             .optional(),
+        avatarAutoCleanupDays: z.union([z.literal(0), z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -93,5 +94,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         mutualGraphEdgeCurvature: settings?.mutualGraphEdgeCurvature ?? 0.1,
         mutualGraphCommunitySeparation: settings?.mutualGraphCommunitySeparation ?? 0,
         mutualGraphExcludedFriendIds: settings?.mutualGraphExcludedFriendIds ?? [],
+        avatarAutoCleanupDays: settings?.avatarAutoCleanupDays ?? 0,
     };
 }

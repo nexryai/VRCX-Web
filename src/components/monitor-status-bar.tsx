@@ -8,6 +8,7 @@ type MonitorStatus = {
     lastPipelineEventAt?: string;
     lastReconciledAt?: string;
     lastError?: string;
+    avatarCleanup?: { lastRunAt?: string; deleted: number; error?: string };
     rateLimit?: { remaining?: number; resetAt?: string; blockedUntil?: string };
 };
 
@@ -62,6 +63,12 @@ export function MonitorStatusBar() {
                     <div className="flex h-[22px] shrink-0 items-center gap-1 border-r border-border px-2" title={blocked ? `Requests paused until ${time(status.rateLimit?.blockedUntil)}` : "VRChat API requests remaining in the current upstream window"}>
                         <span className={`size-2 rounded-full ${blocked ? "bg-status-askme" : "bg-status-online"}`} />
                         <span className="text-foreground">API {blocked ? "limited" : status.rateLimit?.remaining}</span>
+                    </div>
+                ) : null}
+                {status.avatarCleanup?.error ? (
+                    <div className="flex h-[22px] shrink-0 items-center gap-1 border-r border-border px-2 text-destructive" title={status.avatarCleanup.error}>
+                        <span className="size-2 rounded-full bg-destructive" />
+                        <span>Cleanup error</span>
                     </div>
                 ) : null}
             </div>

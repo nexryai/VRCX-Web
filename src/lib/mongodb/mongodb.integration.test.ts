@@ -29,7 +29,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
         expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -52,7 +52,9 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
+        expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await collections(database).monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
+        expect(await collections(database).appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
     });
 
     test("stores encrypted session material and isolates cached users by owner", async () => {
@@ -109,7 +111,10 @@ describe("MongoDB application repositories", () => {
         const firstOwnerId = "usr_00000000-0000-0000-0000-000000000010";
         const secondOwnerId = "usr_00000000-0000-0000-0000-000000000011";
         await saveAuthenticatedVrchatSession({ auth: "first-auth" }, firstOwnerId);
-        await collections(await getMongoDatabase()).monitorState.updateOne({ _id: "singleton" }, { $set: { ownerId: firstOwnerId, pipelineSequence: 7, lastPipelineEventKey: "first-event", lastPipelineEventType: "friend-online", lastPipelineEventAt: new Date() } });
+        await collections(await getMongoDatabase()).monitorState.updateOne(
+            { _id: "singleton" },
+            { $set: { ownerId: firstOwnerId, pipelineSequence: 7, lastPipelineEventKey: "first-event", lastPipelineEventType: "friend-online", lastPipelineEventAt: new Date(), lastAvatarCleanupAt: new Date(), lastAvatarAutoCleanupAt: new Date(), lastAvatarCleanupDeleted: 4 } },
+        );
         await saveAuthenticatedVrchatSession({ auth: "second-auth" }, secondOwnerId);
 
         expect(await updateStoredVrchatCookies({ twoFactorAuth: "stale-cookie" }, { activeUserId: firstOwnerId, authCookie: "first-auth" })).toBe(false);
@@ -118,6 +123,8 @@ describe("MongoDB application repositories", () => {
         expect((await getStoredVrchatSession())?.cookies.twoFactorAuth).toBeUndefined();
         expect(await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" })).toMatchObject({ ownerId: secondOwnerId, pipelineSequence: 0, status: "starting", pipelineConnected: false });
         expect((await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }))?.lastPipelineEventKey).toBeUndefined();
+        expect((await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }))?.lastAvatarCleanupAt).toBeUndefined();
+        expect((await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }))?.lastAvatarAutoCleanupAt).toBeUndefined();
     });
 
     test("serializes reconciliation across server processes", async () => {
@@ -375,5 +382,35 @@ describe("MongoDB application repositories", () => {
         await persistActivityTransitions({ ownerId, events: [readded], previousDocuments: [], observedAt: new Date(readded.createdAt), provenance: "pipeline" });
         await persistActivityTransitions({ ownerId, events: [{ ...readded, id: "readded-retry", createdAt: "2026-08-02T15:15:10.000Z" }], previousDocuments: [], observedAt: new Date("2026-08-02T15:15:10.000Z"), provenance: "reconciliation" });
         expect(await database.collection("activity_events").countDocuments({ ownerId, type: "Friend" })).toBe(2);
+    });
+
+    test("purges only eligible avatar feed history and runs automatic cleanup weekly", async () => {
+        const { purgeAvatarFeedData, runAvatarAutoCleanup } = await import("@/lib/monitor/avatar-cleanup");
+        const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
+        const ownerId = "usr_00000000-0000-0000-0000-0000000000a1";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-0000000000a2";
+        const subjectUserId = "usr_00000000-0000-0000-0000-0000000000a3";
+        const now = new Date("2026-08-08T16:00:00.000Z");
+        const c = collections(await getMongoDatabase());
+        await c.appSettings.updateOne({ _id: "singleton" }, { $set: { activeUserId: ownerId, avatarAutoCleanupDays: 30, updatedAt: now } });
+        await c.monitorState.updateOne({ _id: "singleton" }, { $set: { ownerId, updatedAt: now }, $unset: { lastAvatarCleanupAt: "", lastAvatarAutoCleanupAt: "" } });
+        await c.activityEvents.insertMany([
+            { _id: "cleanup-old-avatar", ownerId, type: "Avatar", subjectUserId, displayName: "Cleanup Friend", occurredAt: new Date("2026-06-01T00:00:00.000Z"), observedAt: new Date("2026-06-01T00:00:00.000Z"), provenance: "pipeline" },
+            { _id: "cleanup-current-avatar", ownerId, type: "Avatar", subjectUserId, displayName: "Cleanup Friend", occurredAt: new Date("2026-08-01T00:00:00.000Z"), observedAt: new Date("2026-08-01T00:00:00.000Z"), provenance: "pipeline" },
+            { _id: "cleanup-old-gps", ownerId, type: "GPS", subjectUserId, displayName: "Cleanup Friend", occurredAt: new Date("2026-06-01T00:00:00.000Z"), observedAt: new Date("2026-06-01T00:00:00.000Z"), provenance: "pipeline" },
+            { _id: "cleanup-other-owner", ownerId: otherOwnerId, type: "Avatar", subjectUserId, displayName: "Other Friend", occurredAt: new Date("2026-06-01T00:00:00.000Z"), observedAt: new Date("2026-06-01T00:00:00.000Z"), provenance: "pipeline" },
+        ]);
+
+        expect(await runAvatarAutoCleanup(ownerId, now)).toMatchObject({ ran: true, days: 30, deleted: 1, cutoff: new Date("2026-07-09T16:00:00.000Z") });
+        await c.activityEvents.insertOne({ _id: "cleanup-weekly-guard", ownerId, type: "Avatar", subjectUserId, displayName: "Cleanup Friend", occurredAt: new Date("2026-06-02T00:00:00.000Z"), observedAt: new Date("2026-06-02T00:00:00.000Z"), provenance: "reconciliation" });
+        expect(await runAvatarAutoCleanup(ownerId, new Date("2026-08-14T16:00:00.000Z"))).toMatchObject({ ran: false, deleted: 0 });
+        expect(await c.activityEvents.findOne({ _id: "cleanup-weekly-guard" })).not.toBeNull();
+        expect(await runAvatarAutoCleanup(ownerId, new Date("2026-08-15T16:00:00.000Z"))).toMatchObject({ ran: true, deleted: 1 });
+
+        expect(await purgeAvatarFeedData(ownerId, null, new Date("2026-08-15T17:00:00.000Z"))).toMatchObject({ ran: true, days: null, deleted: 1 });
+        expect(await c.activityEvents.findOne({ _id: "cleanup-old-gps" })).not.toBeNull();
+        expect(await c.activityEvents.findOne({ _id: "cleanup-other-owner" })).not.toBeNull();
+        expect(await c.monitorState.findOne({ _id: "singleton" })).toMatchObject({ ownerId, lastAvatarCleanupAt: new Date("2026-08-15T17:00:00.000Z"), lastAvatarAutoCleanupAt: new Date("2026-08-15T16:00:00.000Z"), lastAvatarCleanupDeleted: 1 });
     });
 });
