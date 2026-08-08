@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Clipboard, ExternalLink, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
+import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
 import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
 import { friendImage, locationLabel, statusColor } from "@/lib/friends";
@@ -357,6 +358,11 @@ function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removi
                             <span className="block truncate">{user.representedGroup.name}</span>
                             <span className="text-[10px] text-muted-foreground">{user.representedGroup.shortCode}</span>
                         </span>
+                    </div>
+                ) : null}
+                {!isCurrentUser && isFriend ? (
+                    <div className="flex justify-end border-t border-border pt-2">
+                        <FavoriteAction kind="friend" objectId={user.id} label={user.displayName} />
                     </div>
                 ) : null}
                 <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">

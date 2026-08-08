@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Apple, Clipboard, ExternalLink, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, User, X } from "lucide-react";
 
+import { FavoriteAction } from "@/components/favorite-action";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { MemoField } from "@/components/memo-field";
 import type { VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
@@ -114,6 +115,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                                 {world.description && world.description !== world.name ? <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-xs">{world.description}</p> : null}
                             </div>
                             <div className="flex shrink-0 items-end gap-2 sm:items-center">
+                                <FavoriteAction kind="world" objectId={world.id} label={world.name} />
                                 <button type="button" onClick={() => void load(true)} disabled={loading} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh world">
                                     <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                                 </button>

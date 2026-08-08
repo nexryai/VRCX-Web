@@ -233,8 +233,18 @@ await database.collection("entity_memos").insertMany([
     { _id: `${ownerId}:avatar:${favoriteAvatar.id}`, ownerId, entityType: "avatar", entityId: favoriteAvatar.id, memo: "Cross-platform dance avatar.", createdAt: now, updatedAt: now },
 ]);
 const localFriendGroupId = "lfg_00000000-0000-0000-0000-000000000053";
-await database.collection("local_favorite_groups").insertOne({ _id: `${ownerId}:${localFriendGroupId}`, ownerId, groupId: localFriendGroupId, kind: "friend", name: "Event Crew", normalizedName: "event crew", createdAt: now, updatedAt: now });
-await database.collection("local_favorites").insertOne({ _id: `${ownerId}:${localFriendGroupId}:${friends[1].id}`, ownerId, groupId: localFriendGroupId, kind: "friend", objectId: friends[1].id, item: friends[1], createdAt: now, updatedAt: now });
+const localWorldGroupId = "lfg_00000000-0000-0000-0000-000000000054";
+const localAvatarGroupId = "lfg_00000000-0000-0000-0000-000000000055";
+await database.collection("local_favorite_groups").insertMany([
+    { _id: `${ownerId}:${localFriendGroupId}`, ownerId, groupId: localFriendGroupId, kind: "friend", name: "Event Crew", normalizedName: "event crew", createdAt: now, updatedAt: now },
+    { _id: `${ownerId}:${localWorldGroupId}`, ownerId, groupId: localWorldGroupId, kind: "world", name: "Event Worlds", normalizedName: "event worlds", createdAt: now, updatedAt: now },
+    { _id: `${ownerId}:${localAvatarGroupId}`, ownerId, groupId: localAvatarGroupId, kind: "avatar", name: "Performance Avatars", normalizedName: "performance avatars", createdAt: now, updatedAt: now },
+]);
+await database.collection("local_favorites").insertMany([
+    { _id: `${ownerId}:${localFriendGroupId}:${friends[1].id}`, ownerId, groupId: localFriendGroupId, kind: "friend", objectId: friends[1].id, item: friends[1], createdAt: now, updatedAt: now },
+    { _id: `${ownerId}:${localWorldGroupId}:${favoriteWorld.id}`, ownerId, groupId: localWorldGroupId, kind: "world", objectId: favoriteWorld.id, item: favoriteWorld, createdAt: now, updatedAt: now },
+    { _id: `${ownerId}:${localAvatarGroupId}:${favoriteAvatar.id}`, ownerId, groupId: localAvatarGroupId, kind: "avatar", objectId: favoriteAvatar.id, item: favoriteAvatar, createdAt: now, updatedAt: now },
+]);
 const visualModerations = [
     { id: "pmod_visual_block", type: "block", sourceUserId: ownerId, sourceDisplayName: currentUser.displayName, targetUserId: friends[1].id, targetDisplayName: "Moderated Cobalt User", created: new Date(now.getTime() - 22 * 60_000).toISOString() },
     { id: "pmod_visual_mute", type: "mute", sourceUserId: ownerId, sourceDisplayName: currentUser.displayName, targetUserId: friends[3].id, targetDisplayName: friends[3].displayName, created: new Date(now.getTime() - 75 * 60_000).toISOString() },

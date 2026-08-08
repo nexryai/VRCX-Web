@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Apple, CheckCircle, Clipboard, ExternalLink, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, X } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
+import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
@@ -124,6 +125,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                 {avatar.description && avatar.description !== avatar.name ? <p className="mt-2 line-clamp-4 break-words text-xs">{avatar.description}</p> : null}
                             </div>
                             <div className="flex shrink-0 items-end gap-2 sm:mt-12 sm:items-start">
+                                <FavoriteAction kind="avatar" objectId={avatar.id} label={avatar.name} />
                                 <button
                                     type="button"
                                     onClick={() => void selectAvatar()}

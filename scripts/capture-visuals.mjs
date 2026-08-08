@@ -13,6 +13,7 @@ const captures = [
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
+    { name: "user-favorite-dialog", path: "/social/friend-list", readyText: "VRChat Favorites", clickText: "Aoi Sample", favoriteKind: "friend", favoriteActionLabel: "Manage favorites for Aoi Sample" },
     { name: "notifications", path: "/notification", readyText: "Group announcement, Community meetup starts in one hour." },
     { name: "game-log", path: "/game-log", readyText: "Midnight Rooftop" },
     { name: "search", path: "/search", readyText: "Found through the VRChat user search.", searchQuery: "sample creator" },
@@ -21,11 +22,13 @@ const captures = [
     { name: "favorite-friends-export", path: "/favorite/friends", readyText: "Export favorite friends", favoriteKind: "friend", favoriteDialog: "Export" },
     { name: "favorite-worlds", path: "/favorite/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
     { name: "world-dialog", path: "/favorite/worlds", readyText: "World ID", favoriteKind: "world", worldDialog: true },
+    { name: "world-favorite-dialog", path: "/favorite/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/", readyText: "Group ID", groupDialog: true },
     { name: "group-dialog-posts", path: "/", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
     { name: "group-dialog-members", path: "/", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorite/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorite/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
+    { name: "avatar-favorite-dialog", path: "/favorite/avatars", readyText: "VRChat Favorites", favoriteKind: "avatar", avatarDialog: true, favoriteActionLabel: "Manage favorites for Favorite Browser Avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
     { name: "mutual-friends", path: "/charts/mutual", readyText: "Aoi Sample" },
@@ -50,8 +53,11 @@ const searchFixture = [
 ];
 const requestedCaptures = new Set((process.env.VRCX_VISUAL_ONLY || "").split(",").filter(Boolean));
 const selectedCaptures = requestedCaptures.size ? captures.filter((capture) => requestedCaptures.has(capture.name)) : captures;
+const requestedWidths = (process.env.VRCX_VISUAL_WIDTHS || "").split(",").filter(Boolean).map(Number);
+const widths = requestedWidths.length ? requestedWidths : [360, 768, 1280, 1920];
+if (widths.some((width) => !Number.isInteger(width) || width < 320 || width > 3840)) throw new Error("VRCX_VISUAL_WIDTHS must contain comma-separated viewport widths from 320 through 3840.");
 
-for (const width of [360, 768, 1280, 1920]) {
+for (const width of widths) {
     for (const capture of selectedCaptures) {
         // A fresh browser per capture avoids native Chromium resource leakage in
         // minimal CI containers while keeping each screenshot deterministic.
@@ -129,6 +135,9 @@ for (const width of [360, 768, 1280, 1920]) {
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
+        }
+        if (capture.favoriteActionLabel) {
+            await page.getByRole("button", { name: capture.favoriteActionLabel, exact: true }).click();
         }
         if (capture.searchQuery) {
             await page.getByRole("searchbox", { name: "Search users" }).fill(capture.searchQuery);
