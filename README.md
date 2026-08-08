@@ -16,14 +16,14 @@ This remains an in-progress port: several remote workflows still call VRChat int
 - A long-running Next.js/Node.js server that maintains the VRChat Pipeline connection and performs scheduled HTTP API reconciliation even when no browser is open.
 - MongoDB as the source of truth for settings, synchronization state, snapshots, feed and friend history, notifications, favorites, tags, memos, caches, graph data, and other durable VRCX state.
 - A React UI ported from VRCX's views, components, styles, assets, strings, and interactions, with matched-viewport visual comparison as the acceptance standard.
-- A VRCX-faithful Game Log session view populated from continuously observed remote location state and MongoDB history.
+- A VRCX-faithful Game Log session view populated from continuously observed remote location state, the active identity's remote-observable activity, and MongoDB history.
 - Browser adaptations only where required, with each material difference documented.
 
 ## Scope Boundary
 
 Features available from remote VRChat APIs, continuously observed remote state, MongoDB history, or standard browser capabilities are generally eligible. This includes server-derived Feed, Friend Log, previous-location history, Game Log sessions, and charts when the remote observations can support them truthfully. Dashboard is an explicit product-scope exception and will not be ported.
 
-Game Log implements only VRCX's session presentation. The server derives sessions from API-observed changes to the active account's location and stores observed boundaries, duration, world/group metadata, current state, and provenance in MongoDB. The flat table and local-log player join/leave, portal, video, resource, external, and arbitrary event rows are intentionally absent. Their filters and the sessions/table switch are not shown.
+Game Log implements only VRCX's session presentation. The server derives sessions from API-observed changes to the active account's location and stores observed boundaries, duration, world/group metadata, current state, and provenance in MongoDB. Remotely observed GPS, presence, status, avatar, and bio changes made by the active identity are recorded in Feed and nested into the applicable session; the first observation is only a baseline. The flat table and local-log player join/leave, portal, video, resource, external, and arbitrary event rows are intentionally absent. Their filters and the sessions/table switch are not shown.
 
 Other features that require a locally installed or running VRChat client remain excluded: Photon Player List, screenshot Gallery, OpenVR/overlay support, Steam/registry/process control, local OSC, launch/attach, IPC, Electron window/tray behavior, and the desktop updater. Excluded controls must not appear as broken placeholders.
 
@@ -77,7 +77,7 @@ The capture command writes ignored images under `.visual/` for Friends Locations
 
 MongoDB migrations are versioned in `schema_migrations` and run automatically and idempotently when the application first accesses the database. `GET /api/health` is the deployment health probe; it returns HTTP 503 without exposing driver details when MongoDB is unavailable.
 
-VRCX's Avatar Feed cleanup is available under Settings → System → Database cleanup. Automatic cleanup can be disabled or retain 30, 90, 180, or 365 days of avatar-change history; the monitor checks the per-identity schedule weekly without requiring a browser. Manual cleanup supports 180, 365, or 730 days and all avatar-change history. Both paths delete only owner-scoped Avatar Feed events—other Feed types, Friend Log, Game Log, current projections, favorites, tags, and memos are retained. Back up MongoDB before manual purge because deletion cannot be undone.
+VRCX's Avatar Feed cleanup is available under Settings → System → Database cleanup. Automatic cleanup can be disabled or retain 30, 90, 180, or 365 days of avatar-change history; the monitor checks the per-identity schedule weekly without requiring a browser. Manual cleanup supports 180, 365, or 730 days and all avatar-change history. Both paths delete only owner-scoped Avatar Feed events—other Feed types, Friend Log, Game Log sessions, current projections, favorites, tags, and memos are retained. Because a self Avatar event is one shared record, deleting it also removes that nested activity row from its Game Log session without deleting the session. Back up MongoDB before manual purge because deletion cannot be undone.
 
 Production must run as a persistent Node.js process:
 

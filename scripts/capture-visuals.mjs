@@ -9,13 +9,13 @@ await mkdir(output, { recursive: true });
 
 const captures = [
     { name: "friends-locations", path: "/", readyText: "Aoi Sample" },
-    { name: "feed", path: "/feed", readyText: "Moved to wrld_00000000-0000-0000-0000-000000000010:12345" },
+    { name: "feed", path: "/feed", readyText: "Own status is now recorded" },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
     { name: "user-favorite-dialog", path: "/social/friend-list", readyText: "VRChat Favorites", clickText: "Aoi Sample", favoriteKind: "friend", favoriteActionLabel: "Manage favorites for Aoi Sample" },
     { name: "notifications", path: "/notification", readyText: "Group announcement, Community meetup starts in one hour." },
-    { name: "game-log", path: "/game-log", readyText: "Midnight Rooftop" },
+    { name: "game-log", path: "/game-log", readyText: "Visual Operator: join me · Own status is now recorded" },
     { name: "search", path: "/search", readyText: "Found through the VRChat user search.", searchQuery: "sample creator" },
     { name: "favorite-friends", path: "/favorite/friends", readyText: "Building a new world", favoriteKind: "friend" },
     { name: "favorite-friends-import", path: "/favorite/friends", readyText: "Import favorite friends", favoriteKind: "friend", favoriteDialog: "Import" },

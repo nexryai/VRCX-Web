@@ -93,6 +93,16 @@ export type FriendSnapshotDocument = {
     updatedAt: Date;
 };
 
+export type SelfSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    userId: string;
+    online: boolean;
+    user: VrchatUser;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
 export type UserDocument = {
     _id: string;
     ownerId: string;
@@ -317,6 +327,7 @@ export type Collections = {
     avatarTags: Collection<AvatarTagDocument>;
     entityMemos: Collection<EntityMemoDocument>;
     friendSnapshots: Collection<FriendSnapshotDocument>;
+    selfSnapshots: Collection<SelfSnapshotDocument>;
     activityEvents: Collection<ActivityEventDocument>;
     gameSessions: Collection<GameSessionDocument>;
     notifications: Collection<NotificationDocument>;
@@ -343,6 +354,7 @@ export function collections(db: Db): Collections {
         avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),
         entityMemos: db.collection<EntityMemoDocument>("entity_memos"),
         friendSnapshots: db.collection<FriendSnapshotDocument>("friend_snapshots"),
+        selfSnapshots: db.collection<SelfSnapshotDocument>("self_snapshots"),
         activityEvents: db.collection<ActivityEventDocument>("activity_events"),
         gameSessions: db.collection<GameSessionDocument>("game_sessions"),
         notifications: db.collection<NotificationDocument>("notifications"),

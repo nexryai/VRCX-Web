@@ -45,7 +45,7 @@ export function toFriendSnapshots(allFriends: VrchatUser[], onlineIds: Set<strin
     }));
 }
 
-export function diffFriendSnapshots(previous: FriendSnapshot[], current: FriendSnapshot[], now = new Date().toISOString()): FriendActivity[] {
+export function diffFriendSnapshots(previous: FriendSnapshot[], current: FriendSnapshot[], now = new Date().toISOString(), includeRelationshipChanges = true): FriendActivity[] {
     const before = new Map(previous.map((friend) => [friend.id, friend]));
     const after = new Map(current.map((friend) => [friend.id, friend]));
     const entries: FriendActivity[] = [];
@@ -56,7 +56,7 @@ export function diffFriendSnapshots(previous: FriendSnapshot[], current: FriendS
     for (const friend of current) {
         const old = before.get(friend.id);
         if (!old) {
-            add("Friend", friend);
+            if (includeRelationshipChanges) add("Friend", friend);
             continue;
         }
         if (old.displayName !== friend.displayName) add("DisplayName", friend, old.displayName, friend.displayName);
@@ -68,7 +68,7 @@ export function diffFriendSnapshots(previous: FriendSnapshot[], current: FriendS
         if (old.trustLevel !== friend.trustLevel) add("TrustLevel", friend, old.trustLevel, friend.trustLevel);
     }
     for (const friend of previous) {
-        if (!after.has(friend.id)) add("Unfriend", friend);
+        if (includeRelationshipChanges && !after.has(friend.id)) add("Unfriend", friend);
     }
     return entries;
 }

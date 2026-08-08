@@ -21,6 +21,12 @@ describe("friend activity differences", () => {
         ]);
     });
 
+    it("diffs the active identity without fabricating relationship events", () => {
+        expect(diffFriendSnapshots([], [friend()], "2026-08-02T00:00:00.000Z", false)).toEqual([]);
+        const result = diffFriendSnapshots([friend()], [friend({ location: "wrld_two:2", status: "join me\nOwn session" })], "2026-08-02T00:01:00.000Z", false);
+        expect(result.map((entry) => entry.type)).toEqual(["GPS", "Status"]);
+    });
+
     it("ports VRCX trust ranks and records remotely observed rank changes", () => {
         expect(trustLevelFromTags(["system_trust_veteran"])).toBe("Trusted User");
         expect(trustLevelFromTags(["system_trust_trusted"])).toBe("Known User");

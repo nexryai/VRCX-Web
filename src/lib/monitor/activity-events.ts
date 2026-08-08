@@ -2,7 +2,7 @@ import "server-only";
 
 import type { FriendActivity } from "@/lib/activity-log";
 import { getMongoDatabase } from "@/lib/mongodb/client";
-import { type ActivityEventDocument, collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
+import { type ActivityEventDocument, collections, type FriendSnapshotDocument, type SelfSnapshotDocument } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 
 import { createHash } from "node:crypto";
@@ -10,10 +10,14 @@ import { createHash } from "node:crypto";
 type PersistActivityTransitionsOptions = {
     ownerId: string;
     events: FriendActivity[];
-    previousDocuments: FriendSnapshotDocument[];
+    previousDocuments: Array<FriendSnapshotDocument | SelfSnapshotDocument>;
     observedAt: Date;
     provenance: ActivityEventDocument["provenance"];
 };
+
+function snapshotUserId(document: FriendSnapshotDocument | SelfSnapshotDocument) {
+    return "friendId" in document ? document.friendId : document.userId;
+}
 
 function transitionId(ownerId: string, event: FriendActivity, anchor: string) {
     return createHash("sha256")
@@ -30,7 +34,7 @@ export async function persistActivityTransitions({ ownerId, events, previousDocu
     if (!events.length) return;
     await ensureMongoSchema();
     const activityEvents = collections(await getMongoDatabase()).activityEvents;
-    const previousByUser = new Map(previousDocuments.map((document) => [document.friendId, document]));
+    const previousByUser = new Map(previousDocuments.map((document) => [snapshotUserId(document), document]));
     const relationshipStarts = [...new Set(events.filter((event) => event.type === "Friend" && !previousByUser.has(event.userId)).map((event) => event.userId))];
     const relationshipAnchors = new Map<string, string>();
     if (relationshipStarts.length) {

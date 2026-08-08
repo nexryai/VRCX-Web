@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     observeGameSession: vi.fn(async (): Promise<void> => undefined),
     resolveLocationMetadata: vi.fn(async () => ({ cookies: { auth: "auth-cookie" } })),
     runAvatarAutoCleanup: vi.fn(async () => ({ ran: false, days: null, deleted: 0 })),
+    applyPipelineSelfEvent: vi.fn(async () => true),
     sockets: [] as FakeWebSocket[],
 }));
 
@@ -54,6 +55,7 @@ vi.mock("./lease", () => ({
 vi.mock("./reconcile", () => ({ reconcileRemoteState: mocks.reconcileRemoteState }));
 vi.mock("./location-metadata", () => ({ resolveLocationMetadata: mocks.resolveLocationMetadata }));
 vi.mock("./avatar-cleanup", () => ({ runAvatarAutoCleanup: mocks.runAvatarAutoCleanup }));
+vi.mock("./self-events", () => ({ applyPipelineSelfEvent: mocks.applyPipelineSelfEvent }));
 vi.mock("./friend-events", () => ({ applyPipelineFriendEvent: vi.fn(), isPipelineFriendEventType: vi.fn(() => false) }));
 vi.mock("@/lib/mongodb/session-repository", () => ({
     clearStoredVrchatSession: vi.fn(),
@@ -131,6 +133,7 @@ describe("AlwaysOnMonitor leadership lifecycle", () => {
         );
         await vi.advanceTimersByTimeAsync(0);
         expect(mocks.observeGameSession).toHaveBeenCalledTimes(1);
+        expect(mocks.applyPipelineSelfEvent).toHaveBeenCalledWith("usr_00000000-0000-0000-0000-000000000001", "user-location", expect.objectContaining({ location: "wrld_00000000-0000-0000-0000-000000000010:12345" }), expect.any(Date));
 
         await vi.advanceTimersByTimeAsync(120_000);
         expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(1);
@@ -139,6 +142,28 @@ describe("AlwaysOnMonitor leadership lifecycle", () => {
         await vi.advanceTimersByTimeAsync(0);
         expect(mocks.advanceMonitorPipelineCursor).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ ownerId: "usr_00000000-0000-0000-0000-000000000001", type: "user-location" }));
         expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(2);
+        monitor.stop();
+    });
+
+    test("applies current-user updates through the self activity path before committing the Pipeline cursor", async () => {
+        vi.useFakeTimers();
+        const { AlwaysOnMonitor } = await import("./service");
+        const monitor = new AlwaysOnMonitor();
+        await monitor.start();
+        const socket = mocks.sockets[0];
+        socket?.emit("open");
+        socket?.emit(
+            "message",
+            JSON.stringify({
+                type: "user-update",
+                content: JSON.stringify({ user: { id: "usr_00000000-0000-0000-0000-000000000001", displayName: "Monitor User", status: "join me", statusDescription: "Own update" } }),
+            }),
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(mocks.applyPipelineSelfEvent).toHaveBeenCalledWith("usr_00000000-0000-0000-0000-000000000001", "user-update", expect.objectContaining({ user: expect.objectContaining({ statusDescription: "Own update" }) }), expect.any(Date));
+        expect(mocks.advanceMonitorPipelineCursor).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ type: "user-update" }));
+        expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(1);
         monitor.stop();
     });
 });

@@ -3,7 +3,7 @@ import "server-only";
 import { type Filter, MongoServerError } from "mongodb";
 
 import { getMongoDatabase } from "@/lib/mongodb/client";
-import { collections, type GameSessionDocument } from "@/lib/mongodb/collections";
+import { type ActivityEventDocument, collections, type GameSessionDocument } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { parseObservableLocation, unobservableReason } from "./location";
 
@@ -22,6 +22,9 @@ export type GameSessionCursor = {
     startedAt: Date;
     id: string;
 };
+
+const sessionActivityTypes = ["Avatar", "Bio", "GPS", "Offline", "Online", "Status"] as const;
+export type GameSessionActivityDocument = ActivityEventDocument & { type: (typeof sessionActivityTypes)[number] };
 
 function sessionId(ownerId: string, location: string, startedAt: Date): string {
     return createHash("sha256").update(`${ownerId}\u0000${location}\u0000${startedAt.toISOString()}`).digest("hex");
@@ -158,4 +161,54 @@ export async function listGameSessions(options: { ownerId: string; limit: number
         sessions,
         ...(hasMore && last ? { nextCursor: { startedAt: last.startedAt, id: last._id } } : {}),
     };
+}
+
+/** Associates remotely observed self activity with the location session that contained its observed boundary. */
+export async function listGameSessionActivities(ownerId: string, sessions: GameSessionDocument[]): Promise<Map<string, GameSessionActivityDocument[]>> {
+    const bySession = new Map(sessions.map((session) => [session._id, [] as GameSessionActivityDocument[]]));
+    if (!sessions.length) return bySession;
+    await ensureMongoSchema();
+    const tolerance = 1_000;
+    const earliest = new Date(Math.min(...sessions.map((session) => session.startedAt.getTime())) - tolerance);
+    const latest = new Date(
+        Math.max(
+            ...sessions.map((session) => {
+                if (session.endedAt) return session.endedAt.getTime() + tolerance;
+                return Math.max(session.lastObservedAt.getTime(), Date.now());
+            }),
+        ),
+    );
+    const c = collections(await getMongoDatabase());
+    const [events, associationSessions] = await Promise.all([
+        c.activityEvents
+            .find({ ownerId, subjectUserId: ownerId, type: { $in: [...sessionActivityTypes] }, occurredAt: { $gte: earliest, $lte: latest } })
+            .sort({ occurredAt: 1, _id: 1 })
+            .toArray() as Promise<GameSessionActivityDocument[]>,
+        c.gameSessions
+            .find({
+                ownerId,
+                startedAt: { $lte: latest },
+                $or: [{ endedAt: { $gte: earliest } }, { current: true }],
+            })
+            .toArray(),
+    ]);
+
+    for (const event of events) {
+        const occurredAt = event.occurredAt.getTime();
+        const candidates = associationSessions.filter((session) => occurredAt >= session.startedAt.getTime() - tolerance && occurredAt <= (session.endedAt?.getTime() ?? Number.POSITIVE_INFINITY) + tolerance);
+        if (!candidates.length) continue;
+        let target: GameSessionDocument | undefined;
+        if (event.type === "GPS") {
+            target = event.current ? candidates.find((session) => session.location === event.current) : undefined;
+            if (!target) continue;
+        }
+        if (!target && event.type === "Offline") {
+            target = candidates.filter((session) => session.endedAt).sort((left, right) => (right.endedAt?.getTime() ?? 0) - (left.endedAt?.getTime() ?? 0))[0];
+            if (!target) continue;
+        }
+        target ??= candidates.sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime())[0];
+        if (target) bySession.get(target._id)?.push(event);
+    }
+    for (const eventsForSession of bySession.values()) eventsForSession.reverse();
+    return bySession;
 }

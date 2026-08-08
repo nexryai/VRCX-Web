@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { z } from "zod";
 
-import { type GameSessionCursor, listGameSessions } from "@/lib/game-log/session-repository";
+import { type GameSessionCursor, listGameSessionActivities, listGameSessions } from "@/lib/game-log/session-repository";
 import type { GameSessionDto } from "@/lib/game-log/types";
 import { getStoredVrchatSession } from "@/lib/mongodb/session-repository";
 
@@ -51,6 +51,7 @@ export async function GET(request: Request) {
         ...(query.data.to ? { to: new Date(query.data.to) } : {}),
         ...(query.data.search ? { search: query.data.search } : {}),
     });
+    const activities = await listGameSessionActivities(stored.activeUserId, result.sessions);
     const sessions: GameSessionDto[] = result.sessions.map((session) => ({
         id: session._id,
         location: session.location,
@@ -68,6 +69,15 @@ export async function GET(request: Request) {
         firstObservedAt: session.firstObservedAt.toISOString(),
         lastObservedAt: session.lastObservedAt.toISOString(),
         current: session.current,
+        activities: (activities.get(session._id) || []).map((activity) => ({
+            id: activity._id,
+            type: activity.type,
+            displayName: activity.displayName,
+            occurredAt: activity.occurredAt.toISOString(),
+            ...(activity.previous !== undefined ? { previous: activity.previous } : {}),
+            ...(activity.current !== undefined ? { current: activity.current } : {}),
+            provenance: activity.provenance,
+        })),
     }));
 
     const response = NextResponse.json({ sessions, nextCursor: encodeCursor(result.nextCursor) });

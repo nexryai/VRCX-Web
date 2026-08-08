@@ -10,13 +10,14 @@ import { replaceGroupMemberships } from "@/lib/mongodb/entity-repository";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { replaceFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection } from "@/lib/mongodb/projection-repository";
 import { updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
-import { upsertCachedUser, upsertCachedUsers } from "@/lib/mongodb/user-repository";
+import { upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatGroupSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
 import { persistActivityTransitions } from "./activity-events";
 import { acquireReconciliationLease, releaseReconciliationLease } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
+import { applySelfSnapshot } from "./self-events";
 
 import { randomUUID } from "node:crypto";
 
@@ -93,6 +94,7 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
     const reconciliationStartedAt = new Date();
     const currentResponse = await requestVrchat<unknown>("auth/user", { cookies });
     const user = vrchatUserSchema.parse(currentResponse.data);
+    const currentUserObservedAt = new Date();
     if (expectedOwnerId && user.id !== expectedOwnerId) {
         throw new VrchatApiError("The stored VRChat session no longer matches the active identity.", 401);
     }
@@ -142,8 +144,8 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
     const previous = previousDocuments.flatMap((document) => toFriendSnapshots([document.user], document.online ? new Set([document.friendId]) : new Set()));
     const current = toFriendSnapshots(reconciledFriends, onlineIds);
     const observedAt = new Date();
+    await applySelfSnapshot(user.id, user, currentUserObservedAt, "reconciliation");
     await Promise.all([
-        upsertCachedUser(user.id, user, "auth", observedAt),
         upsertCachedUsers(user.id, combined, "friends", observedAt),
         replaceGroupMemberships(user.id, memberships, observedAt),
         replaceActiveNotifications(user.id, "legacy", legacyNotifications.notifications, observedAt),

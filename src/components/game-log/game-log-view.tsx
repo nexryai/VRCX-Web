@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CalendarRange, ChevronRight, Clock3, MapPin, Search, X } from "lucide-react";
 
-import type { GameSessionDto, GameSessionsResponse } from "@/lib/game-log/types";
+import type { GameSessionActivityDto, GameSessionDto, GameSessionsResponse } from "@/lib/game-log/types";
 
 function formatDate(value: string) {
     return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value));
@@ -19,6 +19,40 @@ function formatDuration(session: GameSessionDto) {
     if (hours) return `${hours}h ${minutes}m`;
     if (minutes) return `${minutes}m ${remainder}s`;
     return `${remainder}s`;
+}
+
+function formatTime(value: string) {
+    return new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(value));
+}
+
+function compactValue(value?: string) {
+    if (!value) return "None";
+    if (/^https?:\/\//i.test(value)) return "avatar image";
+    return value.replaceAll("\n", " · ");
+}
+
+function activityDescription(activity: GameSessionActivityDto) {
+    if (activity.type === "GPS") return `${activity.displayName} moved to ${compactValue(activity.current)}`;
+    if (activity.type === "Online") return `${activity.displayName} came online${activity.current ? ` at ${activity.current}` : ""}`;
+    if (activity.type === "Offline") return `${activity.displayName} went offline${activity.previous ? ` from ${activity.previous}` : ""}`;
+    if (activity.type === "Status") return `${activity.displayName}: ${compactValue(activity.current)}`;
+    if (activity.type === "Avatar") return `${activity.displayName} changed avatar`;
+    return `${activity.displayName} changed bio`;
+}
+
+function SessionActivity({ activity }: { activity: GameSessionActivityDto }) {
+    return (
+        <div className="flex min-h-7 items-center gap-1.5 rounded px-2 py-0.5 text-[0.8125rem] text-muted-foreground hover:bg-muted/50">
+            <span className="w-[5.5rem] shrink-0 text-[0.75rem] tabular-nums">{formatTime(activity.occurredAt)}</span>
+            <span className="inline-flex h-5 min-w-20 shrink-0 items-center justify-center rounded border border-border px-1.5 text-[0.6875rem]">{activity.type}</span>
+            <span className="min-w-0 flex-1 truncate text-foreground" title={activityDescription(activity)}>
+                {activityDescription(activity)}
+            </span>
+            <span className="shrink-0 text-[0.625rem] max-sm:hidden" title={`Observed by ${activity.provenance}`}>
+                observed
+            </span>
+        </div>
+    );
 }
 
 function SessionSegment({ session, latest }: { session: GameSessionDto; latest: boolean }) {
@@ -50,14 +84,23 @@ function SessionSegment({ session, latest }: { session: GameSessionDto; latest: 
                 </span>
             </button>
             {!collapsed ? (
-                <div className="grid gap-1 px-8 py-2 text-[0.75rem] text-muted-foreground lg:grid-cols-2">
-                    <span className="truncate" title={session.location}>
-                        {session.location}
-                    </span>
-                    <span className="flex items-center gap-1 sm:justify-end">
-                        <Clock3 aria-hidden="true" className="size-3" />
-                        Last observed {formatDate(session.lastObservedAt)}
-                    </span>
+                <div>
+                    {session.activities.length ? (
+                        <div className="px-1 py-1">
+                            {session.activities.map((activity) => (
+                                <SessionActivity key={activity.id} activity={activity} />
+                            ))}
+                        </div>
+                    ) : null}
+                    <div className="grid gap-1 px-8 py-2 text-[0.75rem] text-muted-foreground lg:grid-cols-2">
+                        <span className="truncate" title={session.location}>
+                            {session.location}
+                        </span>
+                        <span className="flex items-center gap-1 sm:justify-end">
+                            <Clock3 aria-hidden="true" className="size-3" />
+                            Last observed {formatDate(session.lastObservedAt)}
+                        </span>
+                    </div>
                 </div>
             ) : null}
         </section>

@@ -210,6 +210,7 @@ await database.collection("app_settings").insertOne({
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
 await database.collection("monitor_state").insertOne({ _id: "singleton", schemaVersion: 1, ownerId, status: "healthy", pipelineConnected: true, pipelineSequence: 12, lastPipelineEventAt: now, lastReconciledAt: now, updatedAt: now });
 await database.collection("users").insertOne({ _id: `${ownerId}:${ownerId}`, ownerId, userId: ownerId, user: currentUser, source: "auth", observedAt: now, updatedAt: now });
+await database.collection("self_snapshots").insertOne({ _id: ownerId, ownerId, userId: ownerId, online: true, user: currentUser, observedAt: now, updatedAt: now });
 await database.collection("friend_snapshots").insertMany(friends.map((user) => ({ _id: `${ownerId}:${user.id}`, ownerId, friendId: user.id, online: user.state === "online", user, observedAt: now, updatedAt: now })));
 await database.collection("favorites").insertMany([
     { _id: `${ownerId}:fvrt_visual_friend`, ownerId, recordId: "fvrt_visual_friend", objectId: friends[0].id, favoriteType: "friend", favorite: { id: "fvrt_visual_friend", favoriteId: friends[0].id, type: "friend", tags: ["group_0"] }, active: true, observedAt: now, updatedAt: now },
@@ -366,6 +367,30 @@ await database.collection("mutual_graph").insertOne({
     updatedAt: now,
 });
 await database.collection("activity_events").insertMany([
+    {
+        _id: activityId("visual-self-status"),
+        ownerId,
+        type: "Status",
+        subjectUserId: ownerId,
+        displayName: currentUser.displayName,
+        previous: "active\nChecking settings",
+        current: "join me\nOwn status is now recorded",
+        occurredAt: new Date(now.getTime() - 12 * 60_000),
+        observedAt: new Date(now.getTime() - 12 * 60_000),
+        provenance: "pipeline",
+    },
+    {
+        _id: activityId("visual-self-avatar"),
+        ownerId,
+        type: "Avatar",
+        subjectUserId: ownerId,
+        displayName: currentUser.displayName,
+        previous: "https://example.com/previous-avatar.png",
+        current: "https://example.com/current-avatar.png",
+        occurredAt: new Date(now.getTime() - 8 * 60_000),
+        observedAt: new Date(now.getTime() - 8 * 60_000),
+        provenance: "reconciliation",
+    },
     {
         _id: activityId("visual-gps"),
         ownerId,

@@ -13,6 +13,7 @@ import { applyPipelineFriendEvent, isPipelineFriendEventType } from "./friend-ev
 import { acquireMonitorLease, advanceMonitorPipelineCursor, prepareMonitorIdentity, updateMonitorHealth } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
 import { reconcileRemoteState } from "./reconcile";
+import { applyPipelineSelfEvent } from "./self-events";
 
 import { createHash, randomUUID } from "node:crypto";
 
@@ -251,6 +252,10 @@ export class AlwaysOnMonitor {
     private async applyPipelineEvent(type: string, parsedContent: unknown, now: Date, generation: number, ownerId: string) {
         const content = z.record(z.string(), z.unknown()).safeParse(parsedContent);
         if (type === "user-location" && content.success && content.data.userId === ownerId) {
+            if (!(await applyPipelineSelfEvent(ownerId, "user-location", content.data, now))) {
+                void this.reconcile();
+                return;
+            }
             const location = typeof content.data.location === "string" ? content.data.location : undefined;
             await observeGameSession({ ownerId, location, observedAt: now, provenance: "pipeline" });
             const expectedAuthCookie = this.cookies?.auth;
@@ -259,6 +264,11 @@ export class AlwaysOnMonitor {
             this.cookies = metadata.cookies;
             await updateStoredVrchatCookies(metadata.cookies, { activeUserId: ownerId, authCookie: expectedAuthCookie });
             await enrichGameSession(ownerId, location, metadata);
+            return;
+        }
+
+        if (type === "user-update" && content.success) {
+            if (!(await applyPipelineSelfEvent(ownerId, "user-update", content.data, now))) void this.reconcile();
             return;
         }
 
@@ -297,7 +307,7 @@ export class AlwaysOnMonitor {
             if (await applyPipelineFriendEvent(this.ownerId, type, content.data, now)) return;
         }
 
-        if (type.startsWith("friend-") || type.startsWith("group-") || type === "notification-v2-update" || type === "user-update") {
+        if (type.startsWith("friend-") || type.startsWith("group-") || type === "notification-v2-update") {
             // Reconciliation applies the same typed projection path and
             // deduplicates results, while coalescing noisy Pipeline bursts.
             void this.reconcile();

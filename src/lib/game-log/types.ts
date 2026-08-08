@@ -1,3 +1,15 @@
+export type GameSessionActivityType = "Avatar" | "Bio" | "GPS" | "Offline" | "Online" | "Status";
+
+export type GameSessionActivityDto = {
+    id: string;
+    type: GameSessionActivityType;
+    displayName: string;
+    occurredAt: string;
+    previous?: string;
+    current?: string;
+    provenance: "pipeline" | "reconciliation";
+};
+
 export type GameSessionDto = {
     id: string;
     location: string;
@@ -15,6 +27,7 @@ export type GameSessionDto = {
     firstObservedAt: string;
     lastObservedAt: string;
     current: boolean;
+    activities: GameSessionActivityDto[];
 };
 
 export type GameSessionsResponse = {

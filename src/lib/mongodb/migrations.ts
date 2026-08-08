@@ -310,6 +310,13 @@ const migrations: Migration[] = [
             await Promise.all([c.activityEvents.createIndex({ ownerId: 1, type: 1, occurredAt: 1 }, { name: "owner_type_occurred" }), c.appSettings.updateMany({ avatarAutoCleanupDays: { $exists: false } }, { $set: { avatarAutoCleanupDays: 0, updatedAt } })]);
         },
     },
+    {
+        version: 24,
+        name: "add-self-activity-snapshots",
+        async apply(c) {
+            await c.selfSnapshots.createIndex({ ownerId: 1 }, { unique: true, name: "owner_unique" });
+        },
+    },
 ];
 
 async function applyMigrations() {

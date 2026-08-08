@@ -263,7 +263,7 @@ function SystemSettings({
                         <div className="mt-4 space-y-1 text-sm text-muted-foreground">
                             <p>This permanently deletes avatar change records from the database.</p>
                             <p>This action cannot be undone.</p>
-                            <p>Other Feed, Friend Log, Game Log, current projections, memos, tags, and favorites are not deleted.</p>
+                            <p>Other Feed events, Friend Log, Game Log sessions, current projections, memos, tags, and favorites are not deleted. The same Avatar event is also removed from its nested Game Log session view.</p>
                         </div>
                         <label className="mt-5 flex items-center justify-between gap-4 text-sm">
                             <span>Delete Avatar Data Older Than</span>

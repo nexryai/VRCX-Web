@@ -29,7 +29,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
         expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -53,6 +53,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
+        expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
         expect(await collections(database).monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
         expect(await collections(database).appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
     });
@@ -346,6 +347,44 @@ describe("MongoDB application repositories", () => {
         expect(await applyPipelineFriendEvent(ownerId, "friend-delete", { userId: friendId }, new Date("2026-08-02T13:15:00.000Z"))).toBe(true);
         expect(await database.collection("friend_snapshots").findOne({ ownerId, friendId })).toBeNull();
         expect(await database.collection("activity_events").findOne({ ownerId, type: "Unfriend" })).not.toBeNull();
+    });
+
+    test("records self activity without relationship events and associates it with Game Log sessions", async () => {
+        const { listGameSessionActivities, listGameSessions, observeGameSession } = await import("@/lib/game-log/session-repository");
+        const { applyPipelineSelfEvent, applySelfSnapshot } = await import("@/lib/monitor/self-events");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-0000000000b5";
+        const firstLocation = "wrld_00000000-0000-0000-0000-0000000000b6:11111";
+        const secondLocation = "wrld_00000000-0000-0000-0000-0000000000b7:22222";
+        const baselineAt = new Date("2026-08-02T14:00:00.000Z");
+        const statusAt = new Date("2026-08-02T14:05:00.000Z");
+        const movedAt = new Date("2026-08-02T14:10:00.000Z");
+        const offlineAt = new Date("2026-08-02T14:20:00.000Z");
+
+        await observeGameSession({ ownerId, location: firstLocation, observedAt: baselineAt, provenance: "reconciliation" });
+        await applySelfSnapshot(ownerId, { id: ownerId, displayName: "Self Operator", state: "online", status: "active", statusDescription: "Baseline", location: firstLocation }, baselineAt, "reconciliation");
+        await applyPipelineSelfEvent(ownerId, "user-update", { user: { status: "join me", statusDescription: "Own update" } }, statusAt);
+        await applyPipelineSelfEvent(ownerId, "user-update", { user: { status: "join me", statusDescription: "Own update" } }, statusAt);
+        await applyPipelineSelfEvent(ownerId, "user-location", { userId: ownerId, location: secondLocation }, movedAt);
+        await observeGameSession({ ownerId, location: secondLocation, observedAt: movedAt, provenance: "pipeline" });
+        await applyPipelineSelfEvent(ownerId, "user-location", { userId: ownerId, location: "offline" }, offlineAt);
+        await observeGameSession({ ownerId, location: "offline", observedAt: offlineAt, provenance: "pipeline" });
+
+        const database = await getMongoDatabase();
+        const activity = await database.collection("activity_events").find({ ownerId }).sort({ occurredAt: 1 }).toArray();
+        expect(activity.map((event) => event.type)).toEqual(["Status", "GPS", "Offline"]);
+        expect(activity.every((event) => event.subjectUserId === ownerId)).toBe(true);
+        expect(await database.collection("activity_events").countDocuments({ ownerId, type: { $in: ["Friend", "Unfriend"] } })).toBe(0);
+        expect(await database.collection("friend_snapshots").countDocuments({ ownerId })).toBe(0);
+        expect(await database.collection("self_snapshots").findOne({ ownerId })).toMatchObject({ userId: ownerId, online: false, updatedAt: offlineAt });
+
+        const sessions = await listGameSessions({ ownerId, limit: 10 });
+        const eventsBySession = await listGameSessionActivities(ownerId, sessions.sessions);
+        const first = sessions.sessions.find((session) => session.location === firstLocation);
+        const second = sessions.sessions.find((session) => session.location === secondLocation);
+        expect(first && eventsBySession.get(first._id)?.map((event) => event.type)).toEqual(["Status"]);
+        expect(second && eventsBySession.get(second._id)?.map((event) => event.type)).toEqual(["Offline", "GPS"]);
+        expect(first && (await listGameSessionActivities(ownerId, [first])).get(first._id)?.map((event) => event.type)).toEqual(["Status"]);
     });
 
     test("deduplicates interrupted friend transitions across Pipeline and reconciliation", async () => {
