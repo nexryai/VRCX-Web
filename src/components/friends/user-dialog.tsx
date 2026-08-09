@@ -32,7 +32,7 @@ function userLanguages(user: VrchatUser) {
 
 export function UserDialog({ userId, onClose }: { userId: string; onClose: () => void }) {
     const currentUser = useCurrentUser();
-    const { friends, openUser, openWorld, openGroup, removeFriend, refresh: refreshFriends } = useFriends();
+    const { friends, openUser, openWorld, openGroup, removeFriend, patchFriendMetadata, refresh: refreshFriends } = useFriends();
     const [user, setUser] = useState<VrchatUser | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -269,7 +269,18 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                         <Loader2 className="size-5 animate-spin text-muted-foreground" aria-label={`Loading ${activeTab}`} />
                                     </div>
                                 ) : null}
-                                {!tabLoading && activeTab === "Info" ? <InfoTab user={user} onNoteChange={(note) => setUser((current) => (current ? { ...current, note } : current))} onOpenPreviousInstances={() => setPreviousInstancesOpen(true)} previousInstancesButton={previousInstancesButton} /> : null}
+                                {!tabLoading && activeTab === "Info" ? (
+                                    <InfoTab
+                                        user={user}
+                                        onNoteChange={(note) => {
+                                            setUser((current) => (current ? { ...current, note } : current));
+                                            patchFriendMetadata(user.id, { note });
+                                        }}
+                                        onMemoChange={(memo) => patchFriendMetadata(user.id, { $memo: memo })}
+                                        onOpenPreviousInstances={() => setPreviousInstancesOpen(true)}
+                                        previousInstancesButton={previousInstancesButton}
+                                    />
+                                ) : null}
                                 {!tabLoading && activeTab === "Mutual" ? <MutualTab users={mutuals} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Mutual", true)} openUser={openUser} /> : null}
                                 {!tabLoading && activeTab === "Groups" ? <GroupsTab groups={groups} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Groups", true)} openGroup={openGroup} /> : null}
                                 {!tabLoading && activeTab === "Worlds" ? <WorldsTab worlds={worlds} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Worlds", true)} openWorld={openWorld} /> : null}
@@ -486,12 +497,12 @@ function UserNoteField({ user, onNoteChange }: { user: VrchatUser; onNoteChange:
     );
 }
 
-function InfoTab({ user, onNoteChange, onOpenPreviousInstances, previousInstancesButton }: { user: VrchatUser; onNoteChange: (note: string) => void; onOpenPreviousInstances: () => void; previousInstancesButton: React.RefObject<HTMLButtonElement | null> }) {
+function InfoTab({ user, onNoteChange, onMemoChange, onOpenPreviousInstances, previousInstancesButton }: { user: VrchatUser; onNoteChange: (note: string) => void; onMemoChange: (memo: string) => void; onOpenPreviousInstances: () => void; previousInstancesButton: React.RefObject<HTMLButtonElement | null> }) {
     return (
         <div className="space-y-2">
             <section className="rounded-xl bg-background p-1.5">
                 <UserNoteField key={user.id} user={user} onNoteChange={onNoteChange} />
-                <MemoField entityType="user" entityId={user.id} />
+                <MemoField entityType="user" entityId={user.id} onMemoChange={onMemoChange} />
             </section>
             <section className="rounded-xl bg-background p-3">
                 <SectionTitle>Current instance</SectionTitle>

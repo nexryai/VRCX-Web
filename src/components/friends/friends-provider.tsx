@@ -5,13 +5,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AvatarDialog } from "@/components/avatars/avatar-dialog";
 import { GroupDialog } from "@/components/groups/group-dialog";
 import { WorldDialog } from "@/components/worlds/world-dialog";
+import type { FriendListUser } from "@/lib/friend-list";
 import { fetchAllFriends } from "@/lib/friends-client";
-import type { VrchatUser } from "@/lib/vrchat/types";
 import { UserDialog } from "./user-dialog";
 
 type FriendsContextValue = {
-    friends: VrchatUser[];
-    allFriends: VrchatUser[];
+    friends: FriendListUser[];
+    allFriends: FriendListUser[];
     loading: boolean;
     error: string;
     refresh: () => Promise<void>;
@@ -21,13 +21,14 @@ type FriendsContextValue = {
     openGroup: (groupId: string) => void;
     openAvatar: (avatarId: string) => void;
     removeFriend: (userId: string) => void;
+    patchFriendMetadata: (userId: string, fields: Partial<Pick<FriendListUser, "note" | "$memo">>) => void;
 };
 
 const FriendsContext = createContext<FriendsContextValue | null>(null);
 
 export function FriendsProvider({ children }: { children: React.ReactNode }) {
-    const [friends, setFriends] = useState<VrchatUser[]>([]);
-    const [allFriends, setAllFriends] = useState<VrchatUser[]>([]);
+    const [friends, setFriends] = useState<FriendListUser[]>([]);
+    const [allFriends, setAllFriends] = useState<FriendListUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selectedUserId, setSelectedUserId] = useState("");
@@ -102,6 +103,11 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         setFriends((current) => current.filter((friend) => friend.id !== userId));
         setAllFriends((current) => current.filter((friend) => friend.id !== userId));
     }, []);
+    const patchFriendMetadata = useCallback((userId: string, fields: Partial<Pick<FriendListUser, "note" | "$memo">>) => {
+        const patch = (friend: FriendListUser) => (friend.id === userId ? { ...friend, ...fields } : friend);
+        setFriends((current) => current.map(patch));
+        setAllFriends((current) => current.map(patch));
+    }, []);
 
     useEffect(() => {
         void load(false);
@@ -114,7 +120,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         };
     }, [load]);
 
-    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, openAvatar, removeFriend }), [friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, openAvatar, removeFriend]);
+    const value = useMemo(() => ({ friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, openAvatar, removeFriend, patchFriendMetadata }), [friends, allFriends, loading, error, refresh, reload, openUser, openWorld, openGroup, openAvatar, removeFriend, patchFriendMetadata]);
     return (
         <FriendsContext.Provider value={value}>
             {children}

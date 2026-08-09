@@ -12,6 +12,8 @@ const captures = [
     { name: "feed", path: "/feed", readyText: "Own status is now recorded" },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
+    { name: "friend-list-note-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Note", query: "world-building meetup" } },
+    { name: "friend-list-memo-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Memo", query: "browser-port test crew" } },
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
     { name: "previous-instances-user", path: "/social/friend-list", readyText: "Remote user", clickText: "Aoi Sample", previousInstances: "user" },
     { name: "user-favorite-dialog", path: "/social/friend-list", readyText: "VRChat Favorites", clickText: "Aoi Sample", favoriteKind: "friend", favoriteActionLabel: "Manage favorites for Aoi Sample" },
@@ -133,6 +135,13 @@ for (const width of widths) {
             }
         }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
+        if (capture.friendListSearch) {
+            const filterSummary = page.getByText("Filter fields", { exact: true });
+            await filterSummary.click();
+            await page.getByLabel(capture.friendListSearch.field, { exact: true }).check();
+            await filterSummary.click();
+            await page.getByPlaceholder("Search friends", { exact: true }).fill(capture.friendListSearch.query);
+        }
         if (capture.favoriteDialog) {
             await page.getByLabel("Favorite card settings").click();
             await page.getByRole("button", { name: capture.favoriteDialog, exact: true }).click();

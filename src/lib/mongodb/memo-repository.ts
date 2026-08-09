@@ -11,6 +11,15 @@ export async function getEntityMemo(ownerId: string, entityType: MemoEntityType,
     return (await collections(await getMongoDatabase()).entityMemos.findOne({ _id: `${ownerId}:${entityType}:${entityId}` }))?.memo || "";
 }
 
+export async function listEntityMemos(ownerId: string, entityType: MemoEntityType, entityIds: string[]) {
+    if (!entityIds.length) return new Map<string, string>();
+    await ensureMongoSchema();
+    const documents = await collections(await getMongoDatabase())
+        .entityMemos.find({ ownerId, entityType, entityId: { $in: [...new Set(entityIds)] } }, { projection: { entityId: 1, memo: 1 } })
+        .toArray();
+    return new Map(documents.map((document) => [document.entityId, document.memo]));
+}
+
 export async function saveEntityMemo(ownerId: string, entityType: MemoEntityType, entityId: string, value: string) {
     await ensureMongoSchema();
     const collection = collections(await getMongoDatabase()).entityMemos;

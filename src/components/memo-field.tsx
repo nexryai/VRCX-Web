@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 
 type MemoEntityType = "avatar" | "user" | "world";
 
-export function MemoField({ entityType, entityId }: { entityType: MemoEntityType; entityId: string }) {
+export function MemoField({ entityType, entityId, onMemoChange }: { entityType: MemoEntityType; entityId: string; onMemoChange?: (memo: string) => void }) {
     const [memo, setMemo] = useState("");
     const [savedMemo, setSavedMemo] = useState("");
     const [loading, setLoading] = useState(true);
@@ -42,8 +42,10 @@ export function MemoField({ entityType, entityId }: { entityType: MemoEntityType
             const response = await fetch(`/api/memos/${entityType}/${encodeURIComponent(entityId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ memo }) });
             const payload = (await response.json()) as { error?: string; memo?: string };
             if (!response.ok) throw new Error(payload.error || "Memo could not be saved.");
-            setMemo(payload.memo || "");
-            setSavedMemo(payload.memo || "");
+            const saved = payload.memo || "";
+            setMemo(saved);
+            setSavedMemo(saved);
+            onMemoChange?.(saved);
         } catch (saveError) {
             setError(saveError instanceof Error ? saveError.message : "Memo could not be saved.");
         } finally {

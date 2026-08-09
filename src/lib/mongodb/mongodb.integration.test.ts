@@ -276,14 +276,19 @@ describe("MongoDB application repositories", () => {
         expect((await database.collection("groups").findOne({ ownerId: otherOwnerId, groupId }))?.membershipActive).toBeUndefined();
     });
 
-    test("stores entity memos without leaking them between owners", async () => {
-        const { getEntityMemo, saveEntityMemo } = await import("./memo-repository");
+    test("stores and lists entity memos without leaking them between owners", async () => {
+        const { getEntityMemo, listEntityMemos, saveEntityMemo } = await import("./memo-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000061";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000062";
         const worldId = "wrld_00000000-0000-0000-0000-000000000063";
+        const userId = "usr_00000000-0000-0000-0000-000000000064";
         expect(await saveEntityMemo(ownerId, "world", worldId, "  Weekend meetup world  ")).toBe("Weekend meetup world");
+        expect(await saveEntityMemo(ownerId, "user", userId, "Browser-port friend")).toBe("Browser-port friend");
+        expect(await saveEntityMemo(otherOwnerId, "user", userId, "Other operator's memo")).toBe("Other operator's memo");
         expect(await getEntityMemo(ownerId, "world", worldId)).toBe("Weekend meetup world");
         expect(await getEntityMemo(otherOwnerId, "world", worldId)).toBe("");
+        expect(await listEntityMemos(ownerId, "user", [userId, userId])).toEqual(new Map([[userId, "Browser-port friend"]]));
+        expect(await listEntityMemos(ownerId, "world", [userId])).toEqual(new Map());
         expect(await saveEntityMemo(ownerId, "world", worldId, "")).toBe("");
         expect(await getEntityMemo(ownerId, "world", worldId)).toBe("");
     });

@@ -33,6 +33,7 @@ const friends = [
         state: "online",
         status: "join me",
         statusDescription: "Building a new world",
+        note: "Remember the world-building meetup.",
         bio: "World creator and explorer",
         bioLinks: ["https://example.com/aoi"],
         tags: ["system_trust_trusted", "language_eng", "language_jpn"],

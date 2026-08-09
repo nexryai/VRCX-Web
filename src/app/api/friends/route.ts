@@ -2,8 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { friendListResponseSchema } from "@/lib/friend-list";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { collections } from "@/lib/mongodb/collections";
+import { listEntityMemos } from "@/lib/mongodb/memo-repository";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { getStoredVrchatSession } from "@/lib/mongodb/session-repository";
 
@@ -30,11 +32,14 @@ export async function GET(request: NextRequest) {
         .limit(query.data.n)
         .toArray();
     const c = collections(await getMongoDatabase());
-    const cachedProfiles = documents.length ? await c.users.find({ ownerId: stored.activeUserId, userId: { $in: documents.map((document) => document.friendId) } }).toArray() : [];
+    const friendIds = documents.map((document) => document.friendId);
+    const [cachedProfiles, memosById] = await Promise.all([documents.length ? c.users.find({ ownerId: stored.activeUserId, userId: { $in: friendIds } }).toArray() : [], listEntityMemos(stored.activeUserId, "user", friendIds)]);
     const profilesById = new Map(cachedProfiles.map((document) => [document.userId, document.user]));
     // Friend-list snapshots carry the freshest presence fields, while explicit
-    // profile lookups contribute richer remote fields such as date_joined.
-    const response = NextResponse.json({ friends: documents.map((document) => ({ ...profilesById.get(document.friendId), ...document.user })) });
+    // profile lookups contribute richer remote fields such as date_joined and
+    // VRChat notes. VRCX-local memos remain owner-scoped MongoDB metadata.
+    const payload = friendListResponseSchema.parse({ friends: documents.map((document) => ({ ...profilesById.get(document.friendId), ...document.user, $memo: memosById.get(document.friendId) || "" })) });
+    const response = NextResponse.json(payload);
     response.headers.set("Cache-Control", "private, no-store");
     return response;
 }

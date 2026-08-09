@@ -8,6 +8,7 @@ import { useCurrentUser } from "@/components/current-user-provider";
 import type { FriendActivity } from "@/lib/activity-log";
 import { trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
+import { type FriendListSearchField, type FriendListUser, friendListSearchFields, friendMatchesSearch } from "@/lib/friend-list";
 import { statusColor } from "@/lib/friends";
 import type { MutualGraphSnapshot } from "@/lib/mutual-graph";
 import { fetchAndPersistMutualGraph } from "@/lib/mutual-graph-client";
@@ -15,11 +16,8 @@ import type { VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
-type SearchField = "Display Name" | "User Name" | "Rank" | "Status" | "Bio";
 type SortKey = "number" | "displayName" | "rank" | "status" | "mutual" | "lastActivity" | "lastLogin" | "dateJoined";
 type PageSize = 20 | 50 | 100;
-
-const searchFields: SearchField[] = ["Display Name", "User Name", "Rank", "Status", "Bio"];
 
 function formatDate(value?: string) {
     if (!value) return "";
@@ -40,7 +38,7 @@ export function FriendListView() {
     const currentUser = useCurrentUser();
     const { allFriends: friends, loading, error, reload, openUser, removeFriend } = useFriends();
     const [search, setSearch] = useState("");
-    const [fields, setFields] = useState<SearchField[]>([]);
+    const [fields, setFields] = useState<FriendListSearchField[]>([]);
     const [favoritesOnly, setFavoritesOnly] = useState(false);
     const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
     const [snapshot, setSnapshot] = useState<MutualGraphSnapshot | null>(null);
@@ -87,16 +85,7 @@ export function FriendListView() {
     const friendNumbers = useMemo(() => new Map(friends.map((friend, index) => [friend.id, friends.length - index])), [friends]);
     const mutualCount = (friend: VrchatUser) => snapshot?.relationships[friend.id]?.length || 0;
     const filteredFriends = useMemo(() => {
-        const query = search.trim().toLocaleLowerCase();
-        const activeFields = fields.length ? fields : searchFields;
-        const valueFor = (friend: VrchatUser, field: SearchField) => {
-            if (field === "Display Name") return friend.displayName;
-            if (field === "User Name") return friend.username || "";
-            if (field === "Rank") return trustLevelFromTags(friend.tags);
-            if (field === "Status") return `${friend.status || ""} ${friend.statusDescription || ""}`;
-            return friend.bio || "";
-        };
-        const sortValue = (friend: VrchatUser) => {
+        const sortValue = (friend: FriendListUser) => {
             if (sort.key === "number") return friendNumbers.get(friend.id) || 0;
             if (sort.key === "displayName") return friend.displayName;
             if (sort.key === "rank") return trustLevelFromTags(friend.tags);
@@ -106,9 +95,7 @@ export function FriendListView() {
             if (sort.key === "lastLogin") return friend.last_login || "";
             return friend.date_joined || "";
         };
-        return friends
-            .filter((friend) => (!favoritesOnly || favoriteIds.has(friend.id)) && (!query || activeFields.some((field) => valueFor(friend, field).toLocaleLowerCase().includes(query))))
-            .toSorted((left, right) => (sort.descending ? -1 : 1) * compare(sortValue(left), sortValue(right)) || left.displayName.localeCompare(right.displayName));
+        return friends.filter((friend) => (!favoritesOnly || favoriteIds.has(friend.id)) && friendMatchesSearch(friend, search, fields)).toSorted((left, right) => (sort.descending ? -1 : 1) * compare(sortValue(left), sortValue(right)) || left.displayName.localeCompare(right.displayName));
     }, [favoriteIds, favoritesOnly, fields, friendNumbers, friends, lastSeen, search, snapshot, sort]);
 
     const pageCount = Math.max(1, Math.ceil(filteredFriends.length / pageSize));
@@ -119,7 +106,7 @@ export function FriendListView() {
         setSort((current) => (current.key === key ? { key, descending: !current.descending } : { key, descending: descendingFirst }));
     }
 
-    function toggleField(field: SearchField) {
+    function toggleField(field: FriendListSearchField) {
         setFields((current) => (current.includes(field) ? current.filter((value) => value !== field) : [...current, field]));
         setPage(0);
     }
@@ -239,7 +226,7 @@ export function FriendListView() {
                             <ChevronDown className="size-4 shrink-0" />
                         </summary>
                         <div className="absolute top-10 left-0 z-30 w-48 rounded-md border border-border bg-popover p-1 shadow-xl">
-                            {searchFields.map((field) => (
+                            {friendListSearchFields.map((field) => (
                                 <label key={field} className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-xs hover:bg-muted">
                                     <input type="checkbox" checked={fields.includes(field)} onChange={() => toggleField(field)} className="accent-primary" />
                                     {field}
