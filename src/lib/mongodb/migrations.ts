@@ -350,6 +350,13 @@ const migrations: Migration[] = [
             );
         },
     },
+    {
+        version: 28,
+        name: "add-group-instance-snapshot-indexes",
+        async apply(c) {
+            await Promise.all([c.groupInstanceSnapshots.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }), c.groupInstanceSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

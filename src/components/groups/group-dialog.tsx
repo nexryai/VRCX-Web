@@ -9,7 +9,7 @@ import { PreviousInstancesDialog } from "@/components/previous-instances/previou
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
-import type { VrchatGroup, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatGroup, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
 type GroupTab = "Info" | "Posts" | "Members" | "JSON";
 type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
@@ -27,6 +27,8 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [error, setError] = useState("");
     const [copied, setCopied] = useState(false);
     const [posts, setPosts] = useState<VrchatGroupPost[]>([]);
+    const [instances, setInstances] = useState<VrchatGroupInstance[]>([]);
+    const [instancesLoading, setInstancesLoading] = useState(false);
     const [members, setMembers] = useState<VrchatGroupMember[]>([]);
     const [hasMoreMembers, setHasMoreMembers] = useState(false);
     const [tabLoading, setTabLoading] = useState(false);
@@ -83,6 +85,24 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         [groupId],
     );
 
+    const loadInstances = useCallback(
+        async (refresh = false) => {
+            setInstancesLoading(true);
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/instances${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; instances?: VrchatGroupInstance[] };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok) throw new Error(payload.error || "Group instances could not be loaded.");
+                setInstances(payload.instances || []);
+            } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : "Group instances could not be loaded.");
+            } finally {
+                setInstancesLoading(false);
+            }
+        },
+        [groupId],
+    );
+
     const loadMembers = useCallback(
         async (offset = 0, refresh = false) => {
             setTabLoading(true);
@@ -107,6 +127,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setOwnerName("");
         setTab("Info");
         setPosts([]);
+        setInstances([]);
         setMembers([]);
         setPostsLoaded(false);
         setMembersLoaded(false);
@@ -114,9 +135,9 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setActionLoading("");
         setConfirmAction(null);
         setPreviousInstancesOpen(false);
-        void Promise.all([load(), loadPosts()]);
+        void Promise.all([load(), loadPosts(), loadInstances()]);
         closeButton.current?.focus();
-    }, [load, loadPosts]);
+    }, [load, loadInstances, loadPosts]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
@@ -205,8 +226,8 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                             </div>
                             <div className="flex shrink-0 items-end gap-2 sm:mt-12 sm:items-start">
                                 <GroupPrimaryAction group={group} loading={actionLoading} runAction={runAction} />
-                                <button type="button" onClick={() => void load(true)} disabled={loading} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh group">
-                                    <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+                                <button type="button" onClick={() => void Promise.all([load(true), loadInstances(true)])} disabled={loading || instancesLoading} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh group">
+                                    <RefreshCw className={`size-4 ${loading || instancesLoading ? "animate-spin" : ""}`} />
                                 </button>
                                 <button type="button" onClick={() => void copy(`https://vrchat.com/home/group/${group.id}`)} className="inline-flex h-9 items-center gap-1 rounded-full border border-input px-3 text-xs">
                                     <Clipboard className="size-4" /> {copied ? "Copied" : "Share"}
@@ -245,7 +266,9 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
                                 </div>
                             ) : null}
-                            {!tabLoading && tab === "Info" ? <GroupInfo group={group} friends={groupFriends} announcement={posts[0]} openUser={openUser} copy={copy} onOpenPreviousInstances={() => setPreviousInstancesOpen(true)} previousInstancesButton={previousInstancesButton} /> : null}
+                            {!tabLoading && tab === "Info" ? (
+                                <GroupInfo group={group} friends={groupFriends} instances={instances} instancesLoading={instancesLoading} announcement={posts[0]} openUser={openUser} copy={copy} onOpenPreviousInstances={() => setPreviousInstancesOpen(true)} previousInstancesButton={previousInstancesButton} />
+                            ) : null}
                             {!tabLoading && tab === "Posts" ? <GroupPosts posts={posts} search={search} setSearch={setSearch} refresh={() => void loadPosts(true)} openUser={openUser} /> : null}
                             {!tabLoading && tab === "Members" ? <GroupMembers group={group} members={members} search={search} setSearch={setSearch} refresh={() => void loadMembers(0, true)} loadMore={() => void loadMembers(members.length, true)} hasMore={hasMoreMembers} openUser={openUser} /> : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(group, null, 2)}</pre> : null}
@@ -375,6 +398,8 @@ function GroupActionConfirmation({ group, action, loading, cancel, confirm }: { 
 function GroupInfo({
     group,
     friends,
+    instances,
+    instancesLoading,
     announcement,
     openUser,
     copy,
@@ -383,13 +408,23 @@ function GroupInfo({
 }: {
     group: VrchatGroup;
     friends: VrchatUser[];
+    instances: VrchatGroupInstance[];
+    instancesLoading: boolean;
     announcement?: VrchatGroupPost;
     openUser: (userId: string) => void;
     copy: (value: string) => Promise<void>;
     onOpenPreviousInstances: () => void;
     previousInstancesButton: React.RefObject<HTMLButtonElement | null>;
 }) {
-    const instances = Array.from(new Set(friends.map((friend) => friend.location).filter((location): location is string => Boolean(location))));
+    const rooms = new Map<string, { instance?: VrchatGroupInstance; users: VrchatUser[] }>();
+    for (const instance of instances) rooms.set(instance.location, { instance, users: [] });
+    for (const friend of friends) {
+        if (!friend.location) continue;
+        const room = rooms.get(friend.location) || { users: [] };
+        room.users.push(friend);
+        rooms.set(friend.location, room);
+    }
+    const visibleRooms = Array.from(rooms, ([location, room]) => ({ location, ...room })).toSorted((a, b) => b.users.length - a.users.length || (b.instance?.userCount || 0) - (a.instance?.userCount || 0) || a.location.localeCompare(b.location));
     const links = (group.links || []).map((link) => safeExternalHttpUrl(link)).filter(Boolean);
     return (
         <div>
@@ -405,21 +440,39 @@ function GroupInfo({
                     </div>
                 }
             />
-            {instances.length ? (
+            {instancesLoading && !visibleRooms.length ? (
+                <div className="mt-3 flex items-center gap-2 px-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" /> Loading instances…
+                </div>
+            ) : null}
+            {visibleRooms.length ? (
                 <section className="mt-3">
                     <h3 className="px-1.5 text-xs font-bold">Instances</h3>
-                    {instances.map((location) => (
-                        <div key={location} className="mt-2 rounded-lg bg-background p-2">
-                            <p className="break-all text-xs text-muted-foreground">{locationLabel(friends.find((friend) => friend.location === location) || friends[0])}</p>
+                    {visibleRooms.map((room) => (
+                        <div key={room.location} className="mt-1.5 w-full">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="max-w-full truncate rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground" title={room.location}>
+                                    {room.instance?.world.name || locationLabel(room.users[0])}
+                                    {room.instance?.displayName ? ` · #${room.instance.displayName}` : ""}
+                                </span>
+                                {room.instance?.userCount ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground" title="Remote player count">
+                                        <Users className="size-3.5" /> {room.instance.userCount}/{room.instance.capacity ?? "—"}
+                                    </span>
+                                ) : null}
+                                {room.users.length ? (
+                                    <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                                        {room.users.length} friend{room.users.length === 1 ? "" : "s"}
+                                    </span>
+                                ) : null}
+                            </div>
                             <div className="mt-1 flex flex-wrap">
-                                {friends
-                                    .filter((friend) => friend.location === location)
-                                    .map((friend) => (
-                                        <button key={friend.id} type="button" onClick={() => openUser(friend.id)} className="flex w-[167px] items-center gap-2.5 rounded p-1.5 text-left text-[13px] hover:bg-muted">
-                                            <FriendAvatar friend={friend} size="sm" />
-                                            <span className="min-w-0 truncate font-medium">{friend.displayName}</span>
-                                        </button>
-                                    ))}
+                                {room.users.map((friend) => (
+                                    <button key={friend.id} type="button" onClick={() => openUser(friend.id)} className="flex w-[167px] items-center gap-2.5 rounded p-1.5 text-left text-[13px] hover:bg-muted">
+                                        <FriendAvatar friend={friend} size="sm" />
+                                        <span className="min-w-0 truncate font-medium">{friend.displayName}</span>
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     ))}

@@ -106,6 +106,41 @@ export const vrchatWorldSchema = z
 
 export type VrchatWorld = z.infer<typeof vrchatWorldSchema>;
 
+// GET users/{userId}/instances/groups/{groupId} returns complete instance
+// objects, including an embedded world. Keep the passthrough shape because the
+// upstream instance contract grows frequently, while validating every field
+// consumed by the Group Dialog and persistence layer.
+export const vrchatGroupInstanceSchema = z
+    .object({
+        id: z.string(),
+        location: z.string(),
+        instanceId: z.string(),
+        worldId: z.string(),
+        ownerId: z.string(),
+        shortName: z.string().optional(),
+        displayName: z.string().nullable().optional(),
+        type: z.string().optional(),
+        region: z.string().optional(),
+        userCount: z.number().int().nonnegative().optional(),
+        capacity: z.number().int().nonnegative().optional(),
+        recommendedCapacity: z.number().int().nonnegative().optional(),
+        queueEnabled: z.boolean().optional(),
+        queueSize: z.number().int().nonnegative().optional(),
+        groupAccessType: z.string().nullable().optional(),
+        roleRestricted: z.boolean().optional(),
+        world: vrchatWorldSchema,
+    })
+    .passthrough();
+
+export type VrchatGroupInstance = z.infer<typeof vrchatGroupInstanceSchema>;
+
+export const vrchatGroupInstancesResponseSchema = z
+    .object({
+        instances: z.array(vrchatGroupInstanceSchema).default([]),
+        fetchedAt: z.string().optional(),
+    })
+    .passthrough();
+
 export const vrchatAvatarSchema = z
     .object({
         id: z.string(),

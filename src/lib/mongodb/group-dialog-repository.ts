@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { VrchatGroupMember, VrchatGroupPost } from "@/lib/vrchat/types";
+import type { VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost } from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
@@ -53,4 +53,40 @@ export async function upsertCachedGroupMembers(ownerId: string, groupId: string,
         })),
         { ordered: false },
     );
+}
+
+export async function getCachedGroupInstances(ownerId: string, groupId: string) {
+    await ensureMongoSchema();
+    const document = await collections(await getMongoDatabase()).groupInstanceSnapshots.findOne({ _id: `${ownerId}:${groupId}` });
+    if (!document) return null;
+    return { instances: document.instances, upstreamFetchedAt: document.upstreamFetchedAt, observedAt: document.observedAt };
+}
+
+export async function replaceCachedGroupInstances(ownerId: string, groupId: string, instances: VrchatGroupInstance[], upstreamFetchedAt?: string, observedAt = new Date()) {
+    await ensureMongoSchema();
+    const snapshot = { ownerId, groupId, instances, observedAt, updatedAt: observedAt };
+    await collections(await getMongoDatabase()).groupInstanceSnapshots.updateOne({ _id: `${ownerId}:${groupId}` }, upstreamFetchedAt ? { $set: { ...snapshot, upstreamFetchedAt } } : { $set: snapshot, $unset: { upstreamFetchedAt: "" } }, { upsert: true });
+}
+
+export async function replaceAllCachedGroupInstances(ownerId: string, groupIds: string[], instances: VrchatGroupInstance[], upstreamFetchedAt?: string, observedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).groupInstanceSnapshots;
+    const uniqueGroupIds = Array.from(new Set(groupIds));
+    const byGroupId = Map.groupBy(instances, (instance) => instance.ownerId);
+    if (uniqueGroupIds.length) {
+        await collection.bulkWrite(
+            uniqueGroupIds.map((groupId) => {
+                const snapshot = { ownerId, groupId, instances: byGroupId.get(groupId) || [], observedAt, updatedAt: observedAt };
+                return {
+                    updateOne: {
+                        filter: { _id: `${ownerId}:${groupId}` },
+                        update: upstreamFetchedAt ? { $set: { ...snapshot, upstreamFetchedAt } } : { $set: snapshot, $unset: { upstreamFetchedAt: "" } },
+                        upsert: true,
+                    },
+                };
+            }),
+            { ordered: false },
+        );
+    }
+    await collection.deleteMany({ ownerId, ...(uniqueGroupIds.length ? { groupId: { $nin: uniqueGroupIds } } : {}) });
 }

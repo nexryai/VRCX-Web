@@ -290,6 +290,33 @@ await database.collection("groups").insertOne({
     observedAt: now,
     updatedAt: now,
 });
+const groupId = "grp_00000000-0000-0000-0000-000000000020";
+const groupWorldId = "wrld_00000000-0000-0000-0000-000000000024";
+const groupLocation = `${groupWorldId}:4242~group(${groupId})~groupAccessType(public)~region(us)`;
+await database.collection("group_instance_snapshots").insertOne({
+    _id: `${ownerId}:${groupId}`,
+    ownerId,
+    groupId,
+    instances: [
+        {
+            id: groupLocation,
+            location: groupLocation,
+            instanceId: `4242~group(${groupId})~groupAccessType(public)~region(us)`,
+            worldId: groupWorldId,
+            ownerId: groupId,
+            displayName: "Community Hub",
+            type: "groupPublic",
+            region: "us",
+            userCount: 18,
+            capacity: 40,
+            recommendedCapacity: 32,
+            world: { id: groupWorldId, name: "Remote Group Lounge", capacity: 40, recommendedCapacity: 32 },
+        },
+    ],
+    upstreamFetchedAt: now.toISOString(),
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("group_posts").insertMany([
     {
         _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:gpos_visual_announcement`,

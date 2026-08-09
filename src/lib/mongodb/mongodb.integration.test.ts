@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -53,6 +53,7 @@ describe("MongoDB application repositories", () => {
         expect(sessionIndexes).toBe(true);
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
+        expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
@@ -315,6 +316,41 @@ describe("MongoDB application repositories", () => {
         expect(await listCachedGroupPosts(otherOwnerId, groupId)).toEqual([]);
         expect(await listCachedGroupMembers(ownerId, groupId, 0, 100)).toMatchObject({ total: 1, members: [expect.objectContaining({ userId })] });
         expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
+    });
+
+    test("replaces complete group-instance snapshots without crossing owners", async () => {
+        const { getCachedGroupInstances, replaceAllCachedGroupInstances, replaceCachedGroupInstances } = await import("./group-dialog-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000055";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000056";
+        const groupId = "grp_00000000-0000-0000-0000-000000000057";
+        const worldId = "wrld_00000000-0000-0000-0000-000000000058";
+        const instance = {
+            id: `${worldId}:123~group(${groupId})~region(us)`,
+            location: `${worldId}:123~group(${groupId})~region(us)`,
+            instanceId: `123~group(${groupId})~region(us)`,
+            worldId,
+            ownerId: groupId,
+            userCount: 12,
+            capacity: 40,
+            world: { id: worldId, name: "Remote Group World" },
+        };
+        const firstObservedAt = new Date("2026-08-09T10:00:00.000Z");
+        await replaceCachedGroupInstances(ownerId, groupId, [instance], "2026-08-09T09:59:59.000Z", firstObservedAt);
+        await replaceCachedGroupInstances(otherOwnerId, groupId, [instance]);
+
+        expect(await getCachedGroupInstances(ownerId, groupId)).toEqual({ instances: [instance], upstreamFetchedAt: "2026-08-09T09:59:59.000Z", observedAt: firstObservedAt });
+        expect((await getCachedGroupInstances(otherOwnerId, groupId))?.instances).toEqual([instance]);
+
+        const secondGroupId = "grp_00000000-0000-0000-0000-000000000059";
+        await replaceCachedGroupInstances(ownerId, secondGroupId, [{ ...instance, ownerId: secondGroupId, location: `${worldId}:456~group(${secondGroupId})`, id: `${worldId}:456~group(${secondGroupId})` }]);
+        await replaceAllCachedGroupInstances(ownerId, [groupId], [instance], "2026-08-09T10:02:00.000Z", new Date("2026-08-09T10:02:01.000Z"));
+        expect(await getCachedGroupInstances(ownerId, secondGroupId)).toBeNull();
+        expect((await getCachedGroupInstances(otherOwnerId, groupId))?.instances).toEqual([instance]);
+
+        const emptyObservedAt = new Date("2026-08-09T10:05:00.000Z");
+        await replaceCachedGroupInstances(ownerId, groupId, [], undefined, emptyObservedAt);
+        expect(await getCachedGroupInstances(ownerId, groupId)).toEqual({ instances: [], upstreamFetchedAt: undefined, observedAt: emptyObservedAt });
+        expect((await getCachedGroupInstances(otherOwnerId, groupId))?.instances).toEqual([instance]);
     });
 
     test("updates group membership projection without crossing owners", async () => {

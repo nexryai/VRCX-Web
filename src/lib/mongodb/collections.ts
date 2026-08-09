@@ -3,7 +3,7 @@ import "server-only";
 import type { Collection, Db } from "mongodb";
 
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
-import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
     algorithm: "aes-256-gcm";
@@ -157,6 +157,16 @@ export type GroupMemberDocument = {
     userId: string;
     member: VrchatGroupMember;
     active: boolean;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type GroupInstanceSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    instances: VrchatGroupInstance[];
+    upstreamFetchedAt?: string;
     observedAt: Date;
     updatedAt: Date;
 };
@@ -331,6 +341,7 @@ export type Collections = {
     groups: Collection<GroupDocument>;
     groupPosts: Collection<GroupPostDocument>;
     groupMembers: Collection<GroupMemberDocument>;
+    groupInstanceSnapshots: Collection<GroupInstanceSnapshotDocument>;
     avatars: Collection<AvatarDocument>;
     avatarTags: Collection<AvatarTagDocument>;
     entityMemos: Collection<EntityMemoDocument>;
@@ -358,6 +369,7 @@ export function collections(db: Db): Collections {
         groups: db.collection<GroupDocument>("groups"),
         groupPosts: db.collection<GroupPostDocument>("group_posts"),
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
+        groupInstanceSnapshots: db.collection<GroupInstanceSnapshotDocument>("group_instance_snapshots"),
         avatars: db.collection<AvatarDocument>("avatars"),
         avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),
         entityMemos: db.collection<EntityMemoDocument>("entity_memos"),

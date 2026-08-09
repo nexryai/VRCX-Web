@@ -4,16 +4,32 @@ import { z } from "zod";
 
 import { diffFriendSnapshots, toFriendSnapshots } from "@/lib/activity-log";
 import { enrichGameSession, observeGameSession } from "@/lib/game-log/session-repository";
+import { isGroupInstanceFor } from "@/lib/group-instances";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
 import { replaceGroupMemberships } from "@/lib/mongodb/entity-repository";
+import { replaceAllCachedGroupInstances } from "@/lib/mongodb/group-dialog-repository";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { replaceFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection } from "@/lib/mongodb/projection-repository";
 import { updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
 import { upsertCachedUsers } from "@/lib/mongodb/user-repository";
 import { type NotificationSource, replaceActiveNotifications } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
-import { type VrchatFavorite, type VrchatFavoriteGroup, type VrchatNotification, type VrchatPlayerModeration, type VrchatUser, vrchatFavoriteGroupSchema, vrchatFavoriteSchema, vrchatGroupSchema, vrchatNotificationSchema, vrchatPlayerModerationSchema, vrchatUserSchema } from "@/lib/vrchat/types";
+import {
+    type VrchatFavorite,
+    type VrchatFavoriteGroup,
+    type VrchatGroupInstance,
+    type VrchatNotification,
+    type VrchatPlayerModeration,
+    type VrchatUser,
+    vrchatFavoriteGroupSchema,
+    vrchatFavoriteSchema,
+    vrchatGroupInstancesResponseSchema,
+    vrchatGroupSchema,
+    vrchatNotificationSchema,
+    vrchatPlayerModerationSchema,
+    vrchatUserSchema,
+} from "@/lib/vrchat/types";
 import { persistActivityTransitions } from "./activity-events";
 import { acquireReconciliationLease, releaseReconciliationLease } from "./lease";
 import { resolveLocationMetadata } from "./location-metadata";
@@ -117,6 +133,23 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
     currentCookies = { ...currentCookies, ...groupsResponse.cookies };
     const memberships = z.array(vrchatGroupSchema).parse(groupsResponse.data);
 
+    let groupInstances: { instances: VrchatGroupInstance[]; fetchedAt?: string; observedAt: Date } | null = null;
+    try {
+        const instancesResponse = await requestVrchat<unknown>(`users/${user.id}/instances/groups`, { cookies: currentCookies });
+        currentCookies = { ...currentCookies, ...instancesResponse.cookies };
+        const parsed = vrchatGroupInstancesResponseSchema.parse(instancesResponse.data);
+        const membershipIds = new Set(memberships.map((group) => group.id));
+        if (parsed.instances.some((instance) => !membershipIds.has(instance.ownerId) || !isGroupInstanceFor(instance, instance.ownerId))) {
+            throw new Error("The group instances response did not match the active memberships.");
+        }
+        groupInstances = { instances: parsed.instances, fetchedAt: parsed.fetchedAt, observedAt: new Date() };
+    } catch (error) {
+        // VRCX also treats this frequently rate-limited aggregate endpoint as a
+        // deferred refresh. Preserve the last complete snapshot without
+        // failing unrelated friend/session reconciliation.
+        if (!(error instanceof VrchatApiError) || (error.status !== 429 && error.status !== 502)) throw error;
+    }
+
     const online = await fetchAllFriends(currentCookies, false);
     currentCookies = online.cookies;
     const offline = await fetchAllFriends(currentCookies, true);
@@ -148,6 +181,17 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
     await Promise.all([
         upsertCachedUsers(user.id, combined, "friends", observedAt),
         replaceGroupMemberships(user.id, memberships, observedAt),
+        ...(groupInstances
+            ? [
+                  replaceAllCachedGroupInstances(
+                      user.id,
+                      memberships.map((group) => group.id),
+                      groupInstances.instances,
+                      groupInstances.fetchedAt,
+                      groupInstances.observedAt,
+                  ),
+              ]
+            : []),
         replaceActiveNotifications(user.id, "legacy", legacyNotifications.notifications, observedAt),
         replaceActiveNotifications(user.id, "v2", v2Notifications.notifications, observedAt),
         replaceActiveNotifications(user.id, "hidden", hiddenNotifications.notifications, observedAt),
