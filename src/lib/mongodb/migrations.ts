@@ -317,6 +317,13 @@ const migrations: Migration[] = [
             await c.selfSnapshots.createIndex({ ownerId: 1 }, { unique: true, name: "owner_unique" });
         },
     },
+    {
+        version: 25,
+        name: "add-legacy-browser-settings-import-state",
+        async apply(c) {
+            await c.appSettings.updateMany({ legacyBrowserSettingsImportVersion: { $exists: false } }, { $set: { legacyBrowserSettingsImportVersion: 0, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

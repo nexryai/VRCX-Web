@@ -29,7 +29,7 @@ describe("MongoDB application repositories", () => {
 
         const database = await getMongoDatabase();
         const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
         expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -46,6 +46,7 @@ describe("MongoDB application repositories", () => {
             mutualGraphEdgeCurvature: 0.1,
             mutualGraphCommunitySeparation: 0,
             mutualGraphExcludedFriendIds: [],
+            legacyBrowserSettingsImportVersion: 0,
         });
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner"]);
         expect(sessionIndexes).toBe(true);
@@ -56,6 +57,33 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
         expect(await collections(database).monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
         expect(await collections(database).appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
+    });
+
+    test("imports the former root browser settings into MongoDB exactly once", async () => {
+        const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
+        const { getLegacyBrowserSettingsImportStatus, importLegacyBrowserSettings } = await import("./legacy-browser-settings-repository");
+        const appSettings = collections(await getMongoDatabase()).appSettings;
+        await appSettings.updateOne(
+            { _id: "singleton" },
+            {
+                $set: { theme: "dark", navigationCollapsed: false, myAvatarsView: "grid", legacyBrowserSettingsImportVersion: 0 },
+                $unset: { legacyBrowserSettingsImportedAt: "", legacyBrowserSettingsImportedKeys: "" },
+            },
+        );
+
+        const importedAt = new Date("2026-08-09T08:00:00.000Z");
+        expect(await importLegacyBrowserSettings({ theme: "light", navigationCollapsed: true, myAvatarsView: "table" }, importedAt)).toBe(true);
+        expect(await getLegacyBrowserSettingsImportStatus()).toEqual({
+            version: 1,
+            completed: true,
+            importedAt,
+            importedKeys: ["vrcx-theme", "vrcx-nav-collapsed", "vrcx-my-avatars-view"],
+        });
+        expect(await appSettings.findOne({ _id: "singleton" })).toMatchObject({ theme: "light", navigationCollapsed: true, myAvatarsView: "table" });
+
+        expect(await importLegacyBrowserSettings({ theme: "dark", navigationCollapsed: false, myAvatarsView: "grid" }, new Date("2026-08-09T09:00:00.000Z"))).toBe(false);
+        expect(await appSettings.findOne({ _id: "singleton" })).toMatchObject({ theme: "light", navigationCollapsed: true, myAvatarsView: "table", legacyBrowserSettingsImportedAt: importedAt });
     });
 
     test("stores encrypted session material and isolates cached users by owner", async () => {

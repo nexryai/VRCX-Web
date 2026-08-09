@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Collection, Db } from "mongodb";
 
+import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
 import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
@@ -57,6 +58,9 @@ export type AppSettingsDocument = {
     mutualGraphCommunitySeparation: number;
     mutualGraphExcludedFriendIds: string[];
     avatarAutoCleanupDays: 0 | 30 | 90 | 180 | 365;
+    legacyBrowserSettingsImportVersion: 0 | 1;
+    legacyBrowserSettingsImportedAt?: Date;
+    legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];
     updatedAt: Date;
 };
 

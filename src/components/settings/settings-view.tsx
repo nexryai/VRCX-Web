@@ -5,11 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Download, ExternalLink, Trash2, TriangleAlert, Upload } from "lucide-react";
 
 import type { AppSettingsPayload } from "@/lib/app-settings";
+import { clearImportedLegacyBrowserSettings, type LegacyBrowserSettingsImport, readLegacyBrowserSettings } from "@/lib/legacy-browser-settings";
 
 type Tab = "Interface" | "System";
 type PageSizeKey = "activityTablePageSize" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "notificationTablePageSize";
 type SettingsState = Required<Pick<AppSettingsPayload, "activityTablePageSize" | "avatarAutoCleanupDays" | "favoriteSortByDate" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "navigationCollapsed" | "notificationTablePageSize" | "theme">>;
 type AvatarPurgeDays = 180 | 365 | 730 | "all";
+type LegacyImportState = { checked: boolean; completed: boolean; importing: boolean; payload: LegacyBrowserSettingsImport | null };
 
 const defaults: SettingsState = {
     theme: "dark",
@@ -28,6 +30,7 @@ export function SettingsView({ version }: { version: string }) {
     const [settings, setSettings] = useState<SettingsState>(defaults);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
+    const [legacyImport, setLegacyImport] = useState<LegacyImportState>({ checked: false, completed: false, importing: false, payload: null });
     const fileInput = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -42,6 +45,27 @@ export function SettingsView({ version }: { version: string }) {
                 if (!(error instanceof DOMException && error.name === "AbortError")) setMessage({ error: true, text: error instanceof Error ? error.message : "Settings could not be loaded." });
             })
             .finally(() => setLoading(false));
+        return () => controller.abort();
+    }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        let payload: LegacyBrowserSettingsImport | null = null;
+        try {
+            payload = readLegacyBrowserSettings(window.localStorage);
+        } catch {
+            // Browser storage can be unavailable in hardened privacy modes. It
+            // is only a one-time legacy source and is never authoritative.
+        }
+        void fetch("/api/settings/legacy-browser-import", { cache: "no-store", signal: controller.signal })
+            .then(async (response) => {
+                if (!response.ok) throw new Error("Legacy browser settings status could not be loaded.");
+                return response.json() as Promise<{ completed: boolean }>;
+            })
+            .then((status) => setLegacyImport({ checked: true, completed: status.completed, importing: false, payload }))
+            .catch((error) => {
+                if (!(error instanceof DOMException && error.name === "AbortError")) setMessage({ error: true, text: error instanceof Error ? error.message : "Legacy browser settings status could not be loaded." });
+            });
         return () => controller.abort();
     }, []);
 
@@ -83,6 +107,51 @@ export function SettingsView({ version }: { version: string }) {
         }
     }
 
+    async function importLegacySettings() {
+        const legacy = legacyImport.payload;
+        if (!legacy || legacyImport.completed || legacyImport.importing) return;
+        const count = Object.keys(legacy.settings).length;
+        if (!window.confirm(`Import ${count} legacy browser ${count === 1 ? "setting" : "settings"} into MongoDB? Only the detected theme, menu collapse, and My Avatars view values can be replaced.`)) return;
+        setMessage(null);
+        setLegacyImport((current) => ({ ...current, importing: true }));
+        try {
+            const response = await fetch("/api/settings/legacy-browser-import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(legacy) });
+            const payload = (await response.json()) as { error?: string; settings?: AppSettingsPayload; status?: { completed?: boolean } };
+            if (response.status === 409 && payload.status?.completed) {
+                if (payload.settings) {
+                    const current = { ...defaults, ...payload.settings };
+                    setSettings(current);
+                    document.documentElement.dataset.theme = current.theme;
+                    window.dispatchEvent(new CustomEvent("vrcx:settings", { detail: payload.settings }));
+                }
+                try {
+                    clearImportedLegacyBrowserSettings(window.localStorage, legacy.settings);
+                } catch {
+                    // The durable import already completed on another page or
+                    // browser; inaccessible legacy residue is non-authoritative.
+                }
+                setLegacyImport({ checked: true, completed: true, importing: false, payload: null });
+                setMessage({ error: false, text: "Legacy browser settings were already imported." });
+                return;
+            }
+            if (!response.ok || !payload.settings) throw new Error(payload.error || "Legacy browser settings could not be imported.");
+            const next = { ...defaults, ...payload.settings };
+            setSettings(next);
+            document.documentElement.dataset.theme = next.theme;
+            window.dispatchEvent(new CustomEvent("vrcx:settings", { detail: payload.settings }));
+            try {
+                clearImportedLegacyBrowserSettings(window.localStorage, legacy.settings);
+            } catch {
+                // MongoDB is authoritative after the successful response.
+            }
+            setLegacyImport({ checked: true, completed: true, importing: false, payload: null });
+            setMessage({ error: false, text: `${count} legacy browser ${count === 1 ? "setting" : "settings"} imported into MongoDB.` });
+        } catch (error) {
+            setLegacyImport((current) => ({ ...current, importing: false }));
+            setMessage({ error: true, text: error instanceof Error ? error.message : "Legacy browser settings could not be imported." });
+        }
+    }
+
     async function purgeAvatarFeed(days: AvatarPurgeDays) {
         setMessage(null);
         try {
@@ -120,7 +189,7 @@ export function SettingsView({ version }: { version: string }) {
                     {loading ? (
                         <div className="h-32 animate-pulse rounded-lg border border-border bg-card" />
                     ) : tab === "System" ? (
-                        <SystemSettings version={version} fileInput={fileInput} importSettings={importSettings} settings={settings} change={change} purgeAvatarFeed={purgeAvatarFeed} />
+                        <SystemSettings version={version} fileInput={fileInput} importSettings={importSettings} legacyImport={legacyImport} importLegacySettings={importLegacySettings} settings={settings} change={change} purgeAvatarFeed={purgeAvatarFeed} />
                     ) : (
                         <InterfaceSettings settings={settings} change={change} />
                     )}
@@ -134,6 +203,8 @@ function SystemSettings({
     version,
     fileInput,
     importSettings,
+    legacyImport,
+    importLegacySettings,
     settings,
     change,
     purgeAvatarFeed,
@@ -141,6 +212,8 @@ function SystemSettings({
     version: string;
     fileInput: React.RefObject<HTMLInputElement | null>;
     importSettings: (file: File) => Promise<void>;
+    legacyImport: LegacyImportState;
+    importLegacySettings: () => Promise<void>;
     settings: SettingsState;
     change: (patch: Partial<SettingsState>) => Promise<void>;
     purgeAvatarFeed: (days: AvatarPurgeDays) => Promise<boolean>;
@@ -212,6 +285,27 @@ function SystemSettings({
                     />
                     <button type="button" onClick={() => fileInput.current?.click()} className="inline-flex h-8 items-center gap-2 rounded-md border border-input px-3 text-xs hover:bg-muted">
                         <Upload className="size-4" /> Import
+                    </button>
+                </SettingsRow>
+                <SettingsRow
+                    label="Import legacy browser settings"
+                    description={
+                        legacyImport.completed
+                            ? "The former root browser preferences were already migrated to MongoDB."
+                            : legacyImport.payload
+                              ? `${Object.keys(legacyImport.payload.settings).length} compatible ${Object.keys(legacyImport.payload.settings).length === 1 ? "setting was" : "settings were"} found in this browser. Import replaces only those values.`
+                              : legacyImport.checked
+                                ? "No compatible settings from the former browser-storage prototype were found in this browser."
+                                : "Checking this browser for the former theme, menu collapse, and My Avatars view preferences."
+                    }
+                >
+                    <button
+                        type="button"
+                        disabled={!legacyImport.checked || legacyImport.completed || !legacyImport.payload || legacyImport.importing}
+                        onClick={() => void importLegacySettings()}
+                        className="inline-flex h-8 items-center gap-2 rounded-md border border-input px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <Upload className="size-4" /> {legacyImport.importing ? "Importing…" : legacyImport.completed ? "Imported" : legacyImport.payload ? "Import" : legacyImport.checked ? "Not found" : "Checking…"}
                     </button>
                 </SettingsRow>
             </SettingsGroup>
