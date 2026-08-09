@@ -150,6 +150,14 @@ export type GroupPostDocument = {
     updatedAt: Date;
 };
 
+export type GroupPostSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
 export type GroupMemberDocument = {
     _id: string;
     ownerId: string;
@@ -362,6 +370,7 @@ export type Collections = {
     worlds: Collection<WorldDocument>;
     groups: Collection<GroupDocument>;
     groupPosts: Collection<GroupPostDocument>;
+    groupPostSnapshots: Collection<GroupPostSnapshotDocument>;
     groupMembers: Collection<GroupMemberDocument>;
     groupInstanceSnapshots: Collection<GroupInstanceSnapshotDocument>;
     groupCalendarSnapshots: Collection<GroupCalendarSnapshotDocument>;
@@ -392,6 +401,7 @@ export function collections(db: Db): Collections {
         worlds: db.collection<WorldDocument>("worlds"),
         groups: db.collection<GroupDocument>("groups"),
         groupPosts: db.collection<GroupPostDocument>("group_posts"),
+        groupPostSnapshots: db.collection<GroupPostSnapshotDocument>("group_post_snapshots"),
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupInstanceSnapshots: db.collection<GroupInstanceSnapshotDocument>("group_instance_snapshots"),
         groupCalendarSnapshots: db.collection<GroupCalendarSnapshotDocument>("group_calendar_snapshots"),

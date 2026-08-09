@@ -6,18 +6,19 @@ import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
 
-export async function listCachedGroupPosts(ownerId: string, groupId: string) {
+export async function getCachedGroupPosts(ownerId: string, groupId: string) {
     await ensureMongoSchema();
-    const documents = await collections(await getMongoDatabase())
-        .groupPosts.find({ ownerId, groupId, active: true })
-        .sort({ "post.updatedAt": -1, "post.createdAt": -1 })
-        .toArray();
+    const c = collections(await getMongoDatabase());
+    const snapshot = await c.groupPostSnapshots.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+    if (!snapshot) return null;
+    const documents = await c.groupPosts.find({ ownerId, groupId, active: true }).sort({ "post.updatedAt": -1, "post.createdAt": -1 }).toArray();
     return documents.map((document) => document.post);
 }
 
 export async function replaceCachedGroupPosts(ownerId: string, groupId: string, posts: VrchatGroupPost[], observedAt = new Date()) {
     await ensureMongoSchema();
-    const collection = collections(await getMongoDatabase()).groupPosts;
+    const c = collections(await getMongoDatabase());
+    const collection = c.groupPosts;
     if (posts.length) {
         await collection.bulkWrite(
             posts.map((post) => ({
@@ -31,7 +32,25 @@ export async function replaceCachedGroupPosts(ownerId: string, groupId: string, 
         );
     }
     const postIds = posts.map((post) => post.id);
-    await collection.updateMany({ ownerId, groupId, active: true, ...(postIds.length ? { postId: { $nin: postIds } } : {}) }, { $set: { active: false, updatedAt: observedAt } });
+    await Promise.all([
+        collection.updateMany({ ownerId, groupId, active: true, ...(postIds.length ? { postId: { $nin: postIds } } : {}) }, { $set: { active: false, updatedAt: observedAt } }),
+        c.groupPostSnapshots.updateOne({ _id: `${ownerId}:${groupId}` }, { $set: { ownerId, groupId, observedAt, updatedAt: observedAt } }, { upsert: true }),
+    ]);
+}
+
+export async function upsertCachedGroupPost(ownerId: string, groupId: string, post: VrchatGroupPost, observedAt = new Date()) {
+    await ensureMongoSchema();
+    const c = collections(await getMongoDatabase());
+    await Promise.all([
+        c.groupPosts.updateOne({ _id: `${ownerId}:${groupId}:${post.id}` }, { $set: { ownerId, groupId, postId: post.id, post, active: true, observedAt, updatedAt: observedAt } }, { upsert: true }),
+        c.groupPostSnapshots.updateOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId }, { $set: { observedAt, updatedAt: observedAt } }),
+    ]);
+}
+
+export async function deactivateCachedGroupPost(ownerId: string, groupId: string, postId: string, observedAt = new Date()) {
+    await ensureMongoSchema();
+    const c = collections(await getMongoDatabase());
+    await Promise.all([c.groupPosts.updateOne({ _id: `${ownerId}:${groupId}:${postId}`, ownerId, groupId, postId }, { $set: { active: false, updatedAt: observedAt } }), c.groupPostSnapshots.updateOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId }, { $set: { observedAt, updatedAt: observedAt } })]);
 }
 
 export async function listCachedGroupMembers(ownerId: string, groupId: string, offset: number, limit: number) {

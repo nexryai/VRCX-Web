@@ -293,6 +293,7 @@ export const vrchatGroupSchema = z
                 isRepresenting: z.boolean().optional(),
                 isSubscribedToAnnouncements: z.boolean().optional(),
                 isSubscribedToEventAnnouncements: z.boolean().optional(),
+                permissions: z.array(z.string()).optional(),
                 roleIds: z.array(z.string()).optional(),
                 bannedAt: z.string().nullable().optional(),
             })
@@ -309,10 +310,12 @@ export const vrchatGroupPostSchema = z
         groupId: z.string().optional(),
         title: z.string().default(""),
         text: z.string().default(""),
+        imageId: z.string().nullable().optional(),
         imageUrl: z.string().optional(),
         authorId: z.string().optional(),
         editorId: z.string().optional(),
         roleIds: z.array(z.string()).default([]),
+        visibility: z.enum(["group", "public"]).default("group"),
         createdAt: z.string().optional(),
         updatedAt: z.string().optional(),
     })

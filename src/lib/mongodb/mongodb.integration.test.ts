@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -52,6 +52,7 @@ describe("MongoDB application repositories", () => {
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner", "owner_world_started", "owner_group_started"]);
         expect(sessionIndexes).toBe(true);
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
+        expect(await database.collection("group_post_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -303,19 +304,24 @@ describe("MongoDB application repositories", () => {
     });
 
     test("caches group posts and member pages per active owner", async () => {
-        const { listCachedGroupMembers, listCachedGroupPosts, replaceCachedGroupPosts, upsertCachedGroupMembers } = await import("./group-dialog-repository");
+        const { deactivateCachedGroupPost, getCachedGroupPosts, listCachedGroupMembers, replaceCachedGroupPosts, upsertCachedGroupMembers, upsertCachedGroupPost } = await import("./group-dialog-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000051";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000052";
         const groupId = "grp_00000000-0000-0000-0000-000000000053";
         const userId = "usr_00000000-0000-0000-0000-000000000054";
-        await replaceCachedGroupPosts(ownerId, groupId, [{ id: "gpos_one", title: "First", text: "Visible", roleIds: [] }]);
-        await replaceCachedGroupPosts(ownerId, groupId, [{ id: "gpos_two", title: "Second", text: "Replacement", roleIds: [] }]);
+        await replaceCachedGroupPosts(ownerId, groupId, [{ id: "gpos_00000000-0000-0000-0000-000000000061", title: "First", text: "Visible", roleIds: [], visibility: "group" }]);
+        await replaceCachedGroupPosts(ownerId, groupId, [{ id: "gpos_00000000-0000-0000-0000-000000000062", title: "Second", text: "Replacement", roleIds: [], visibility: "group" }]);
+        await upsertCachedGroupPost(ownerId, groupId, { id: "gpos_00000000-0000-0000-0000-000000000063", title: "Third", text: "Created", roleIds: [], visibility: "public" });
         await upsertCachedGroupMembers(ownerId, groupId, [{ id: "gmem_one", userId, roleIds: [], user: { id: userId, displayName: "Group Member" } }]);
 
-        expect(await listCachedGroupPosts(ownerId, groupId)).toEqual([expect.objectContaining({ id: "gpos_two" })]);
+        expect(await getCachedGroupPosts(ownerId, groupId)).toEqual([expect.objectContaining({ id: "gpos_00000000-0000-0000-0000-000000000062" }), expect.objectContaining({ id: "gpos_00000000-0000-0000-0000-000000000063" })]);
+        await deactivateCachedGroupPost(ownerId, groupId, "gpos_00000000-0000-0000-0000-000000000062");
+        expect(await getCachedGroupPosts(ownerId, groupId)).toEqual([expect.objectContaining({ id: "gpos_00000000-0000-0000-0000-000000000063" })]);
         const { getMongoDatabase } = await import("./client");
-        expect(await (await getMongoDatabase()).collection("group_posts").findOne({ ownerId, groupId, postId: "gpos_one" })).toMatchObject({ active: false });
-        expect(await listCachedGroupPosts(otherOwnerId, groupId)).toEqual([]);
+        expect(await (await getMongoDatabase()).collection("group_posts").findOne({ ownerId, groupId, postId: "gpos_00000000-0000-0000-0000-000000000061" })).toMatchObject({ active: false });
+        expect(await getCachedGroupPosts(otherOwnerId, groupId)).toBeNull();
+        await replaceCachedGroupPosts(otherOwnerId, groupId, []);
+        expect(await getCachedGroupPosts(otherOwnerId, groupId)).toEqual([]);
         expect(await listCachedGroupMembers(ownerId, groupId, 0, 100)).toMatchObject({ total: 1, members: [expect.objectContaining({ userId })] });
         expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
     });

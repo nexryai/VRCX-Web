@@ -32,6 +32,9 @@ const captures = [
     { name: "group-dialog-photos", path: "/friends-locations", readyText: "Highlights shared by the whole community.", groupDialog: true, groupTab: "Photos" },
     { name: "previous-instances-group", path: "/friends-locations", readyText: "You", groupDialog: true, previousInstances: "group" },
     { name: "group-dialog-posts", path: "/friends-locations", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
+    { name: "group-dialog-post-create", path: "/friends-locations", readyText: "Create/Edit Post", groupDialog: true, groupTab: "Posts", groupPostDialog: "create" },
+    { name: "group-dialog-post-edit", path: "/friends-locations", readyText: "Create/Edit Post", groupDialog: true, groupTab: "Posts", groupPostDialog: "edit" },
+    { name: "group-dialog-post-delete", path: "/friends-locations", readyText: "Delete post?", groupDialog: true, groupTab: "Posts", groupPostDialog: "delete" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
@@ -162,6 +165,43 @@ for (const width of widths) {
                 }),
             );
         }
+        if (capture.groupPostDialog === "create") {
+            await page.route("**/api/groups/*/posts", async (route) => {
+                if (route.request().method() !== "POST") return route.fallback();
+                const body = route.request().postDataJSON();
+                if (body.title !== "Visual created post" || body.text !== "Created through the browser workflow." || body.sendNotification !== true || body.visibility !== "group") throw new Error("Unexpected create group post payload.");
+                return route.fulfill({
+                    status: 200,
+                    contentType: "application/json",
+                    body: JSON.stringify({ post: { id: "gpos_00000000-0000-0000-0000-000000000032", groupId: "grp_00000000-0000-0000-0000-000000000020", ...body, authorId: "usr_00000000-0000-0000-0000-000000000001", createdAt: "2026-08-09T23:30:00.000Z", updatedAt: "2026-08-09T23:30:00.000Z" } }),
+                });
+            });
+        }
+        if (capture.groupPostDialog === "edit" || capture.groupPostDialog === "delete") {
+            await page.route("**/api/groups/*/posts/gpos_*", async (route) => {
+                if (route.request().method() === "PUT") {
+                    const body = route.request().postDataJSON();
+                    if (body.title !== "Edited community meetup" || "sendNotification" in body) throw new Error("Unexpected edit group post payload.");
+                    return route.fulfill({
+                        status: 200,
+                        contentType: "application/json",
+                        body: JSON.stringify({
+                            post: {
+                                id: "gpos_00000000-0000-0000-0000-000000000030",
+                                groupId: "grp_00000000-0000-0000-0000-000000000020",
+                                ...body,
+                                authorId: "usr_00000000-0000-0000-0000-000000000001",
+                                editorId: "usr_00000000-0000-0000-0000-000000000001",
+                                createdAt: "2026-08-09T22:00:00.000Z",
+                                updatedAt: "2026-08-09T23:30:00.000Z",
+                            },
+                        }),
+                    });
+                }
+                if (route.request().method() === "DELETE") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) });
+                return route.fallback();
+            });
+        }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
         if (capture.friendListSearch) {
             const filterSummary = page.getByText("Filter fields", { exact: true });
@@ -216,6 +256,58 @@ for (const width of widths) {
                 await page.getByRole("button", { name: "Download .ics", exact: true }).click();
                 const download = await downloadPromise;
                 if (download.suggestedFilename() !== "evt_visual_upcoming.ics") throw new Error(`Unexpected calendar filename: ${download.suggestedFilename()}`);
+            }
+            if (capture.groupPostDialog === "create") {
+                const manage = page.getByLabel("Manage group", { exact: true });
+                await manage.click();
+                await page.getByRole("button", { name: "Create Post", exact: true }).click();
+                const dialog = page.getByRole("dialog", { name: "Create/Edit Post", exact: true });
+                await dialog.waitFor();
+                const title = page.getByLabel("Title", { exact: true });
+                if (!(await title.evaluate((element) => document.activeElement === element))) throw new Error("Group post create dialog did not focus its title field.");
+                await page.keyboard.press("Escape");
+                await dialog.waitFor({ state: "detached" });
+                await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Manage group");
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Group post create dialog did not restore focus to Manage group.");
+                await manage.click();
+                await page.getByRole("button", { name: "Create Post", exact: true }).click();
+                await page.getByLabel("Title", { exact: true }).fill("Visual created post");
+                await page.getByLabel("Message", { exact: true }).fill("Created through the browser workflow.");
+                await page.getByRole("button", { name: "Create Post", exact: true }).click();
+                await page.getByText("Visual created post", { exact: true }).waitFor();
+                await manage.click();
+                await page.getByRole("button", { name: "Create Post", exact: true }).click();
+            }
+            if (capture.groupPostDialog === "edit") {
+                const trigger = page.getByRole("button", { name: "Edit post", exact: true }).first();
+                await trigger.click();
+                const dialog = page.getByRole("dialog", { name: "Create/Edit Post", exact: true });
+                await dialog.waitFor();
+                await page.keyboard.press("Escape");
+                await dialog.waitFor({ state: "detached" });
+                await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Edit post");
+                if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Group post edit dialog did not restore focus after Escape.");
+                await trigger.click();
+                await page.getByLabel("Title", { exact: true }).fill("Edited community meetup");
+                await page.getByRole("button", { name: "Edit Post", exact: true }).click();
+                await page.getByText("Edited community meetup", { exact: true }).waitFor();
+                await page.getByRole("button", { name: "Edit post", exact: true }).first().click();
+            }
+            if (capture.groupPostDialog === "delete") {
+                const trigger = page.getByRole("button", { name: "Delete post", exact: true }).first();
+                await trigger.click();
+                const dialog = page.getByRole("alertdialog", { name: "Delete post?", exact: true });
+                await dialog.waitFor();
+                const cancel = page.getByRole("button", { name: "Cancel", exact: true }).last();
+                if (!(await cancel.evaluate((element) => document.activeElement === element))) throw new Error("Group post delete dialog did not focus Cancel.");
+                await page.keyboard.press("Escape");
+                await dialog.waitFor({ state: "detached" });
+                await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Delete post");
+                if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Group post delete dialog did not restore focus after Escape.");
+                await trigger.click();
+                await page.getByRole("button", { name: "Delete", exact: true }).click();
+                await page.getByText("Community meetup", { exact: true }).waitFor({ state: "detached" });
+                await page.getByRole("button", { name: "Delete post", exact: true }).first().click();
             }
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
             if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();

@@ -298,7 +298,7 @@ await database.collection("groups").insertOne({
             { id: "grol_00000000-0000-0000-0000-000000000021", name: "Everyone", permissions: [] },
             { id: "grol_00000000-0000-0000-0000-000000000022", name: "Event Host", permissions: ["group-instance-manage"] },
         ],
-        myMember: { membershipStatus: "member", visibility: "friends", isRepresenting: true, isSubscribedToAnnouncements: true, roleIds: ["grol_00000000-0000-0000-0000-000000000021"] },
+        myMember: { membershipStatus: "member", visibility: "friends", isRepresenting: true, isSubscribedToAnnouncements: true, permissions: ["group-announcement-manage"], roleIds: ["grol_00000000-0000-0000-0000-000000000021"] },
     },
     source: "membership",
     membershipActive: true,
@@ -437,17 +437,18 @@ await database.collection("group_gallery_snapshots").insertOne({
 });
 await database.collection("group_posts").insertMany([
     {
-        _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:gpos_visual_announcement`,
+        _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:gpos_00000000-0000-0000-0000-000000000030`,
         ownerId,
         groupId: "grp_00000000-0000-0000-0000-000000000020",
-        postId: "gpos_visual_announcement",
+        postId: "gpos_00000000-0000-0000-0000-000000000030",
         post: {
-            id: "gpos_visual_announcement",
+            id: "gpos_00000000-0000-0000-0000-000000000030",
             groupId: "grp_00000000-0000-0000-0000-000000000020",
             title: "Community meetup",
             text: "The browser-port meetup starts in one hour.",
             authorId: ownerId,
             roleIds: [],
+            visibility: "group",
             createdAt: new Date(now.getTime() - 60 * 60_000).toISOString(),
             updatedAt: new Date(now.getTime() - 30 * 60_000).toISOString(),
         },
@@ -456,17 +457,18 @@ await database.collection("group_posts").insertMany([
         updatedAt: now,
     },
     {
-        _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:gpos_visual_rules`,
+        _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:gpos_00000000-0000-0000-0000-000000000031`,
         ownerId,
         groupId: "grp_00000000-0000-0000-0000-000000000020",
-        postId: "gpos_visual_rules",
+        postId: "gpos_00000000-0000-0000-0000-000000000031",
         post: {
-            id: "gpos_visual_rules",
+            id: "gpos_00000000-0000-0000-0000-000000000031",
             groupId: "grp_00000000-0000-0000-0000-000000000020",
             title: "Event notes",
             text: "Check the group calendar for the next world hop.",
             authorId: friends[0].id,
             roleIds: [],
+            visibility: "public",
             createdAt: new Date(now.getTime() - 3 * 60 * 60_000).toISOString(),
             updatedAt: new Date(now.getTime() - 3 * 60 * 60_000).toISOString(),
         },
@@ -475,6 +477,7 @@ await database.collection("group_posts").insertMany([
         updatedAt: now,
     },
 ]);
+await database.collection("group_post_snapshots").insertOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId, observedAt: now, updatedAt: now });
 await database.collection("group_members").insertMany([
     {
         _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:usr_00000000-0000-0000-0000-000000000071`,

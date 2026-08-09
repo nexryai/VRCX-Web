@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Bell, BellOff, Bookmark, BookmarkCheck, CalendarDays, Check, Clipboard, Download, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Repeat, Search, Share2, ShieldCheck, Star, Trash2, Users, X, XCircle } from "lucide-react";
+import { Bell, BellOff, Bookmark, BookmarkCheck, CalendarDays, Check, Clipboard, Download, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, Pencil, Plus, RefreshCw, Repeat, Search, Share2, ShieldCheck, Star, Trash2, Users, X, XCircle } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
@@ -15,9 +15,22 @@ import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterest
 type GroupTab = "Info" | "Posts" | "Members" | "Photos" | "JSON";
 type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
 type ConfirmAction = "block" | "leave";
+type GroupPostInput = {
+    title: string;
+    text: string;
+    roleIds: string[];
+    visibility: "group" | "public";
+    imageId: string | null;
+    sendNotification: boolean;
+};
 
 function inGroup(group: VrchatGroup) {
     return group.membershipStatus === "member" || group.myMember?.membershipStatus === "member";
+}
+
+function canManageGroupPosts(group: VrchatGroup) {
+    const permissions = group.myMember?.permissions || [];
+    return permissions.includes("*") || permissions.includes("group-announcement-manage");
 }
 
 export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: string; friends: VrchatUser[]; openUser: (userId: string) => void; onClose: () => void }) {
@@ -47,8 +60,12 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [actionLoading, setActionLoading] = useState<GroupActionName | "">("");
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
+    const [postEditor, setPostEditor] = useState<VrchatGroupPost | "new" | null>(null);
+    const [postToDelete, setPostToDelete] = useState<VrchatGroupPost | null>(null);
+    const [postMutationLoading, setPostMutationLoading] = useState(false);
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
+    const postActionReturnFocus = useRef<HTMLElement | null>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -189,13 +206,16 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setPreviousInstancesOpen(false);
         setFollowingEventId("");
         setGalleriesLoaded(false);
+        setPostEditor(null);
+        setPostToDelete(null);
+        setPostMutationLoading(false);
         void Promise.all([load(), loadPosts(), loadInstances(), loadCalendar()]);
         closeButton.current?.focus();
     }, [load, loadCalendar, loadInstances, loadPosts]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
-            if (event.key === "Escape") onClose();
+            if (event.key === "Escape" && !document.querySelector("[data-group-post-overlay]")) onClose();
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
@@ -249,6 +269,68 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
             setError(followError instanceof Error ? followError.message : "The calendar follow request could not be completed.");
         } finally {
             setFollowingEventId("");
+        }
+    }
+
+    function openPostEditor(post: VrchatGroupPost | "new", trigger: HTMLElement) {
+        postActionReturnFocus.current = trigger;
+        setPostEditor(post);
+        setError("");
+    }
+
+    function closePostOverlay() {
+        setPostEditor(null);
+        setPostToDelete(null);
+        setError("");
+        window.setTimeout(() => postActionReturnFocus.current?.focus(), 0);
+    }
+
+    async function savePost(input: GroupPostInput) {
+        if (!postEditor) return;
+        setPostMutationLoading(true);
+        setError("");
+        try {
+            const editing = postEditor !== "new";
+            const endpoint = editing ? `/api/groups/${encodeURIComponent(groupId)}/posts/${encodeURIComponent(postEditor.id)}` : `/api/groups/${encodeURIComponent(groupId)}/posts`;
+            const { sendNotification, ...editable } = input;
+            const response = await fetch(endpoint, {
+                method: editing ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(editing ? editable : { ...editable, sendNotification }),
+            });
+            const payload = (await response.json()) as { error?: string; post?: VrchatGroupPost; refreshRequired?: boolean };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.post) throw new Error(payload.error || "The group post could not be saved.");
+            setPosts((current) => {
+                const existing = current.some((post) => post.id === payload.post?.id);
+                return existing ? current.map((post) => (post.id === payload.post?.id ? payload.post : post)) : [payload.post as VrchatGroupPost, ...current];
+            });
+            setPostsLoaded(true);
+            closePostOverlay();
+            if (payload.refreshRequired) void loadPosts(true);
+        } catch (saveError) {
+            setError(saveError instanceof Error ? saveError.message : "The group post could not be saved.");
+        } finally {
+            setPostMutationLoading(false);
+        }
+    }
+
+    async function deletePost() {
+        if (!postToDelete) return;
+        setPostMutationLoading(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/posts/${encodeURIComponent(postToDelete.id)}`, { method: "DELETE" });
+            const payload = (await response.json()) as { error?: string; success?: boolean; refreshRequired?: boolean };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.success) throw new Error(payload.error || "The group post could not be deleted.");
+            setPosts((current) => current.filter((post) => post.id !== postToDelete.id));
+            closePostOverlay();
+            if (payload.refreshRequired) void loadPosts(true);
+        } catch (deleteError) {
+            setError(deleteError instanceof Error ? deleteError.message : "The group post could not be deleted.");
+        } finally {
+            setPostMutationLoading(false);
         }
     }
 
@@ -315,7 +397,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                 <a href={`https://vrchat.com/home/group/${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer" className="inline-flex size-9 items-center justify-center rounded-full border border-input" aria-label="Open on VRChat">
                                     <ExternalLink className="size-4" />
                                 </a>
-                                <GroupManageMenu group={group} loading={actionLoading} runAction={runAction} confirm={setConfirmAction} />
+                                <GroupManageMenu group={group} loading={actionLoading} runAction={runAction} confirm={setConfirmAction} createPost={(trigger) => openPostEditor("new", trigger)} />
                             </div>
                         </header>
                         {confirmAction ? <GroupActionConfirmation group={group} action={confirmAction} loading={actionLoading !== ""} cancel={() => setConfirmAction(null)} confirm={() => void runAction(confirmAction)} /> : null}
@@ -358,13 +440,35 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                     followingEventId={followingEventId}
                                     followCalendarEvent={followCalendarEvent}
                                     announcement={posts[0]}
+                                    canManagePosts={canManageGroupPosts(group)}
+                                    editPost={openPostEditor}
+                                    deletePost={(post, trigger) => {
+                                        postActionReturnFocus.current = trigger;
+                                        setError("");
+                                        setPostToDelete(post);
+                                    }}
                                     openUser={openUser}
                                     copy={copy}
                                     onOpenPreviousInstances={() => setPreviousInstancesOpen(true)}
                                     previousInstancesButton={previousInstancesButton}
                                 />
                             ) : null}
-                            {!tabLoading && tab === "Posts" ? <GroupPosts posts={posts} search={search} setSearch={setSearch} refresh={() => void loadPosts(true)} openUser={openUser} /> : null}
+                            {!tabLoading && tab === "Posts" ? (
+                                <GroupPosts
+                                    posts={posts}
+                                    group={group}
+                                    search={search}
+                                    setSearch={setSearch}
+                                    refresh={() => void loadPosts(true)}
+                                    openUser={openUser}
+                                    editPost={openPostEditor}
+                                    deletePost={(post, trigger) => {
+                                        postActionReturnFocus.current = trigger;
+                                        setError("");
+                                        setPostToDelete(post);
+                                    }}
+                                />
+                            ) : null}
                             {!tabLoading && tab === "Members" ? <GroupMembers group={group} members={members} search={search} setSearch={setSearch} refresh={() => void loadMembers(0, true)} loadMore={() => void loadMembers(members.length, true)} hasMore={hasMoreMembers} openUser={openUser} /> : null}
                             {tab === "Photos" ? <GroupPhotos galleries={galleries} images={galleryImages} truncatedGalleryIds={truncatedGalleryIds} loading={galleriesLoading} refresh={() => void loadGalleries(true)} /> : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(group, null, 2)}</pre> : null}
@@ -373,6 +477,8 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                 ) : null}
             </section>
             {previousInstancesOpen && group ? <PreviousInstancesDialog variant="group" entityId={group.id} label={group.name} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
+            {postEditor && group ? <GroupPostEditor group={group} post={postEditor === "new" ? undefined : postEditor} loading={postMutationLoading} error={error} cancel={closePostOverlay} save={savePost} /> : null}
+            {postToDelete ? <GroupPostDeleteConfirmation post={postToDelete} loading={postMutationLoading} error={error} cancel={closePostOverlay} confirm={() => void deletePost()} /> : null}
         </div>
     );
 }
@@ -412,7 +518,7 @@ function GroupPrimaryAction({ group, loading, runAction }: { group: VrchatGroup;
     );
 }
 
-function GroupManageMenu({ group, loading, runAction, confirm }: { group: VrchatGroup; loading: GroupActionName | ""; runAction: (action: GroupActionName, value?: boolean | string) => Promise<void>; confirm: (action: ConfirmAction) => void }) {
+function GroupManageMenu({ group, loading, runAction, confirm, createPost }: { group: VrchatGroup; loading: GroupActionName | ""; runAction: (action: GroupActionName, value?: boolean | string) => Promise<void>; confirm: (action: ConfirmAction) => void; createPost: (trigger: HTMLElement) => void }) {
     const member = inGroup(group) && group.myMember;
     const closeAndRun = (event: React.MouseEvent<HTMLButtonElement>, action: () => void) => {
         event.currentTarget.closest("details")?.removeAttribute("open");
@@ -438,6 +544,17 @@ function GroupManageMenu({ group, loading, runAction, confirm }: { group: Vrchat
                             disabled={loading !== ""}
                             action={(event) => closeAndRun(event, () => void runAction("event-announcements", group.myMember?.isSubscribedToEventAnnouncements === false))}
                         />
+                        {canManageGroupPosts(group) ? (
+                            <GroupMenuButton
+                                icon={<Plus />}
+                                label="Create Post"
+                                disabled={loading !== ""}
+                                action={(event) => {
+                                    const returnFocus = event.currentTarget.closest("details")?.querySelector<HTMLElement>("summary") || event.currentTarget;
+                                    closeAndRun(event, () => createPost(returnFocus));
+                                }}
+                            />
+                        ) : null}
                         {group.privacy === "default" ? (
                             <>
                                 <hr className="my-1 border-border" />
@@ -501,6 +618,9 @@ function GroupInfo({
     followingEventId,
     followCalendarEvent,
     announcement,
+    canManagePosts,
+    editPost,
+    deletePost,
     openUser,
     copy,
     onOpenPreviousInstances,
@@ -515,6 +635,9 @@ function GroupInfo({
     followingEventId: string;
     followCalendarEvent: (event: VrchatGroupCalendarEvent) => Promise<void>;
     announcement?: VrchatGroupPost;
+    canManagePosts: boolean;
+    editPost: (post: VrchatGroupPost, trigger: HTMLButtonElement) => void;
+    deletePost: (post: VrchatGroupPost, trigger: HTMLButtonElement) => void;
     openUser: (userId: string) => void;
     copy: (value: string) => Promise<void>;
     onOpenPreviousInstances: () => void;
@@ -583,7 +706,30 @@ function GroupInfo({
                 </section>
             ) : null}
             <div className="mt-3 flex flex-wrap items-start px-1">
-                <FullInfo label="Announcement" value={announcement ? `${announcement.title}${announcement.text ? `\n${announcement.text}` : ""}` : "—"} />
+                <div className="box-border w-full p-1.5 text-[13px]">
+                    <span className="block font-medium leading-[18px]">Announcement</span>
+                    {announcement ? (
+                        <div className="text-xs">
+                            <p>{announcement.title}</p>
+                            <p className="mt-1 whitespace-pre-wrap">{announcement.text || "—"}</p>
+                            <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+                                <span>{dateTime(announcement.updatedAt || announcement.createdAt)}</span>
+                                {canManagePosts ? (
+                                    <>
+                                        <button type="button" onClick={(event) => editPost(announcement, event.currentTarget)} className="inline-flex size-6 items-center justify-center rounded hover:bg-muted hover:text-foreground" aria-label="Edit post">
+                                            <Pencil className="size-3.5" />
+                                        </button>
+                                        <button type="button" onClick={(event) => deletePost(announcement, event.currentTarget)} className="inline-flex size-6 items-center justify-center rounded hover:bg-muted hover:text-destructive" aria-label="Delete post">
+                                            <Trash2 className="size-3.5" />
+                                        </button>
+                                    </>
+                                ) : null}
+                            </div>
+                        </div>
+                    ) : (
+                        <span className="text-xs">—</span>
+                    )}
+                </div>
                 <FullInfo label="Rules" value={group.rules || "—"} />
             </div>
             <GroupCalendar events={calendar} loading={calendarLoading} followingEventId={followingEventId} follow={followCalendarEvent} />
@@ -749,9 +895,184 @@ function eventRange(event: VrchatGroupCalendarEvent) {
     return `${date} ${time.format(startsAt)} – ${time.format(endsAt)}`;
 }
 
-function GroupPosts({ posts, search, setSearch, refresh, openUser }: { posts: VrchatGroupPost[]; search: string; setSearch: (value: string) => void; refresh: () => void; openUser: (userId: string) => void }) {
+function GroupPostEditor({ group, post, loading, error, cancel, save }: { group: VrchatGroup; post?: VrchatGroupPost; loading: boolean; error: string; cancel: () => void; save: (input: GroupPostInput) => Promise<void> }) {
+    const [title, setTitle] = useState(post?.title || "");
+    const [message, setMessage] = useState(post?.text || "");
+    const [sendNotification, setSendNotification] = useState(true);
+    const [visibility, setVisibility] = useState<"group" | "public">(post?.visibility || "group");
+    const [roleIds, setRoleIds] = useState(post?.roleIds || []);
+    const [imageId, setImageId] = useState<string | null>(post?.imageId || null);
+    const dialog = useRef<HTMLDivElement>(null);
+    const titleInput = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        titleInput.current?.focus();
+        function handleKey(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                cancel();
+                return;
+            }
+            if (event.key !== "Tab" || !dialog.current) return;
+            const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), textarea:not([disabled]), summary"));
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+        window.addEventListener("keydown", handleKey, true);
+        return () => window.removeEventListener("keydown", handleKey, true);
+    }, [cancel]);
+
+    const valid = title.length > 0 && message.length > 0 && title.length <= 1_024 && message.length <= 10_000;
+    const roleNames = new Map((group.roles || []).map((role) => [role.id, role.name]));
+    const selectedRoleNames = roleIds.map((roleId) => roleNames.get(roleId) || roleId);
+    const selectedRoleSummary = selectedRoleNames.length ? `${selectedRoleNames.slice(0, 3).join(", ")}${selectedRoleNames.length > 3 ? ` +${selectedRoleNames.length - 3}` : ""}` : "Select roles";
+    return (
+        <div data-group-post-overlay className="absolute inset-0 z-[90] flex items-center justify-center bg-black/65 p-3 sm:p-4">
+            <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="group-post-editor-title" className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[650px] overflow-y-auto rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                <h3 id="group-post-editor-title" className="font-semibold">
+                    Create/Edit Post
+                </h3>
+                <form
+                    className="mt-4 space-y-4 text-sm"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        if (valid) void save({ title, text: message, sendNotification, visibility, roleIds, imageId });
+                    }}
+                >
+                    <label className="block">
+                        <span className="text-xs font-medium">Title</span>
+                        <input ref={titleInput} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={1_024} required className="mt-1 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs font-medium">Message</span>
+                        <textarea value={message} onChange={(event) => setMessage(event.target.value)} maxLength={10_000} required rows={4} className="mt-1 w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                    </label>
+                    {!post ? (
+                        <label className="flex items-center gap-2 text-xs">
+                            <input type="checkbox" checked={sendNotification} onChange={(event) => setSendNotification(event.target.checked)} className="size-4 accent-primary" />
+                            Send Notification
+                        </label>
+                    ) : null}
+                    <fieldset>
+                        <legend className="text-xs font-medium">Post Visibility</legend>
+                        <div className="mt-2 flex items-center gap-4 text-xs">
+                            <label className="flex items-center gap-2">
+                                <input type="radio" name="group-post-visibility" value="public" checked={visibility === "public"} onChange={() => setVisibility("public")} className="size-4 accent-primary" /> Public
+                            </label>
+                            <label className="flex items-center gap-2">
+                                <input type="radio" name="group-post-visibility" value="group" checked={visibility === "group"} onChange={() => setVisibility("group")} className="size-4 accent-primary" /> Group
+                            </label>
+                        </div>
+                    </fieldset>
+                    {visibility === "group" ? (
+                        <div>
+                            <span className="text-xs font-medium">Roles</span>
+                            <details className="relative mt-1">
+                                <summary className="flex h-9 cursor-pointer list-none items-center rounded-md border border-input bg-background px-3 text-xs outline-none focus:ring-2 focus:ring-ring [&::-webkit-details-marker]:hidden">{selectedRoleSummary}</summary>
+                                <div className="absolute z-20 mt-1 w-full rounded-md border border-border bg-popover p-1 shadow-xl">
+                                    {(group.roles || []).map((role) => (
+                                        <label key={role.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-xs hover:bg-muted">
+                                            <input type="checkbox" checked={roleIds.includes(role.id)} onChange={(event) => setRoleIds((current) => (event.target.checked ? [...current, role.id] : current.filter((roleId) => roleId !== role.id)))} className="size-4 accent-primary" />
+                                            {role.name}
+                                        </label>
+                                    ))}
+                                </div>
+                            </details>
+                        </div>
+                    ) : null}
+                    {post?.imageUrl && imageId ? (
+                        <div>
+                            <span className="block text-xs font-medium">Image</span>
+                            <div className="mt-1 flex items-start gap-2">
+                                <VrchatImage src={post.imageUrl} alt="" className="size-[60px] rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                                <button type="button" onClick={() => setImageId(null)} className="h-8 rounded-md border border-input px-3 text-xs hover:bg-muted">
+                                    Clear selected image
+                                </button>
+                            </div>
+                        </div>
+                    ) : null}
+                    {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                    <div className="flex justify-end gap-2">
+                        <button type="button" onClick={cancel} disabled={loading} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                            Cancel
+                        </button>
+                        <button type="submit" disabled={loading || !valid} className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-4 text-xs text-primary-foreground disabled:opacity-40">
+                            {loading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                            {post ? "Edit Post" : "Create Post"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+function GroupPostDeleteConfirmation({ post, loading, error, cancel, confirm }: { post: VrchatGroupPost; loading: boolean; error: string; cancel: () => void; confirm: () => void }) {
+    const cancelButton = useRef<HTMLButtonElement>(null);
+    useEffect(() => {
+        cancelButton.current?.focus();
+        function handleKey(event: KeyboardEvent) {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            cancel();
+        }
+        window.addEventListener("keydown", handleKey, true);
+        return () => window.removeEventListener("keydown", handleKey, true);
+    }, [cancel]);
+    return (
+        <div data-group-post-overlay className="absolute inset-0 z-[90] flex items-center justify-center bg-black/65 p-4">
+            <div role="alertdialog" aria-modal="true" aria-labelledby="group-post-delete-title" className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                <h3 id="group-post-delete-title" className="font-semibold">
+                    Delete post?
+                </h3>
+                <p className="mt-2 text-xs text-muted-foreground">Are you sure you want to delete “{post.title || "Untitled post"}”?</p>
+                {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                <div className="mt-4 flex justify-end gap-2">
+                    <button ref={cancelButton} type="button" onClick={cancel} disabled={loading} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                        Cancel
+                    </button>
+                    <button type="button" onClick={confirm} disabled={loading} className="inline-flex h-9 items-center gap-1 rounded-md bg-destructive px-4 text-xs text-white disabled:opacity-40">
+                        {loading ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />} Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function GroupPosts({
+    posts,
+    group,
+    search,
+    setSearch,
+    refresh,
+    openUser,
+    editPost,
+    deletePost,
+}: {
+    posts: VrchatGroupPost[];
+    group: VrchatGroup;
+    search: string;
+    setSearch: (value: string) => void;
+    refresh: () => void;
+    openUser: (userId: string) => void;
+    editPost: (post: VrchatGroupPost, trigger: HTMLButtonElement) => void;
+    deletePost: (post: VrchatGroupPost, trigger: HTMLButtonElement) => void;
+}) {
     const query = search.trim().toLocaleLowerCase();
     const visible = posts.filter((post) => !query || `${post.title} ${post.text}`.toLocaleLowerCase().includes(query));
+    const roleNames = new Map((group.roles || []).map((role) => [role.id, role.name]));
+    const canManage = canManageGroupPosts(group);
     return (
         <div>
             <TabToolbar count={posts.length} value={search} setValue={setSearch} refresh={refresh} placeholder="Search posts" />
@@ -760,16 +1081,32 @@ function GroupPosts({ posts, search, setSearch, refresh, openUser }: { posts: Vr
                     <article key={post.id} className="rounded-lg p-2 text-[13px] hover:bg-background">
                         <p className="font-medium">{post.title || "Untitled post"}</p>
                         <div className="mt-1 flex items-start gap-2">
-                            <VrchatImage src={post.imageUrl} alt="" className="size-[60px] shrink-0 rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                            {post.imageUrl ? <VrchatImage src={post.imageUrl} alt="" className="size-[60px] shrink-0 rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" /> : null}
                             <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs">{post.text || "—"}</p>
                         </div>
-                        <div className="mt-1 flex flex-wrap justify-end gap-2 text-[10px] text-muted-foreground">
+                        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 text-[10px] text-muted-foreground">
+                            {post.roleIds.length ? (
+                                <span className="inline-flex items-center gap-1" title={`Visibility: ${post.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ")}`}>
+                                    <Eye className="size-3.5" />
+                                    <span className="sr-only">Role-restricted post</span>
+                                </span>
+                            ) : null}
                             {post.authorId ? (
                                 <button type="button" onClick={() => openUser(post.authorId || "")} className="hover:text-foreground">
                                     {post.authorId}
                                 </button>
                             ) : null}
                             <span>{dateTime(post.updatedAt || post.createdAt)}</span>
+                            {canManage ? (
+                                <>
+                                    <button type="button" onClick={(event) => editPost(post, event.currentTarget)} className="inline-flex size-6 items-center justify-center rounded hover:bg-muted hover:text-foreground" aria-label="Edit post">
+                                        <Pencil className="size-3.5" />
+                                    </button>
+                                    <button type="button" onClick={(event) => deletePost(post, event.currentTarget)} className="inline-flex size-6 items-center justify-center rounded hover:bg-muted hover:text-destructive" aria-label="Delete post">
+                                        <Trash2 className="size-3.5" />
+                                    </button>
+                                </>
+                            ) : null}
                         </div>
                     </article>
                 ))}

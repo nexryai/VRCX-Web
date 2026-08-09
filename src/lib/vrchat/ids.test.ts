@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { isAllowedVrchatEndpoint } from "./client";
-import { avatarIdSchema, calendarEventIdSchema, favoriteObjectIdSchema, groupGalleryIdSchema, groupGalleryImageIdSchema, groupIdSchema, isVrchatId, localFavoriteGroupIdSchema, userIdSchema, worldIdSchema } from "./ids";
+import { avatarIdSchema, calendarEventIdSchema, favoriteObjectIdSchema, fileIdSchema, groupGalleryIdSchema, groupGalleryImageIdSchema, groupIdSchema, groupPostIdSchema, groupRoleIdSchema, isVrchatId, localFavoriteGroupIdSchema, userIdSchema, worldIdSchema } from "./ids";
 
 describe("VRChat entity ID boundary", () => {
     const uuid = "00000000-0000-0000-0000-000000000001";
@@ -13,6 +13,9 @@ describe("VRChat entity ID boundary", () => {
         expect(groupIdSchema.parse(`grp_${uuid}`)).toBe(`grp_${uuid}`);
         expect(groupGalleryIdSchema.parse(`ggal_${uuid}`)).toBe(`ggal_${uuid}`);
         expect(groupGalleryImageIdSchema.parse(`ggim_${uuid}`)).toBe(`ggim_${uuid}`);
+        expect(groupPostIdSchema.parse(`gpos_${uuid}`)).toBe(`gpos_${uuid}`);
+        expect(groupRoleIdSchema.parse(`grol_${uuid}`)).toBe(`grol_${uuid}`);
+        expect(fileIdSchema.parse(`file_${uuid}`)).toBe(`file_${uuid}`);
         expect(calendarEventIdSchema.parse("evt_calendar-one_2")).toBe("evt_calendar-one_2");
         expect(localFavoriteGroupIdSchema.parse(`lfg_${uuid}`)).toBe(`lfg_${uuid}`);
         expect(favoriteObjectIdSchema.safeParse(`grp_${uuid}`).success).toBe(false);
@@ -39,6 +42,8 @@ describe("VRChat entity ID boundary", () => {
         expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}/evt_example.ics/extra`)).toBe(false);
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/galleries/ggal_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/galleries/ggal_${uuid}/images`)).toBe(false);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/posts/gpos_${uuid}`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/posts/gpos_${uuid}/extra`)).toBe(false);
         expect(isAllowedVrchatEndpoint("users/usr_000000000000-0000-0000-000000000001")).toBe(false);
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}-suffix`)).toBe(false);
     });
