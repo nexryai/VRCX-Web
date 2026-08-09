@@ -3,7 +3,7 @@ import "server-only";
 import type { Collection, Db } from "mongodb";
 
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
-import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
     algorithm: "aes-256-gcm";
@@ -182,6 +182,17 @@ export type GroupCalendarSnapshotDocument = {
     updatedAt: Date;
 };
 
+export type GroupGallerySnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    galleries: VrchatGroupGallery[];
+    images: VrchatGroupGalleryImage[];
+    truncatedGalleryIds: string[];
+    observedAt: Date;
+    updatedAt: Date;
+};
+
 export type AvatarDocument = {
     _id: string;
     ownerId: string;
@@ -354,6 +365,7 @@ export type Collections = {
     groupMembers: Collection<GroupMemberDocument>;
     groupInstanceSnapshots: Collection<GroupInstanceSnapshotDocument>;
     groupCalendarSnapshots: Collection<GroupCalendarSnapshotDocument>;
+    groupGallerySnapshots: Collection<GroupGallerySnapshotDocument>;
     avatars: Collection<AvatarDocument>;
     avatarTags: Collection<AvatarTagDocument>;
     entityMemos: Collection<EntityMemoDocument>;
@@ -383,6 +395,7 @@ export function collections(db: Db): Collections {
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupInstanceSnapshots: db.collection<GroupInstanceSnapshotDocument>("group_instance_snapshots"),
         groupCalendarSnapshots: db.collection<GroupCalendarSnapshotDocument>("group_calendar_snapshots"),
+        groupGallerySnapshots: db.collection<GroupGallerySnapshotDocument>("group_gallery_snapshots"),
         avatars: db.collection<AvatarDocument>("avatars"),
         avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),
         entityMemos: db.collection<EntityMemoDocument>("entity_memos"),

@@ -1,6 +1,7 @@
 import "server-only";
 
-import type { VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost } from "@/lib/vrchat/types";
+import { groupGalleryIdSchema } from "@/lib/vrchat/ids";
+import { type VrchatGroupCalendarEvent, type VrchatGroupCalendarInterestUpdate, type VrchatGroupGallery, type VrchatGroupGalleryImage, type VrchatGroupInstance, type VrchatGroupMember, type VrchatGroupPost, vrchatGroupGalleryImageSchema, vrchatGroupGallerySchema } from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
@@ -109,4 +110,26 @@ export async function updateCachedGroupCalendarEvent(ownerId: string, groupId: s
     const result = await collection.updateOne({ _id: `${ownerId}:${groupId}`, "events.id": event.id }, { $set: { "events.$.userInterest": event.userInterest, updatedAt } });
     if (!result.matchedCount) return false;
     return true;
+}
+
+export async function getCachedGroupGalleries(ownerId: string, groupId: string) {
+    await ensureMongoSchema();
+    const document = await collections(await getMongoDatabase()).groupGallerySnapshots.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+    if (!document) return null;
+    const galleries = vrchatGroupGallerySchema.array().parse(document.galleries);
+    const images = vrchatGroupGalleryImageSchema.array().parse(document.images);
+    const truncatedGalleryIds = groupGalleryIdSchema.array().parse(document.truncatedGalleryIds);
+    const galleryIds = new Set(galleries.map((gallery) => gallery.id));
+    if (images.some((image) => image.groupId !== groupId || !galleryIds.has(image.galleryId)) || truncatedGalleryIds.some((galleryId) => !galleryIds.has(galleryId))) throw new Error("The cached group gallery snapshot did not match its owner.");
+    return {
+        galleries,
+        images,
+        truncatedGalleryIds,
+        observedAt: document.observedAt,
+    };
+}
+
+export async function replaceCachedGroupGalleries(ownerId: string, groupId: string, galleries: VrchatGroupGallery[], images: VrchatGroupGalleryImage[], truncatedGalleryIds: string[], observedAt = new Date()) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).groupGallerySnapshots.updateOne({ _id: `${ownerId}:${groupId}` }, { $set: { ownerId, groupId, galleries, images, truncatedGalleryIds, observedAt, updatedAt: observedAt } }, { upsert: true });
 }

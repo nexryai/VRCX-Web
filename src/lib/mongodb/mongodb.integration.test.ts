@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -55,6 +55,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
@@ -399,6 +400,30 @@ describe("MongoDB application repositories", () => {
         await replaceCachedGroupCalendar(ownerId, groupId, [], false, 0);
         expect((await getCachedGroupCalendar(ownerId, groupId))?.events).toEqual([]);
         expect(await updateCachedGroupCalendarEvent(ownerId, groupId, { id: calendarEvent.id, userInterest: { isFollowing: false } })).toBe(false);
+    });
+
+    test("replaces complete group-gallery snapshots without crossing owners", async () => {
+        const { getCachedGroupGalleries, replaceCachedGroupGalleries } = await import("./group-dialog-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000071";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000072";
+        const groupId = "grp_00000000-0000-0000-0000-000000000073";
+        const galleryId = "ggal_00000000-0000-0000-0000-000000000074";
+        const gallery = { id: galleryId, name: "Photos", description: "Remote photos", membersOnly: false };
+        const image = { id: "ggim_00000000-0000-0000-0000-000000000075", groupId, galleryId, imageUrl: "https://api.vrchat.cloud/api/1/file/file_00000000-0000-0000-0000-000000000076/1/file" };
+        const observedAt = new Date("2026-08-09T12:00:00.000Z");
+
+        await replaceCachedGroupGalleries(ownerId, groupId, [gallery], [image], [galleryId], observedAt);
+        await replaceCachedGroupGalleries(otherOwnerId, groupId, [gallery], [image], [], observedAt);
+        expect(await getCachedGroupGalleries(ownerId, groupId)).toEqual({ galleries: [gallery], images: [image], truncatedGalleryIds: [galleryId], observedAt });
+        expect((await getCachedGroupGalleries(otherOwnerId, groupId))?.truncatedGalleryIds).toEqual([]);
+
+        const { getMongoDatabase } = await import("./client");
+        await (await getMongoDatabase()).collection("group_gallery_snapshots").updateOne({ ownerId, groupId }, { $set: { "images.0.groupId": "grp_00000000-0000-0000-0000-000000000099" } });
+        await expect(getCachedGroupGalleries(ownerId, groupId)).rejects.toThrow("did not match its owner");
+
+        await replaceCachedGroupGalleries(ownerId, groupId, [], [], []);
+        expect(await getCachedGroupGalleries(ownerId, groupId)).toMatchObject({ galleries: [], images: [], truncatedGalleryIds: [] });
+        expect((await getCachedGroupGalleries(otherOwnerId, groupId))?.images).toEqual([image]);
     });
 
     test("updates group membership projection without crossing owners", async () => {

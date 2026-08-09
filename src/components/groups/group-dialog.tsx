@@ -10,9 +10,9 @@ import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
 import { partitionGroupCalendarEvents } from "@/lib/group-calendar";
-import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
-type GroupTab = "Info" | "Posts" | "Members" | "JSON";
+type GroupTab = "Info" | "Posts" | "Members" | "Photos" | "JSON";
 type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
 type ConfirmAction = "block" | "leave";
 
@@ -33,6 +33,11 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [calendar, setCalendar] = useState<VrchatGroupCalendarEvent[]>([]);
     const [calendarLoading, setCalendarLoading] = useState(false);
     const [followingEventId, setFollowingEventId] = useState("");
+    const [galleries, setGalleries] = useState<VrchatGroupGallery[]>([]);
+    const [galleryImages, setGalleryImages] = useState<VrchatGroupGalleryImage[]>([]);
+    const [truncatedGalleryIds, setTruncatedGalleryIds] = useState<string[]>([]);
+    const [galleriesLoading, setGalleriesLoading] = useState(false);
+    const [galleriesLoaded, setGalleriesLoaded] = useState(false);
     const [members, setMembers] = useState<VrchatGroupMember[]>([]);
     const [hasMoreMembers, setHasMoreMembers] = useState(false);
     const [tabLoading, setTabLoading] = useState(false);
@@ -144,6 +149,27 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         [groupId],
     );
 
+    const loadGalleries = useCallback(
+        async (refresh = false) => {
+            setGalleriesLoading(true);
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/galleries${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; galleries?: VrchatGroupGallery[]; images?: VrchatGroupGalleryImage[]; truncatedGalleryIds?: string[] };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok) throw new Error(payload.error || "Group photos could not be loaded.");
+                setGalleries(payload.galleries || []);
+                setGalleryImages(payload.images || []);
+                setTruncatedGalleryIds(payload.truncatedGalleryIds || []);
+                setGalleriesLoaded(true);
+            } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : "Group photos could not be loaded.");
+            } finally {
+                setGalleriesLoading(false);
+            }
+        },
+        [groupId],
+    );
+
     useEffect(() => {
         setGroup(null);
         setOwnerName("");
@@ -151,6 +177,9 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setPosts([]);
         setInstances([]);
         setCalendar([]);
+        setGalleries([]);
+        setGalleryImages([]);
+        setTruncatedGalleryIds([]);
         setMembers([]);
         setPostsLoaded(false);
         setMembersLoaded(false);
@@ -159,6 +188,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setConfirmAction(null);
         setPreviousInstancesOpen(false);
         setFollowingEventId("");
+        setGalleriesLoaded(false);
         void Promise.all([load(), loadPosts(), loadInstances(), loadCalendar()]);
         closeButton.current?.focus();
     }, [load, loadCalendar, loadInstances, loadPosts]);
@@ -291,7 +321,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                         {confirmAction ? <GroupActionConfirmation group={group} action={confirmAction} loading={actionLoading !== ""} cancel={() => setConfirmAction(null)} confirm={() => void runAction(confirmAction)} /> : null}
                         {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                         <div className="mt-3 flex shrink-0 overflow-x-auto border-b border-border" role="tablist" aria-label="Group details">
-                            {(["Info", "Posts", "Members", "JSON"] as GroupTab[]).map((item) => (
+                            {(["Info", "Posts", "Members", "Photos", "JSON"] as GroupTab[]).map((item) => (
                                 <button
                                     key={item}
                                     type="button"
@@ -303,6 +333,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                         setError("");
                                         if (item === "Posts" && !postsLoaded) void loadPosts();
                                         if (item === "Members" && !membersLoaded) void loadMembers();
+                                        if (item === "Photos" && !galleriesLoaded) void loadGalleries();
                                     }}
                                     className={`h-10 flex-1 shrink-0 border-b-2 px-4 text-xs ${tab === item ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                                 >
@@ -311,7 +342,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                             ))}
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-card p-3">
-                            {tabLoading && tab !== "Info" ? (
+                            {tabLoading && (tab === "Posts" || tab === "Members") ? (
                                 <div className="flex min-h-48 items-center justify-center">
                                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
                                 </div>
@@ -335,6 +366,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                             ) : null}
                             {!tabLoading && tab === "Posts" ? <GroupPosts posts={posts} search={search} setSearch={setSearch} refresh={() => void loadPosts(true)} openUser={openUser} /> : null}
                             {!tabLoading && tab === "Members" ? <GroupMembers group={group} members={members} search={search} setSearch={setSearch} refresh={() => void loadMembers(0, true)} loadMore={() => void loadMembers(members.length, true)} hasMore={hasMoreMembers} openUser={openUser} /> : null}
+                            {tab === "Photos" ? <GroupPhotos galleries={galleries} images={galleryImages} truncatedGalleryIds={truncatedGalleryIds} loading={galleriesLoading} refresh={() => void loadGalleries(true)} /> : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(group, null, 2)}</pre> : null}
                         </div>
                     </>
@@ -741,6 +773,133 @@ function GroupMembers({ group, members, search, setSearch, refresh, loadMore, ha
                     Load more members
                 </button>
             ) : null}
+        </div>
+    );
+}
+
+function GroupPhotos({ galleries, images, truncatedGalleryIds, loading, refresh }: { galleries: VrchatGroupGallery[]; images: VrchatGroupGalleryImage[]; truncatedGalleryIds: string[]; loading: boolean; refresh: () => void }) {
+    const [selectedGalleryId, setSelectedGalleryId] = useState("");
+    const [preview, setPreview] = useState<{ url: string; name: string } | null>(null);
+    const previewTrigger = useRef<HTMLButtonElement | null>(null);
+    const previewCloseButton = useRef<HTMLButtonElement | null>(null);
+
+    useEffect(() => {
+        if (!galleries.some((gallery) => gallery.id === selectedGalleryId)) setSelectedGalleryId(galleries[0]?.id || "");
+    }, [galleries, selectedGalleryId]);
+
+    useEffect(() => {
+        if (!preview) return;
+        function closeOnEscape(event: KeyboardEvent) {
+            if (event.key === "Tab") {
+                event.preventDefault();
+                previewCloseButton.current?.focus();
+                return;
+            }
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            setPreview(null);
+            window.setTimeout(() => previewTrigger.current?.focus(), 0);
+        }
+        window.addEventListener("keydown", closeOnEscape, true);
+        previewCloseButton.current?.focus();
+        return () => window.removeEventListener("keydown", closeOnEscape, true);
+    }, [preview]);
+
+    const selectedGallery = galleries.find((gallery) => gallery.id === selectedGalleryId);
+    const imageCounts = new Map<string, number>();
+    for (const image of images) imageCounts.set(image.galleryId, (imageCounts.get(image.galleryId) || 0) + 1);
+    const selectedImages = selectedGallery ? images.filter((image) => image.galleryId === selectedGallery.id) : [];
+
+    function closePreview() {
+        setPreview(null);
+        window.setTimeout(() => previewTrigger.current?.focus(), 0);
+    }
+
+    return (
+        <div>
+            <button type="button" onClick={refresh} disabled={loading} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-muted disabled:opacity-40" aria-label="Refresh group photos">
+                {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            </button>
+            <div className="mt-2.5 flex overflow-x-auto border-b border-border" role="tablist" aria-label="Group galleries">
+                {galleries.map((gallery) => {
+                    const selected = gallery.id === selectedGalleryId;
+                    const count = imageCounts.get(gallery.id) || 0;
+                    const truncated = truncatedGalleryIds.includes(gallery.id);
+                    const restriction = !gallery.membersOnly ? "Public gallery" : gallery.roleIdsToView == null ? "Members-only gallery" : "Role-restricted gallery";
+                    const dotColor = !gallery.membersOnly ? "bg-status-joinme" : gallery.roleIdsToView == null ? "bg-status-online" : "bg-status-busy";
+                    return (
+                        <button
+                            key={gallery.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={selected}
+                            aria-controls={`group-gallery-${gallery.id}`}
+                            onClick={() => setSelectedGalleryId(gallery.id)}
+                            className={`flex h-10 shrink-0 items-center border-b-2 px-3 text-left ${selected ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                        >
+                            <span className="text-base font-bold">{gallery.name}</span>
+                            <span className={`ml-1.5 size-2.5 rounded-full ${dotColor}`} aria-hidden="true" title={restriction} />
+                            <span className="sr-only">{restriction}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">
+                                {count}
+                                {truncated ? "+" : ""}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+            {selectedGallery ? (
+                <section id={`group-gallery-${selectedGallery.id}`} role="tabpanel" className="pt-2">
+                    <p className="px-2 text-sm text-muted-foreground">{selectedGallery.description}</p>
+                    <div className="mt-2 grid max-h-[600px] grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4 overflow-y-auto">
+                        {selectedImages.map((image) => (
+                            <button
+                                key={image.id}
+                                type="button"
+                                onClick={(event) => {
+                                    previewTrigger.current = event.currentTarget;
+                                    setPreview({ url: image.imageUrl, name: selectedGallery.name });
+                                }}
+                                className="overflow-hidden rounded-md border border-border bg-card p-0 transition-shadow hover:shadow-md"
+                                aria-label={`Open photo from ${selectedGallery.name}`}
+                            >
+                                <VrchatImage
+                                    src={image.imageUrl}
+                                    alt=""
+                                    className="max-h-full max-w-full"
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer"
+                                    onError={(event) => {
+                                        event.currentTarget.style.display = "none";
+                                        const fallback = event.currentTarget.nextElementSibling;
+                                        if (fallback instanceof HTMLElement) fallback.style.display = "flex";
+                                    }}
+                                    fallback={<PhotoFallback />}
+                                />
+                                <PhotoFallback hidden />
+                            </button>
+                        ))}
+                    </div>
+                </section>
+            ) : null}
+            {preview ? (
+                <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-label={`Photo from ${preview.name}`} data-group-photo-preview="true">
+                    <button type="button" tabIndex={-1} className="absolute inset-0" onClick={closePreview} aria-label="Close photo preview" />
+                    <VrchatImage src={preview.url} alt={`Photo from ${preview.name}`} className="relative max-h-full max-w-full object-contain" referrerPolicy="no-referrer" fallback={<PhotoFallback />} />
+                    <button ref={previewCloseButton} type="button" onClick={closePreview} className="absolute top-3 right-3 inline-flex size-9 items-center justify-center rounded-full bg-background/80 text-foreground shadow" aria-label="Close photo preview">
+                        <X className="size-4" />
+                    </button>
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function PhotoFallback({ hidden = false }: { hidden?: boolean }) {
+    return (
+        <div className={`h-[200px] w-full items-center justify-center bg-muted ${hidden ? "hidden" : "flex"}`}>
+            <ImageIcon className="size-8 text-muted-foreground" />
         </div>
     );
 }

@@ -29,6 +29,7 @@ const captures = [
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
     { name: "group-dialog-calendar", path: "/friends-locations", readyText: "Remote Creator Meetup", groupDialog: true, groupCalendar: true },
+    { name: "group-dialog-photos", path: "/friends-locations", readyText: "Highlights shared by the whole community.", groupDialog: true, groupTab: "Photos" },
     { name: "previous-instances-group", path: "/friends-locations", readyText: "You", groupDialog: true, previousInstances: "group" },
     { name: "group-dialog-posts", path: "/friends-locations", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
@@ -135,6 +136,22 @@ for (const width of widths) {
                 await page.route("**/api/local-favorites?kind=friend", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ groups: [], items: [] }) }));
             }
         }
+        if (capture.groupTab === "Photos") {
+            await page.route("https://assets.vrchat.com/visual-fixture/group-photo-*.svg", async (route) => {
+                const name = new URL(route.request().url()).pathname.split("/").at(-1) || "group-photo.svg";
+                const palettes = {
+                    "group-photo-one.svg": ["#1f2937", "#00b8ff", "Creator Meetup"],
+                    "group-photo-two.svg": ["#312e81", "#2ed319", "World Hop"],
+                    "group-photo-three.svg": ["#3f1d2e", "#e97c03", "Member Event"],
+                };
+                const [background, accent, label] = palettes[name] || palettes["group-photo-one.svg"];
+                await route.fulfill({
+                    status: 200,
+                    contentType: "image/svg+xml",
+                    body: `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="${background}"/><circle cx="510" cy="95" r="64" fill="${accent}" opacity=".8"/><path d="M0 310 180 140l120 120 85-70 255 170H0Z" fill="${accent}" opacity=".55"/><text x="28" y="52" fill="white" font-family="sans-serif" font-size="28" font-weight="700">${label}</text></svg>`,
+                });
+            });
+        }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
         if (capture.friendListSearch) {
             const filterSummary = page.getByText("Filter fields", { exact: true });
@@ -166,6 +183,21 @@ for (const width of widths) {
             await page.getByRole("button", { name: /^VRCX Test Group\b/ }).click();
             await page.getByText("Visual Operator", { exact: true }).waitFor();
             if (capture.groupTab) await page.getByRole("tab", { name: capture.groupTab, exact: true }).click();
+            if (capture.groupTab === "Photos") {
+                await page.getByText(capture.readyText, { exact: true }).waitFor();
+                const trigger = page.getByRole("button", { name: "Open photo from Community Photos", exact: true }).first();
+                await trigger.click();
+                const dialog = page.getByRole("dialog", { name: "Photo from Community Photos", exact: true });
+                await dialog.waitFor();
+                const closePreview = page.getByRole("button", { name: "Close photo preview", exact: true }).last();
+                if (!(await closePreview.evaluate((element) => document.activeElement === element))) throw new Error("Group photo preview did not move focus to its close button.");
+                await page.keyboard.press("Tab");
+                if (!(await closePreview.evaluate((element) => document.activeElement === element))) throw new Error("Group photo preview did not trap keyboard focus.");
+                await page.keyboard.press("Escape");
+                await dialog.waitFor({ state: "detached" });
+                await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Open photo from Community Photos");
+                if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Group photo preview did not restore focus after Escape.");
+            }
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
             if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();
         }

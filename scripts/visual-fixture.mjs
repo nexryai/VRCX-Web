@@ -278,6 +278,22 @@ await database.collection("groups").insertOne({
         createdAt: new Date(now.getTime() - 900 * 86_400_000).toISOString(),
         links: ["https://example.com/vrcx-test-group"],
         languages: ["eng", "jpn"],
+        galleries: [
+            {
+                id: "ggal_00000000-0000-0000-0000-000000000025",
+                name: "Community Photos",
+                description: "Highlights shared by the whole community.",
+                membersOnly: false,
+                roleIdsToView: null,
+            },
+            {
+                id: "ggal_00000000-0000-0000-0000-000000000026",
+                name: "Member Screenshots",
+                description: "Event screenshots for group members.",
+                membersOnly: true,
+                roleIdsToView: null,
+            },
+        ],
         roles: [
             { id: "grol_00000000-0000-0000-0000-000000000021", name: "Everyone", permissions: [] },
             { id: "grol_00000000-0000-0000-0000-000000000022", name: "Event Host", permissions: ["group-instance-manage"] },
@@ -366,6 +382,56 @@ await database.collection("group_calendar_snapshots").insertOne({
     ],
     hasNext: false,
     totalCount: 2,
+    observedAt: now,
+    updatedAt: now,
+});
+await database.collection("group_gallery_snapshots").insertOne({
+    _id: `${ownerId}:${groupId}`,
+    ownerId,
+    groupId,
+    galleries: [
+        {
+            id: "ggal_00000000-0000-0000-0000-000000000025",
+            name: "Community Photos",
+            description: "Highlights shared by the whole community.",
+            membersOnly: false,
+            roleIdsToView: null,
+        },
+        {
+            id: "ggal_00000000-0000-0000-0000-000000000026",
+            name: "Member Screenshots",
+            description: "Event screenshots for group members.",
+            membersOnly: true,
+            roleIdsToView: null,
+        },
+    ],
+    images: [
+        {
+            id: "ggim_00000000-0000-0000-0000-000000000027",
+            groupId,
+            galleryId: "ggal_00000000-0000-0000-0000-000000000025",
+            imageUrl: "https://assets.vrchat.com/visual-fixture/group-photo-one.svg",
+            approved: true,
+            createdAt: now.toISOString(),
+        },
+        {
+            id: "ggim_00000000-0000-0000-0000-000000000028",
+            groupId,
+            galleryId: "ggal_00000000-0000-0000-0000-000000000025",
+            imageUrl: "https://assets.vrchat.com/visual-fixture/group-photo-two.svg",
+            approved: true,
+            createdAt: now.toISOString(),
+        },
+        {
+            id: "ggim_00000000-0000-0000-0000-000000000029",
+            groupId,
+            galleryId: "ggal_00000000-0000-0000-0000-000000000026",
+            imageUrl: "https://assets.vrchat.com/visual-fixture/group-photo-three.svg",
+            approved: true,
+            createdAt: now.toISOString(),
+        },
+    ],
+    truncatedGalleryIds: [],
     observedAt: now,
     updatedAt: now,
 });

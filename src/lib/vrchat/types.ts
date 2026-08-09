@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { groupGalleryIdSchema, groupGalleryImageIdSchema, groupIdSchema } from "./ids";
+
 export const vrchatUserSchema = z
     .object({
         id: z.string(),
@@ -217,6 +219,40 @@ export const vrchatFavoriteLimitsSchema = z
 
 export type VrchatFavoriteLimits = z.infer<typeof vrchatFavoriteLimitsSchema>;
 
+export const vrchatGroupGallerySchema = z
+    .object({
+        id: groupGalleryIdSchema,
+        name: z.string().default(""),
+        description: z.string().default(""),
+        membersOnly: z.boolean().default(false),
+        roleIdsToAutoApprove: z.array(z.string()).nullable().optional(),
+        roleIdsToManage: z.array(z.string()).nullable().optional(),
+        roleIdsToSubmit: z.array(z.string()).nullable().optional(),
+        roleIdsToView: z.array(z.string()).nullable().optional(),
+        createdAt: z.string().optional(),
+        updatedAt: z.string().optional(),
+    })
+    .passthrough();
+
+export type VrchatGroupGallery = z.infer<typeof vrchatGroupGallerySchema>;
+
+export const vrchatGroupGalleryImageSchema = z
+    .object({
+        id: groupGalleryImageIdSchema,
+        groupId: groupIdSchema,
+        galleryId: groupGalleryIdSchema,
+        imageUrl: z.url(),
+        fileId: z.string().optional(),
+        submittedByUserId: z.string().optional(),
+        approved: z.boolean().optional(),
+        approvedAt: z.string().optional(),
+        approvedByUserId: z.string().optional(),
+        createdAt: z.string().optional(),
+    })
+    .passthrough();
+
+export type VrchatGroupGalleryImage = z.infer<typeof vrchatGroupGalleryImageSchema>;
+
 export const vrchatGroupSchema = z
     .object({
         id: z.string(),
@@ -237,6 +273,7 @@ export const vrchatGroupSchema = z
         createdAt: z.string().optional(),
         links: z.array(z.string()).optional(),
         languages: z.array(z.string()).optional(),
+        galleries: z.array(vrchatGroupGallerySchema).optional(),
         roles: z
             .array(
                 z

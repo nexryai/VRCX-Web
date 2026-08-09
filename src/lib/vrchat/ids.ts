@@ -8,12 +8,16 @@ function idPattern(prefix: string) {
 
 export const avatarIdPattern = idPattern("avtr");
 export const groupIdPattern = idPattern("grp");
+export const groupGalleryIdPattern = idPattern("ggal");
+export const groupGalleryImageIdPattern = idPattern("ggim");
 export const userIdPattern = idPattern("usr");
 export const worldIdPattern = idPattern("wrld");
 export const localFavoriteGroupIdPattern = idPattern("lfg");
 
 export const avatarIdSchema = z.string().regex(avatarIdPattern);
 export const groupIdSchema = z.string().regex(groupIdPattern);
+export const groupGalleryIdSchema = z.string().regex(groupGalleryIdPattern);
+export const groupGalleryImageIdSchema = z.string().regex(groupGalleryImageIdPattern);
 export const userIdSchema = z.string().regex(userIdPattern);
 export const worldIdSchema = z.string().regex(worldIdPattern);
 export const localFavoriteGroupIdSchema = z.string().regex(localFavoriteGroupIdPattern);
