@@ -1,5 +1,7 @@
 import { MongoClient } from "mongodb";
 
+import { redactOperatorSecrets } from "./lib/redact-secrets.mjs";
+
 import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -52,14 +54,6 @@ function delay(milliseconds) {
     return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
 }
 
-function redactSecrets(value) {
-    let redacted = value;
-    for (const secret of [process.env.MONGODB_URI, process.env.VRCHAT_SESSION_ENCRYPTION_KEY]) {
-        if (secret) redacted = redacted.split(secret).join("[redacted]");
-    }
-    return redacted;
-}
-
 function startProductionServer(workspace, port) {
     const nextCli = resolve(workspace, "node_modules/next/dist/bin/next");
     const child = spawn(process.execPath, [nextCli, "start", "--hostname", "127.0.0.1", "--port", String(port)], {
@@ -104,15 +98,15 @@ async function waitForLeaseAvailability(monitorState, timeoutMs) {
 async function waitForMonitorProof(monitorState, server, expected, timeoutMs) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        if (server.error()) throw new Error(`The production server could not start: ${redactSecrets(server.error().message)}`);
+        if (server.error()) throw new Error(`The production server could not start: ${redactOperatorSecrets(server.error().message)}`);
         if (server.child.exitCode !== null || server.child.signalCode !== null) {
-            throw new Error(`The production server exited before monitor recovery.\n${redactSecrets(server.output())}`);
+            throw new Error(`The production server exited before monitor recovery.\n${redactOperatorSecrets(server.output())}`);
         }
         const state = await monitorState.findOne({ _id: "singleton" });
         if (monitorStateMatchesRestartProof(state, expected)) return state;
         await delay(POLL_MS);
     }
-    throw new Error(`Timed out waiting for monitor recovery.\n${redactSecrets(server.output())}`);
+    throw new Error(`Timed out waiting for monitor recovery.\n${redactOperatorSecrets(server.output())}`);
 }
 
 async function main() {
@@ -174,7 +168,7 @@ async function main() {
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : undefined;
 if (invokedPath === import.meta.url) {
     main().catch((error) => {
-        process.stderr.write(`${redactSecrets(error instanceof Error ? error.message : "Monitor restart smoke test failed.")}\n`);
+        process.stderr.write(`${redactOperatorSecrets(error instanceof Error ? error.message : "Monitor restart smoke test failed.")}\n`);
         process.exitCode = 1;
     });
 }

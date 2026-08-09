@@ -73,4 +73,14 @@ describe("browser security boundary", () => {
         }
         expect(violations).toEqual([]);
     });
+
+    it("keeps direct diagnostic output out of production application modules", async () => {
+        const violations: string[] = [];
+        for (const file of await sourceFiles(join(process.cwd(), "src"))) {
+            if (/\.test\.[cm]?[jt]sx?$/.test(file)) continue;
+            const source = await readFile(file, "utf8");
+            if (/\bconsole\.(?:debug|error|info|log|warn)\s*\(|process\.(?:stderr|stdout)\.write\s*\(/.test(source)) violations.push(relative(process.cwd(), file));
+        }
+        expect(violations).toEqual([]);
+    });
 });

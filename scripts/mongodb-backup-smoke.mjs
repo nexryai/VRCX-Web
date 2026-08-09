@@ -1,5 +1,7 @@
 import { BSON, MongoClient } from "mongodb";
 
+import { redactOperatorSecrets } from "./lib/redact-secrets.mjs";
+
 import { spawn } from "node:child_process";
 import { createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
@@ -108,14 +110,6 @@ async function verifyStoredSession(database, key) {
     return true;
 }
 
-function redactSecrets(value) {
-    let redacted = value;
-    for (const secret of [process.env.MONGODB_URI, process.env.VRCHAT_SESSION_ENCRYPTION_KEY]) {
-        if (secret) redacted = redacted.split(secret).join("[redacted]");
-    }
-    return redacted;
-}
-
 function runTool(command, args, label) {
     return new Promise((resolveRun, rejectRun) => {
         const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -129,13 +123,13 @@ function runTool(command, args, label) {
         child.once("error", (error) => {
             if (settled) return;
             settled = true;
-            rejectRun(new Error(`${label} could not start. Install MongoDB Database Tools or set its binary override. ${redactSecrets(error.message)}`));
+            rejectRun(new Error(`${label} could not start. Install MongoDB Database Tools or set its binary override. ${redactOperatorSecrets(error.message)}`));
         });
         child.once("close", (code, signal) => {
             if (settled) return;
             settled = true;
             if (code === 0) resolveRun();
-            else rejectRun(new Error(`${label} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}.\n${redactSecrets(outputTail)}`));
+            else rejectRun(new Error(`${label} failed${signal ? ` with ${signal}` : ` with exit code ${code}`}.\n${redactOperatorSecrets(outputTail)}`));
         });
     });
 }
@@ -204,7 +198,7 @@ async function main() {
 const invokedPath = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : undefined;
 if (invokedPath === import.meta.url) {
     main().catch((error) => {
-        process.stderr.write(`${redactSecrets(error instanceof Error ? error.message : "MongoDB backup/restore smoke test failed.")}\n`);
+        process.stderr.write(`${redactOperatorSecrets(error instanceof Error ? error.message : "MongoDB backup/restore smoke test failed.")}\n`);
         process.exitCode = 1;
     });
 }
