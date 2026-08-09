@@ -55,7 +55,7 @@ One monitor leader owns the active VRChat session, realtime connection, backgrou
 
 ## Development
 
-The current prototype uses Node.js 20+ and pnpm 11+:
+The current prototype uses Node.js 22.13+ and pnpm 11.18+ (the runtime floor required by the pinned pnpm release):
 
 Copy `.env.example` to an uncommitted environment file or configure the equivalent deployment secrets. Generate the session key with `openssl rand -base64 32`; keep the same key for the lifetime of the database because changing it invalidates the retained VRChat session.
 
@@ -71,6 +71,16 @@ pnpm test
 pnpm lint
 pnpm build
 ```
+
+Before a release or dependency update, reproduce the exact lockfile and audit both production and development dependencies. The license inventory is limited to shipped production packages:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm dependencies:audit
+pnpm dependencies:licenses
+```
+
+The workspace permits an install script only for the test-only `mongodb-memory-server` package. Next.js image support resolves `sharp` without running its install script, and the `nanoid` override is the minimum patched release required by the current Next.js/PostCSS dependency chain.
 
 For deterministic responsive screenshots, start the development-only MongoDB fixture in one terminal and capture the ported reference screens in another:
 

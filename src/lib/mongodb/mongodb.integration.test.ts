@@ -28,9 +28,10 @@ describe("MongoDB application repositories", () => {
         await ensureMongoSchema();
 
         const database = await getMongoDatabase();
-        const migrations = await database.collection("schema_migrations").find().sort({ _id: 1 }).toArray();
+        const databaseCollections = collections(database);
+        const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
         expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
-        expect(await database.collection("app_settings").findOne({ _id: "singleton" })).toMatchObject({
+        expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
             myAvatarsCardScale: 0.6,
@@ -55,8 +56,8 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
-        expect(await collections(database).monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
-        expect(await collections(database).appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
+        expect(await databaseCollections.monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
+        expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
     });
 
     test("imports the former root browser settings into MongoDB exactly once", async () => {
@@ -88,6 +89,7 @@ describe("MongoDB application repositories", () => {
 
     test("stores encrypted session material and isolates cached users by owner", async () => {
         const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
         const { saveAuthenticatedVrchatSession, getStoredVrchatSession } = await import("./session-repository");
         const { upsertCachedUser, getCachedUser } = await import("./user-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000001";
@@ -99,7 +101,7 @@ describe("MongoDB application repositories", () => {
         await upsertCachedUser(ownerId, { ...user, displayName: "Fresh Mongo User" }, "friends", new Date("2026-08-02T08:10:00.000Z"));
         await upsertCachedUser(ownerId, { ...user, displayName: "Stale Mongo User" }, "friends", new Date("2026-08-02T08:05:00.000Z"));
 
-        const storedSession = await (await getMongoDatabase()).collection("vrchat_session").findOne({ _id: "singleton" });
+        const storedSession = await collections(await getMongoDatabase()).vrchatSession.findOne({ _id: "singleton" });
         expect(storedSession?.encryptedCookies).toMatchObject({ algorithm: "aes-256-gcm" });
         expect(JSON.stringify(storedSession)).not.toContain("auth-cookie");
         expect(JSON.stringify(storedSession)).not.toContain("two-factor-cookie");
@@ -110,6 +112,7 @@ describe("MongoDB application repositories", () => {
 
     test("patches relationship and note fields in both user projections", async () => {
         const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
         const { getCachedUser, patchCachedUser, upsertCachedUser } = await import("./user-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000071";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000072";
@@ -117,7 +120,7 @@ describe("MongoDB application repositories", () => {
         const user = { id: userId, displayName: "Relationship User", friendRequestStatus: "outgoing" };
         await upsertCachedUser(ownerId, user, "lookup");
         await upsertCachedUser(otherOwnerId, user, "lookup");
-        await (await getMongoDatabase()).collection("friend_snapshots").insertOne({
+        await collections(await getMongoDatabase()).friendSnapshots.insertOne({
             _id: `${ownerId}:${userId}`,
             ownerId,
             friendId: userId,
