@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -192,6 +192,65 @@ describe("MongoDB application repositories", () => {
         expect(await acquireMonitorLease("monitor-b", new Date(firstTick.getTime() + 60_001))).toBe(true);
         expect(await acquireMonitorLease("monitor-a", new Date(firstTick.getTime() + 60_002))).toBe(false);
         expect(await advanceMonitorPipelineCursor("monitor-a", { ownerId: "usr_00000000-0000-0000-0000-000000000001", key: "stale-key", type: "friend-offline", observedAt: new Date(firstTick.getTime() + 63_000) })).toBe(false);
+    });
+
+    test("claims only a stale owner-scoped Mutual Friends checkpoint", async () => {
+        const { claimStaleMutualGraphJob } = await import("@/lib/mutual-graph-job");
+        const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000091";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000092";
+        const firstFriendId = "usr_00000000-0000-0000-0000-000000000093";
+        const secondFriendId = "usr_00000000-0000-0000-0000-000000000094";
+        const now = new Date("2026-08-09T20:00:00.000Z");
+        const mutualGraph = collections(await getMongoDatabase()).mutualGraph;
+        await mutualGraph.insertMany([
+            {
+                _id: ownerId,
+                ownerId,
+                relationships: { published: ["snapshot"] },
+                optedOut: [],
+                jobId: "abandoned-job",
+                jobStatus: "running",
+                jobProcessed: 1,
+                jobTotal: 2,
+                jobCancelRequested: false,
+                jobHeartbeatAt: new Date(now.getTime() - 180_000),
+                jobFriendIds: [firstFriendId, secondFriendId],
+                jobRelationships: { [firstFriendId]: [secondFriendId] },
+                jobOptedOut: [],
+                updatedAt: new Date(now.getTime() - 600_000),
+            },
+            {
+                _id: otherOwnerId,
+                ownerId: otherOwnerId,
+                relationships: {},
+                optedOut: [],
+                jobId: "fresh-job",
+                jobStatus: "running",
+                jobProcessed: 0,
+                jobTotal: 1,
+                jobCancelRequested: false,
+                jobHeartbeatAt: new Date(now.getTime() - 30_000),
+                jobFriendIds: [firstFriendId],
+                jobRelationships: {},
+                jobOptedOut: [],
+                updatedAt: now,
+            },
+        ]);
+
+        const claimed = await claimStaleMutualGraphJob(ownerId, now);
+        expect(claimed?.jobId).toEqual(expect.any(String));
+        expect(claimed?.jobId).not.toBe("abandoned-job");
+        expect(await claimStaleMutualGraphJob(ownerId, now)).toBeNull();
+        expect(await claimStaleMutualGraphJob(otherOwnerId, now)).toBeNull();
+        expect(await mutualGraph.findOne({ ownerId })).toMatchObject({
+            relationships: { published: ["snapshot"] },
+            jobProcessed: 1,
+            jobFriendIds: [firstFriendId, secondFriendId],
+            jobRelationships: { [firstFriendId]: [secondFriendId] },
+            jobHeartbeatAt: now,
+        });
     });
 
     test("keeps notification history while updating the active projection", async () => {

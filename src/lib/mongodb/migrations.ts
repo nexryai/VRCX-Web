@@ -331,6 +331,25 @@ const migrations: Migration[] = [
             await Promise.all([c.gameSessions.createIndex({ ownerId: 1, worldId: 1, startedAt: -1 }, { name: "owner_world_started" }), c.gameSessions.createIndex({ ownerId: 1, groupId: 1, startedAt: -1 }, { name: "owner_group_started" })]);
         },
     },
+    {
+        version: 27,
+        name: "add-mutual-graph-resume-checkpoints",
+        async apply(c) {
+            // Jobs created before checkpoint support cannot truthfully resume
+            // from jobProcessed because their partial graph was never durable.
+            await c.mutualGraph.updateMany(
+                { jobStatus: "running", jobFriendIds: { $exists: false } },
+                {
+                    $set: {
+                        jobStatus: "error",
+                        jobError: "The interrupted Mutual Friends fetch predates resumable checkpoints. Start it again.",
+                        jobCancelRequested: false,
+                        jobHeartbeatAt: new Date(),
+                    },
+                },
+            );
+        },
+    },
 ];
 
 async function applyMigrations() {

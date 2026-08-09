@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     observeGameSession: vi.fn(async (): Promise<void> => undefined),
     resolveLocationMetadata: vi.fn(async () => ({ cookies: { auth: "auth-cookie" } })),
     runAvatarAutoCleanup: vi.fn(async () => ({ ran: false, days: null, deleted: 0 })),
+    resumeStaleMutualGraphJob: vi.fn(async () => false),
     applyPipelineSelfEvent: vi.fn(async () => true),
     sockets: [] as FakeWebSocket[],
 }));
@@ -55,6 +56,7 @@ vi.mock("./lease", () => ({
 vi.mock("./reconcile", () => ({ reconcileRemoteState: mocks.reconcileRemoteState }));
 vi.mock("./location-metadata", () => ({ resolveLocationMetadata: mocks.resolveLocationMetadata }));
 vi.mock("./avatar-cleanup", () => ({ runAvatarAutoCleanup: mocks.runAvatarAutoCleanup }));
+vi.mock("@/lib/mutual-graph-job", () => ({ resumeStaleMutualGraphJob: mocks.resumeStaleMutualGraphJob }));
 vi.mock("./self-events", () => ({ applyPipelineSelfEvent: mocks.applyPipelineSelfEvent }));
 vi.mock("./friend-events", () => ({ applyPipelineFriendEvent: vi.fn(), isPipelineFriendEventType: vi.fn(() => false) }));
 vi.mock("@/lib/mongodb/session-repository", () => ({
@@ -96,6 +98,7 @@ describe("AlwaysOnMonitor leadership lifecycle", () => {
         await monitor.start();
         expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(1);
         expect(mocks.runAvatarAutoCleanup).toHaveBeenCalledWith("usr_00000000-0000-0000-0000-000000000001");
+        expect(mocks.resumeStaleMutualGraphJob).toHaveBeenCalledWith("usr_00000000-0000-0000-0000-000000000001", { auth: "auth-cookie" });
         expect(mocks.sockets).toHaveLength(1);
 
         mocks.hasLease = false;

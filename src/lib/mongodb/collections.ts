@@ -241,6 +241,9 @@ export type MutualGraphDocument = {
     jobError?: string;
     jobHeartbeatAt?: Date;
     jobTargetFriendId?: string;
+    jobFriendIds?: string[];
+    jobRelationships?: Record<string, string[]>;
+    jobOptedOut?: string[];
     updatedAt: Date;
 };
 
