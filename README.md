@@ -46,6 +46,7 @@ One monitor leader owns the active VRChat session, realtime connection, backgrou
 - Upstream requests use typed, fixed-host, allowlisted service boundaries rather than a general-purpose proxy.
 - VRChat user, world, avatar, and group IDs must use their expected prefix and canonical UUID separator positions at browser, route, stored-setting, location-parser, and upstream allowlist boundaries; a merely 36-character hex-and-hyphen suffix is rejected.
 - Every authenticated or operator-state GET API response explicitly disables caching; a source-level regression test inventories all route handlers so a new GET cannot silently omit `no-store`.
+- Every POST, PUT, PATCH, and DELETE API handler rejects cross-site browser requests through the shared Fetch Metadata/Origin check; an all-route inventory prevents new mutation handlers from omitting it.
 - Single-user operation does not remove normal XSS, CSRF, request-forgery, validation, cache, and secret-handling requirements.
 
 ## Development
