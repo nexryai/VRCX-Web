@@ -1,3 +1,5 @@
+import { vrchatMediaSources } from "./browser-url";
+
 export type SecurityHeader = {
     key: string;
     value: string;
@@ -14,7 +16,7 @@ export function buildContentSecurityPolicy(development: boolean): string {
         "default-src 'self'",
         `script-src ${scriptSources.join(" ")}`,
         "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' blob: data: https:",
+        `img-src 'self' blob: data: ${vrchatMediaSources.join(" ")}`,
         "font-src 'self' data:",
         "connect-src 'self'",
         "media-src 'none'",

@@ -6,6 +6,7 @@ import { Apple, ArrowUpDown, Check, ChevronLeft, ChevronRight, Ellipsis, Externa
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
+import { VrchatImage } from "@/components/vrchat-image";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
 type ReleaseFilter = "all" | "private" | "public";
@@ -420,13 +421,18 @@ function AvatarCard(props: CardProps) {
     return (
         <article onClick={wear} className={`relative cursor-pointer overflow-hidden rounded-lg border hover:bg-muted hover:shadow-sm ${active ? "border-primary ring-1 ring-primary/50" : "border-border/50"}`}>
             <div className="relative aspect-[5/2] overflow-hidden bg-muted">
-                {avatar.thumbnailImageUrl ? (
-                    <img src={avatar.thumbnailImageUrl} alt={avatar.name} className="size-full object-cover [filter:saturate(.8)_contrast(.8)] hover:[filter:saturate(1)_contrast(1)]" loading="lazy" referrerPolicy="no-referrer" />
-                ) : (
-                    <span className="grid size-full place-items-center">
-                        <ImageIcon className="size-6 text-muted-foreground" />
-                    </span>
-                )}
+                <VrchatImage
+                    src={avatar.thumbnailImageUrl}
+                    alt={avatar.name}
+                    className="size-full object-cover [filter:saturate(.8)_contrast(.8)] hover:[filter:saturate(1)_contrast(1)]"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    fallback={
+                        <span className="grid size-full place-items-center">
+                            <ImageIcon className="size-6 text-muted-foreground" />
+                        </span>
+                    }
+                />
                 <PlatformDots available={available} />
                 <ActionMenu {...props} />
                 {busy ? (
@@ -557,13 +563,16 @@ function AvatarTable(props: TableProps) {
                             <tr key={avatar.id} onClick={() => props.details(avatar)} className={`cursor-pointer hover:bg-muted/50 ${cardProps.active ? "bg-primary/10" : ""}`}>
                                 <td className="border-t border-border text-center">{cardProps.active ? <Check className="mx-auto size-4 text-primary" /> : null}</td>
                                 <td className="border-t border-border px-2">
-                                    {avatar.thumbnailImageUrl ? (
-                                        <img src={avatar.thumbnailImageUrl} alt="" className="h-[22px] w-[34px] rounded-sm object-cover [filter:saturate(.8)_contrast(.8)]" />
-                                    ) : (
-                                        <span className="grid h-[22px] w-[34px] place-items-center rounded-sm bg-muted">
-                                            <ImageIcon className="size-3" />
-                                        </span>
-                                    )}
+                                    <VrchatImage
+                                        src={avatar.thumbnailImageUrl}
+                                        alt=""
+                                        className="h-[22px] w-[34px] rounded-sm object-cover [filter:saturate(.8)_contrast(.8)]"
+                                        fallback={
+                                            <span className="grid h-[22px] w-[34px] place-items-center rounded-sm bg-muted">
+                                                <ImageIcon className="size-3" />
+                                            </span>
+                                        }
+                                    />
                                 </td>
                                 <td className="border-t border-border px-2 py-2">{avatar.name}</td>
                                 <td className="border-t border-border px-2 py-2">

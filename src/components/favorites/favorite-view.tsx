@@ -6,6 +6,7 @@ import { Download, Ellipsis, ImageIcon, Loader2, Pencil, Plus, RefreshCcw, Refre
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { useFriends } from "@/components/friends/friends-provider";
+import { VrchatImage } from "@/components/vrchat-image";
 import { FAVORITE_TRANSFER_MAX_FILE_BYTES, formatFavoriteCsv, isVrcxCsvExport, parseFavoriteIds } from "@/lib/favorites-transfer";
 import { locationLabel } from "@/lib/friends";
 import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatFavoriteLimits, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
@@ -697,13 +698,14 @@ function FavoriteCard({
                 <FriendAvatar friend={user} size="sm" />
             ) : (
                 <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted">
-                    {image ? (
-                        <img src={image.replace("256", "128")} alt="" className="size-full object-cover [filter:saturate(.8)_contrast(.8)]" loading="lazy" referrerPolicy="no-referrer" />
-                    ) : kind === "avatar" ? (
-                        <User className="size-4 text-muted-foreground" />
-                    ) : (
-                        <ImageIcon className="size-4 text-muted-foreground" />
-                    )}
+                    <VrchatImage
+                        src={image.replace("256", "128")}
+                        alt=""
+                        className="size-full object-cover [filter:saturate(.8)_contrast(.8)]"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        fallback={kind === "avatar" ? <User className="size-4 text-muted-foreground" /> : <ImageIcon className="size-4 text-muted-foreground" />}
+                    />
                 </span>
             )}
             <span className="min-w-0 flex-1">

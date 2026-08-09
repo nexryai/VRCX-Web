@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bell, ChevronDown, RefreshCw, Search, Settings, User } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
+import { VrchatImage } from "@/components/vrchat-image";
 import { locationLabel } from "@/lib/friends";
 import type { VrchatFavorite, VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
@@ -243,7 +244,9 @@ function GroupList({ groups, search, openGroup }: { groups: VrchatGroup[]; searc
         <div className="pt-2">
             {visible.map((group) => (
                 <button key={group.id} type="button" onClick={() => openGroup(group.id)} className="flex w-full items-center gap-2 rounded-lg p-1.5 text-left text-[13px] hover:bg-muted/50">
-                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">{group.iconUrl ? <img src={group.iconUrl} alt="" className="size-full object-cover" /> : <User className="size-4 text-muted-foreground" />}</span>
+                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                        <VrchatImage src={group.iconUrl} alt="" className="size-full object-cover" fallback={<User className="size-4 text-muted-foreground" />} />
+                    </span>
                     <span className="min-w-0">
                         <span className="block truncate font-medium">{group.name}</span>
                         <span className="block truncate text-xs text-muted-foreground">{group.shortCode || `${group.memberCount ?? 0} members`}</span>

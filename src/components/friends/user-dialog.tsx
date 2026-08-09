@@ -7,7 +7,9 @@ import { CalendarDays, Clipboard, ExternalLink, Image as ImageIcon, Link as Link
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
+import { VrchatImage } from "@/components/vrchat-image";
 import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
+import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { friendImage, locationLabel, statusColor } from "@/lib/friends";
 import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
@@ -21,15 +23,6 @@ function formatDate(value?: string) {
     if (!value) return "Unknown";
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-
-function safeExternalUrl(value: string) {
-    try {
-        const url = new URL(value);
-        return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
-    } catch {
-        return "";
-    }
 }
 
 function userLanguages(user: VrchatUser) {
@@ -307,15 +300,19 @@ function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removi
     return (
         <div className="overflow-hidden rounded-xl bg-card">
             <div className="relative aspect-[17/6]" style={{ backgroundColor: bannerColor || "var(--muted)" }}>
-                {user.bannerType !== "color" && user.bannerUrl ? <img src={user.bannerUrl} alt="" className="absolute inset-0 size-full object-cover" loading="lazy" /> : null}
+                {user.bannerType !== "color" ? <VrchatImage src={user.bannerUrl} alt="" className="absolute inset-0 size-full object-cover" loading="lazy" /> : null}
                 <div className="absolute bottom-0 left-3 size-24 translate-y-1/2 overflow-hidden rounded-lg bg-muted shadow-xl">
-                    {image ? (
-                        <img src={image} alt="" className="size-full object-cover" loading="lazy" />
-                    ) : (
-                        <span className="flex size-full items-center justify-center">
-                            <UserRound className="size-9 text-muted-foreground" />
-                        </span>
-                    )}
+                    <VrchatImage
+                        src={image}
+                        alt=""
+                        className="size-full object-cover"
+                        loading="lazy"
+                        fallback={
+                            <span className="flex size-full items-center justify-center">
+                                <UserRound className="size-9 text-muted-foreground" />
+                            </span>
+                        }
+                    />
                 </div>
             </div>
             <div className="flex flex-col gap-2 px-3 pt-14 pb-3">
@@ -346,14 +343,14 @@ function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removi
                     <div className="flex flex-wrap gap-1.5">
                         {user.badges.map((badge) =>
                             badge.badgeImageUrl ? (
-                                <img key={`${badge.badgeName}:${badge.badgeImageUrl}`} src={badge.badgeImageUrl} alt={badge.badgeName || "Badge"} title={`${badge.badgeName || "Badge"}${badge.badgeDescription ? ` — ${badge.badgeDescription}` : ""}`} className="size-8 rounded object-cover" loading="lazy" />
+                                <VrchatImage key={`${badge.badgeName}:${badge.badgeImageUrl}`} src={badge.badgeImageUrl} alt={badge.badgeName || "Badge"} title={`${badge.badgeName || "Badge"}${badge.badgeDescription ? ` — ${badge.badgeDescription}` : ""}`} className="size-8 rounded object-cover" loading="lazy" />
                             ) : null,
                         )}
                     </div>
                 ) : null}
                 {user.representedGroup?.name ? (
                     <div className="flex items-center gap-2 border-t border-border pt-2">
-                        {user.representedGroup.iconUrl ? <img src={user.representedGroup.iconUrl} alt="" className="size-8 rounded object-cover" /> : <ShieldCheck className="size-5 text-primary" />}
+                        <VrchatImage src={user.representedGroup.iconUrl} alt="" className="size-8 rounded object-cover" fallback={<ShieldCheck className="size-5 text-primary" />} />
                         <span className="min-w-0 text-xs">
                             <span className="block truncate">{user.representedGroup.name}</span>
                             <span className="text-[10px] text-muted-foreground">{user.representedGroup.shortCode}</span>
@@ -501,7 +498,7 @@ function InfoTab({ user, onNoteChange }: { user: VrchatUser; onNoteChange: (note
                         </p>
                         {user.location && !["private", "offline", "traveling"].includes(user.location) ? <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{user.location}</p> : null}
                     </div>
-                    {user.world?.thumbnailImageUrl ? <img src={user.world.thumbnailImageUrl} alt="" className="h-16 w-24 rounded-lg object-cover" loading="lazy" /> : null}
+                    <VrchatImage src={user.world?.thumbnailImageUrl} alt="" className="h-16 w-24 rounded-lg object-cover" loading="lazy" />
                 </div>
             </section>
             <section className="rounded-xl bg-background p-3">
@@ -510,7 +507,7 @@ function InfoTab({ user, onNoteChange }: { user: VrchatUser; onNoteChange: (note
                 {user.bioLinks?.length ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                         {user.bioLinks.map((link) => {
-                            const href = safeExternalUrl(link);
+                            const href = safeExternalHttpUrl(link);
                             return href ? (
                                 <a key={link} href={href} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs text-primary hover:underline">
                                     <LinkIcon className="size-3 shrink-0" />
@@ -569,7 +566,7 @@ function GroupsTab({ groups, search, setSearch, refresh, openGroup }: { groups: 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {filtered.map((group) => (
                     <button key={group.id} type="button" onClick={() => openGroup(group.id)} className="flex items-center gap-2 rounded-lg bg-background p-2 text-left hover:bg-muted">
-                        {group.iconUrl ? <img src={group.iconUrl} alt="" className="size-9 rounded object-cover" /> : <ShieldCheck className="size-5 text-primary" />}
+                        <VrchatImage src={group.iconUrl} alt="" className="size-9 rounded object-cover" fallback={<ShieldCheck className="size-5 text-primary" />} />
                         <span className="min-w-0">
                             <span className="block truncate text-xs font-medium">{group.name}</span>
                             <span className="text-[10px] text-muted-foreground">{group.shortCode || group.memberCount || ""}</span>
@@ -590,13 +587,16 @@ function WorldsTab({ worlds, search, setSearch, refresh, openWorld }: { worlds: 
             <div className="flex flex-wrap items-start">
                 {filtered.map((world) => (
                     <button key={world.id} type="button" onClick={() => openWorld(world.id)} className="flex w-[167px] items-center gap-2.5 rounded p-1.5 text-left text-[13px] hover:bg-muted">
-                        {world.thumbnailImageUrl ? (
-                            <img src={world.thumbnailImageUrl} alt="" className="size-9 rounded object-cover" />
-                        ) : (
-                            <span className="flex size-9 items-center justify-center rounded bg-muted">
-                                <ImageIcon className="size-4" />
-                            </span>
-                        )}
+                        <VrchatImage
+                            src={world.thumbnailImageUrl}
+                            alt=""
+                            className="size-9 rounded object-cover"
+                            fallback={
+                                <span className="flex size-9 items-center justify-center rounded bg-muted">
+                                    <ImageIcon className="size-4" />
+                                </span>
+                            }
+                        />
                         <span className="min-w-0">
                             <span className="block truncate font-medium">{world.name}</span>
                             {world.occupants ? <span className="block text-[10px] text-muted-foreground">({world.occupants})</span> : null}

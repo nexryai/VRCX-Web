@@ -7,6 +7,7 @@ import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, EyeOff, Link as Li
 import { useCurrentUser } from "@/components/current-user-provider";
 import type { FriendActivity } from "@/lib/activity-log";
 import { trustLevelFromTags } from "@/lib/activity-log";
+import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { statusColor } from "@/lib/friends";
 import type { MutualGraphSnapshot } from "@/lib/mutual-graph";
 import { fetchAndPersistMutualGraph } from "@/lib/mutual-graph-client";
@@ -28,15 +29,6 @@ function formatDate(value?: string) {
 
 function languages(friend: VrchatUser) {
     return (friend.tags || []).filter((tag) => tag.startsWith("language_")).map((tag) => tag.slice("language_".length).toUpperCase());
-}
-
-function safeExternalUrl(value: string) {
-    try {
-        const url = new URL(value);
-        return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
-    } catch {
-        return "";
-    }
 }
 
 function compare(left: string | number, right: string | number) {
@@ -360,7 +352,7 @@ export function FriendListView() {
                                     <td className="border-t border-border px-2 py-2" onClick={(event) => event.stopPropagation()}>
                                         <div className="flex gap-1">
                                             {(friend.bioLinks || [])
-                                                .map((link) => safeExternalUrl(link))
+                                                .map((link) => safeExternalHttpUrl(link))
                                                 .filter(Boolean)
                                                 .map((link) => (
                                                     <a key={link} href={link} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-primary" title={link}>

@@ -8,6 +8,7 @@ import { trustLevelFromTags } from "@/lib/activity-log";
 import { friendImage } from "@/lib/friends";
 import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 import { useFriends } from "../friends/friends-provider";
+import { VrchatImage } from "../vrchat-image";
 
 type SearchType = "users" | "worlds" | "groups";
 type SearchResult = VrchatUser | VrchatWorld | VrchatGroup;
@@ -258,7 +259,7 @@ function UserResults({ users, openUser }: { users: VrchatUser[]; openUser: (id: 
                 return (
                     <button key={user.id} type="button" onClick={() => openUser(user.id)} className="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-none px-3 py-2 text-left hover:bg-muted">
                         <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">
-                            {image ? <img src={image} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <User className="size-5" aria-hidden="true" />}
+                            <VrchatImage src={image} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" fallback={<User className="size-5" aria-hidden="true" />} />
                         </span>
                         <span className="min-w-0 flex-1">
                             <span className="flex max-w-full items-center gap-1.5">
@@ -284,7 +285,9 @@ function WorldResults({ worlds, openWorld }: { worlds: VrchatWorld[]; openWorld:
         <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3">
             {worlds.map((world) => (
                 <button key={world.id} type="button" onClick={() => openWorld(world.id)} className="min-w-0 cursor-pointer overflow-hidden rounded-lg border border-border p-3 text-left hover:bg-muted">
-                    <div className="aspect-[16/10] w-full overflow-hidden rounded-lg bg-muted">{world.thumbnailImageUrl ? <img src={world.thumbnailImageUrl} alt={world.name} loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" /> : null}</div>
+                    <div className="aspect-[16/10] w-full overflow-hidden rounded-lg bg-muted">
+                        <VrchatImage src={world.thumbnailImageUrl} alt={world.name} loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
                     <p className="mt-2 truncate text-sm font-medium" title={world.name}>
                         {world.name}
                     </p>
@@ -304,7 +307,7 @@ function GroupResults({ groups, openGroup }: { groups: VrchatGroup[]; openGroup:
             {groups.map((group) => (
                 <button key={group.id} type="button" onClick={() => openGroup(group.id)} className="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-none px-3 py-2 text-left hover:bg-muted">
                     <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-muted text-muted-foreground">
-                        {group.iconUrl ? <img src={group.iconUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <Users className="size-5" aria-hidden="true" />}
+                        <VrchatImage src={group.iconUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" fallback={<Users className="size-5" aria-hidden="true" />} />
                     </span>
                     <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowUpDown, Ban, BellOff, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Image as ImageIcon, Link as LinkIcon, Loader2, MessageCircle, RefreshCw, Reply, Send, Tag, Trash2, X } from "lucide-react";
 
 import { useFriends } from "@/components/friends/friends-provider";
+import { VrchatImage } from "@/components/vrchat-image";
+import { safeExternalHttpUrl } from "@/lib/browser-url";
 import type { VrchatNotification } from "@/lib/vrchat/types";
 
 type NotificationSource = "hidden" | "legacy" | "v2";
@@ -82,16 +84,6 @@ function formatDate(notification: VrchatNotification, long = false) {
     const date = notificationDate(notification);
     if (!date || Number.isNaN(date.getTime())) return "Unknown";
     return new Intl.DateTimeFormat("en", long ? { dateStyle: "long", timeStyle: "medium" } : { dateStyle: "short", timeStyle: "short" }).format(date);
-}
-
-function safeExternalUrl(value?: string) {
-    if (!value) return null;
-    try {
-        const url = new URL(value);
-        return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
-    } catch {
-        return null;
-    }
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -358,7 +350,7 @@ function NotificationRow({ notification, busy, openUser, updateNotification, del
     const groupName = notification.groupName || textValue(data.groupName) || textValue(details.groupName) || (notification.senderUserId?.startsWith("grp_") ? notification.senderUsername : "");
     const image = textValue(details.imageUrl) || notification.imageUrl || "";
     const message = [notification.title, notification.message].filter(Boolean).join(", ") || textValue(details.inviteMessage) || textValue(details.requestMessage) || textValue(details.responseMessage) || textValue(details.worldName);
-    const link = safeExternalUrl(notification.link);
+    const link = safeExternalHttpUrl(notification.link);
     const friendRequest = notification.type === "friendRequest" || notification.type === "ignoredFriendRequest";
     const canActUpstream = notification.source !== "hidden";
     // V2 responses use their own action descriptors; the legacy accept endpoint
@@ -403,8 +395,8 @@ function NotificationRow({ notification, busy, openUser, updateNotification, del
             <td className="truncate border-t border-border px-2 py-2">{groupName}</td>
             <td className="border-t border-border px-2 py-2">
                 {image && !image.startsWith("default_") ? (
-                    <a href={safeExternalUrl(image) || undefined} target="_blank" rel="noreferrer" className="inline-flex size-8 items-center justify-center overflow-hidden rounded bg-muted">
-                        {safeExternalUrl(image) ? <img src={image} alt="Notification" className="size-full object-cover" loading="lazy" /> : <ImageIcon className="size-4" />}
+                    <a href={safeExternalHttpUrl(image) || undefined} target="_blank" rel="noreferrer" className="inline-flex size-8 items-center justify-center overflow-hidden rounded bg-muted">
+                        <VrchatImage src={image} alt="Notification" className="size-full object-cover" loading="lazy" fallback={<ImageIcon className="size-4" />} />
                     </a>
                 ) : null}
             </td>
@@ -429,7 +421,7 @@ function NotificationRow({ notification, busy, openUser, updateNotification, del
                             ) : null}
                             {canActUpstream && notification.source === "v2"
                                 ? notification.responses?.map((response) => {
-                                      const responseLink = response.type === "link" ? safeExternalUrl(response.data) : null;
+                                      const responseLink = response.type === "link" ? safeExternalHttpUrl(response.data) : "";
                                       const label = response.text || response.label || response.type;
                                       return responseLink ? (
                                           <a key={`${response.type}:${response.data || ""}`} href={responseLink} target="_blank" rel="noreferrer" title={label}>

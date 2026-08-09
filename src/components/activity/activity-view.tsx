@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowRight, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ListFilter, Loader2, Search, Star, Trash2, UserMinus } from "lucide-react";
 
 import { useFriends } from "@/components/friends/friends-provider";
+import { VrchatImage } from "@/components/vrchat-image";
 import type { ActivityType, FriendActivity } from "@/lib/activity-log";
 
 type ActivityMode = "feed" | "friend-log";
@@ -422,8 +423,7 @@ function AvatarChange({ previous, current }: { previous?: string; current?: stri
 
 function AvatarPreview({ url, label }: { url?: string; label: string }) {
     if (!url) return <div className="flex h-24 w-32 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground">None</div>;
-    // VRChat image hosts are dynamic, so this browser adaptation cannot use a fixed Next.js image allowlist.
-    return <img src={url} alt={label} loading="lazy" className="h-24 w-32 rounded object-cover" />;
+    return <VrchatImage src={url} alt={label} loading="lazy" className="h-24 w-32 rounded object-cover" fallback={<div className="flex h-24 w-32 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground">Unavailable</div>} />;
 }
 
 function FriendLogTable({ entries, ascending, toggleSort, openUser, removeEntry }: { entries: FriendActivity[]; ascending: boolean; toggleSort: () => void; openUser: (id: string) => void; removeEntry: (entry: FriendActivity, bypassConfirmation: boolean) => Promise<void> }) {

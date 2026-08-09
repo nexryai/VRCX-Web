@@ -6,6 +6,8 @@ import { EyeOff, Loader2, RefreshCw, Settings, Square, User, X } from "lucide-re
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
+import { VrchatSvgImage } from "@/components/vrchat-image";
+import { safeVrchatMediaUrl } from "@/lib/browser-url";
 import { buildMutualEdges, countMutualDegrees, type MutualEdge, type MutualGraphSnapshot } from "@/lib/mutual-graph";
 import { cancelMutualGraphFetch, fetchAndPersistMutualGraph, refreshMutualGraphFriend } from "@/lib/mutual-graph-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
@@ -345,10 +347,10 @@ function GraphCanvas({
         >
             <defs>
                 {ids.map((id) => {
-                    const image = friendById.get(id)?.currentAvatarThumbnailImageUrl;
+                    const image = safeVrchatMediaUrl(friendById.get(id)?.currentAvatarThumbnailImageUrl);
                     return image ? (
                         <pattern key={id} id={`node-${id}`} width="1" height="1">
-                            <image href={image} width="40" height="40" preserveAspectRatio="xMidYMid slice" />
+                            <VrchatSvgImage src={image} width="40" height="40" preserveAspectRatio="xMidYMid slice" />
                         </pattern>
                     ) : null;
                 })}
@@ -373,6 +375,7 @@ function GraphCanvas({
                 const degree = degrees.get(id) || 0;
                 const radius = Math.min(20, 7 + Math.sqrt(degree) * 2);
                 const friend = friendById.get(id);
+                const image = safeVrchatMediaUrl(friend?.currentAvatarThumbnailImageUrl);
                 return (
                     <g
                         key={id}
@@ -390,7 +393,7 @@ function GraphCanvas({
                         }}
                     >
                         <circle r={radius + (selected === id ? 4 : 2)} fill={selected === id ? "hsl(var(--primary))" : "#f2f2f2"} />
-                        <circle r={radius} fill={friend?.currentAvatarThumbnailImageUrl ? `url(#node-${id})` : colors[index % colors.length]} />
+                        <circle r={radius} fill={image ? `url(#node-${id})` : colors[index % colors.length]} />
                         <text x={radius + 5} y="4" className="fill-foreground text-[11px]" style={{ paintOrder: "stroke", stroke: "hsl(var(--background))", strokeWidth: 3 }}>
                             {displayName(id, friendById).slice(0, 20)}
                         </text>

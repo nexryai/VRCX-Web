@@ -7,6 +7,7 @@ import { Apple, Clipboard, ExternalLink, ImageIcon, Loader2, Monitor, RefreshCw,
 import { FavoriteAction } from "@/components/favorite-action";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { MemoField } from "@/components/memo-field";
+import { VrchatImage } from "@/components/vrchat-image";
 import type { VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 type WorldTab = "Info" | "Instances" | "JSON";
@@ -77,7 +78,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                     <>
                         <header className="flex shrink-0 flex-col gap-3 pr-8 sm:flex-row sm:pr-10">
                             <div className="flex h-[120px] w-[160px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
-                                {world.thumbnailImageUrl || world.imageUrl ? <img src={world.thumbnailImageUrl || world.imageUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <ImageIcon className="size-8 text-muted-foreground" />}
+                                <VrchatImage src={world.thumbnailImageUrl || world.imageUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" fallback={<ImageIcon className="size-8 text-muted-foreground" />} />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <h2 id="world-dialog-title" className="break-words font-bold">

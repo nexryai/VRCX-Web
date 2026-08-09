@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, BellOff, Bookmark, BookmarkCheck, Check, Clipboard, Ellipsis, ExternalLink, Eye, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Search, ShieldCheck, Trash2, Users, X, XCircle } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
+import { VrchatImage } from "@/components/vrchat-image";
+import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
 import type { VrchatGroup, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
@@ -169,7 +171,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                     <>
                         <header className="flex shrink-0 flex-col gap-3 pr-8 sm:flex-row sm:pr-10">
                             <div className="flex size-[120px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
-                                {group.iconUrl ? <img src={group.iconUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <ImageIcon className="size-8 text-muted-foreground" />}
+                                <VrchatImage src={group.iconUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" fallback={<ImageIcon className="size-8 text-muted-foreground" />} />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <h2 id="group-dialog-title" className="break-words font-bold">
@@ -367,15 +369,21 @@ function GroupActionConfirmation({ group, action, loading, cancel, confirm }: { 
 
 function GroupInfo({ group, friends, announcement, openUser, copy }: { group: VrchatGroup; friends: VrchatUser[]; announcement?: VrchatGroupPost; openUser: (userId: string) => void; copy: (value: string) => Promise<void> }) {
     const instances = Array.from(new Set(friends.map((friend) => friend.location).filter((location): location is string => Boolean(location))));
+    const links = (group.links || []).map((link) => safeExternalHttpUrl(link)).filter(Boolean);
     return (
         <div>
-            {group.bannerUrl ? (
-                <img src={group.bannerUrl} alt="" className="aspect-[6/1] w-full rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" />
-            ) : (
-                <div className="flex aspect-[6/1] w-full items-center justify-center rounded-md bg-muted">
-                    <ImageIcon className="size-8 text-muted-foreground" />
-                </div>
-            )}
+            <VrchatImage
+                src={group.bannerUrl}
+                alt=""
+                className="aspect-[6/1] w-full rounded-md object-cover"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                fallback={
+                    <div className="flex aspect-[6/1] w-full items-center justify-center rounded-md bg-muted">
+                        <ImageIcon className="size-8 text-muted-foreground" />
+                    </div>
+                }
+            />
             {instances.length ? (
                 <section className="mt-3">
                     <h3 className="px-1.5 text-xs font-bold">Instances</h3>
@@ -404,7 +412,7 @@ function GroupInfo({ group, friends, announcement, openUser, copy }: { group: Vr
                 <Info label="Join state" value={group.joinState || "—"} />
                 <Info label="Privacy" value={group.privacy === "default" ? "public" : group.privacy || "—"} />
                 <Info label="Roles" value={number(group.roles?.length)} />
-                <FullInfo label="Links" value={(group.links || []).filter((link) => safeUrl(link)).join("\n") || "—"} links={(group.links || []).filter((link) => safeUrl(link))} />
+                <FullInfo label="Links" value={links.join("\n") || "—"} links={links} />
                 <Info label="URL" value={`https://vrchat.com/home/group/${group.id}`} action={() => void copy(`https://vrchat.com/home/group/${group.id}`)} />
                 <Info label="Group ID" value={group.id} action={() => void copy(group.id)} />
             </div>
@@ -433,7 +441,7 @@ function GroupPosts({ posts, search, setSearch, refresh, openUser }: { posts: Vr
                     <article key={post.id} className="rounded-lg p-2 text-[13px] hover:bg-background">
                         <p className="font-medium">{post.title || "Untitled post"}</p>
                         <div className="mt-1 flex items-start gap-2">
-                            {post.imageUrl ? <img src={post.imageUrl} alt="" className="size-[60px] shrink-0 rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" /> : null}
+                            <VrchatImage src={post.imageUrl} alt="" className="size-[60px] shrink-0 rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" />
                             <p className="min-w-0 flex-1 whitespace-pre-wrap text-xs">{post.text || "—"}</p>
                         </div>
                         <div className="mt-1 flex flex-wrap justify-end gap-2 text-[10px] text-muted-foreground">
@@ -550,15 +558,6 @@ function FullInfo({ label, value, links }: { label: string; value: string; links
             )}
         </div>
     );
-}
-
-function safeUrl(value: string) {
-    try {
-        const url = new URL(value);
-        return url.protocol === "https:" || url.protocol === "http:";
-    } catch {
-        return false;
-    }
 }
 
 function number(value?: number) {

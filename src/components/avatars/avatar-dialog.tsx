@@ -7,6 +7,7 @@ import { Apple, CheckCircle, Clipboard, ExternalLink, ImageIcon, Loader2, Monito
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
+import { VrchatImage } from "@/components/vrchat-image";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
 type AvatarTab = "Info" | "JSON";
@@ -97,7 +98,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                     <>
                         <header className="flex shrink-0 flex-col gap-3 pr-8 sm:flex-row sm:pr-10">
                             <div className="flex h-[120px] w-[160px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted">
-                                {avatar.thumbnailImageUrl || avatar.imageUrl ? <img src={avatar.thumbnailImageUrl || avatar.imageUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" /> : <ImageIcon className="size-8 text-muted-foreground" />}
+                                <VrchatImage src={avatar.thumbnailImageUrl || avatar.imageUrl} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" fallback={<ImageIcon className="size-8 text-muted-foreground" />} />
                             </div>
                             <div className="min-w-0 flex-1">
                                 <h2 id="avatar-dialog-title" className="break-words font-bold">

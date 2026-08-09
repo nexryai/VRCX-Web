@@ -25,6 +25,8 @@ describe("browser security boundary", () => {
         expect(policy).toContain("script-src 'self' 'unsafe-inline'");
         expect(policy).not.toContain("'unsafe-eval'");
         expect(policy).toContain("connect-src 'self'");
+        expect(policy).toContain("img-src 'self' blob: data: https://api.vrchat.cloud https://files.vrchat.cloud https://assets.vrchat.com");
+        expect(policy).not.toMatch(/img-src[^;]*\shttps:(?:\s|;|$)/);
         expect(policy).toContain("object-src 'none'");
         expect(policy).toContain("frame-src 'none'");
         expect(policy).toContain("frame-ancestors 'none'");
@@ -58,6 +60,16 @@ describe("browser security boundary", () => {
             const name = relative(process.cwd(), file);
             if (/dangerouslySetInnerHTML|\.innerHTML\s*=|\beval\s*\(|new\s+Function\s*\(/.test(source)) violations.push(`${name}:raw-execution`);
             if (/^[\s\n]*["']use client["'];/m.test(source) && /process\.env|MONGODB_URI|VRCHAT_SESSION_ENCRYPTION_KEY/.test(source)) violations.push(`${name}:client-secret-boundary`);
+        }
+        expect(violations).toEqual([]);
+    });
+
+    it("routes every remote media element through the VRChat URL boundary", async () => {
+        const violations: string[] = [];
+        for (const file of await sourceFiles(join(process.cwd(), "src"))) {
+            if (/\.test\.[cm]?[jt]sx?$/.test(file) || file.endsWith(join("components", "vrchat-image.tsx"))) continue;
+            const source = await readFile(file, "utf8");
+            if (/<(?:img|image)\b/.test(source)) violations.push(relative(process.cwd(), file));
         }
         expect(violations).toEqual([]);
     });
