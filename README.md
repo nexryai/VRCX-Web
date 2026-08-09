@@ -47,6 +47,8 @@ One monitor leader owns the active VRChat session, realtime connection, backgrou
 - VRChat user, world, avatar, and group IDs must use their expected prefix and canonical UUID separator positions at browser, route, stored-setting, location-parser, and upstream allowlist boundaries; a merely 36-character hex-and-hyphen suffix is rejected.
 - Every authenticated or operator-state GET API response explicitly disables caching; a source-level regression test inventories all route handlers so a new GET cannot silently omit `no-store`.
 - Every POST, PUT, PATCH, and DELETE API handler rejects cross-site browser requests through the shared Fetch Metadata/Origin check; an all-route inventory prevents new mutation handlers from omitting it.
+- Every route receives a Content Security Policy based on [Next.js's documented static policy](https://nextjs.org/docs/app/guides/content-security-policy): scripts and browser API connections stay same-origin, frames and plug-in objects are disabled, and production omits development-only `unsafe-eval`. React's bootstrap and dynamic VRCX layout styles require the documented static-policy `unsafe-inline` exceptions until a verified nonce migration can dynamically render every page.
+- The default production command binds only to `127.0.0.1`; exposing a different bind address is an explicit deployment decision that requires private ingress controls.
 - Single-user operation does not remove normal XSS, CSRF, request-forgery, validation, cache, and secret-handling requirements.
 
 ## Development
@@ -92,6 +94,8 @@ Production must run as a persistent Node.js process:
 pnpm build
 pnpm start
 ```
+
+`pnpm start` listens on `127.0.0.1:3000` so a normal host deployment can place a same-host HTTPS reverse proxy in front without accidentally publishing the unauthenticated application port. A container or isolated network namespace that genuinely requires a non-loopback listener must run `pnpm exec next start --hostname 0.0.0.0` deliberately and restrict that port to its trusted ingress; never publish it directly to the internet. Configure HSTS at the TLS terminator only after HTTPS is verified for the deployment, because the application also supports explicitly trusted private HTTP networks.
 
 Do not deploy to a scale-to-zero or request-only runtime. Back up both MongoDB and `VRCHAT_SESSION_ENCRYPTION_KEY`; the database backup alone cannot decrypt the retained session.
 

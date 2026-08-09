@@ -87,6 +87,7 @@ describe("MongoDB application repositories", () => {
     });
 
     test("stores encrypted session material and isolates cached users by owner", async () => {
+        const { getMongoDatabase } = await import("./client");
         const { saveAuthenticatedVrchatSession, getStoredVrchatSession } = await import("./session-repository");
         const { upsertCachedUser, getCachedUser } = await import("./user-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000001";
@@ -98,6 +99,10 @@ describe("MongoDB application repositories", () => {
         await upsertCachedUser(ownerId, { ...user, displayName: "Fresh Mongo User" }, "friends", new Date("2026-08-02T08:10:00.000Z"));
         await upsertCachedUser(ownerId, { ...user, displayName: "Stale Mongo User" }, "friends", new Date("2026-08-02T08:05:00.000Z"));
 
+        const storedSession = await (await getMongoDatabase()).collection("vrchat_session").findOne({ _id: "singleton" });
+        expect(storedSession?.encryptedCookies).toMatchObject({ algorithm: "aes-256-gcm" });
+        expect(JSON.stringify(storedSession)).not.toContain("auth-cookie");
+        expect(JSON.stringify(storedSession)).not.toContain("two-factor-cookie");
         expect(await getStoredVrchatSession()).toMatchObject({ status: "authenticated", activeUserId: ownerId, cookies: { auth: "auth-cookie", twoFactorAuth: "two-factor-cookie" } });
         expect(await getCachedUser(ownerId, ownerId)).toMatchObject({ ...user, displayName: "Fresh Mongo User" });
         expect(await getCachedUser(otherOwnerId, ownerId)).toBeNull();

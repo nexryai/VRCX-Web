@@ -5,7 +5,7 @@
     "scripts": {
         "dev": "next dev",
         "build": "next build",
-        "start": "next start",
+        "start": "next start --hostname 127.0.0.1",
         "lint": "biome check",
         "mongodb:backup-smoke": "node scripts/mongodb-backup-smoke.mjs",
         "monitor:restart-smoke": "node scripts/monitor-restart-smoke.mjs",
