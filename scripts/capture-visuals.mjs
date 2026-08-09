@@ -28,7 +28,7 @@ const captures = [
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
-    { name: "group-dialog-calendar", path: "/friends-locations", readyText: "Remote Creator Meetup", groupDialog: true, groupCalendar: true },
+    { name: "group-dialog-calendar", path: "/friends-locations", readyText: "Remote Creator Meetup", groupDialog: true, groupCalendar: true, groupCalendarDownload: true },
     { name: "group-dialog-photos", path: "/friends-locations", readyText: "Highlights shared by the whole community.", groupDialog: true, groupTab: "Photos" },
     { name: "previous-instances-group", path: "/friends-locations", readyText: "You", groupDialog: true, previousInstances: "group" },
     { name: "group-dialog-posts", path: "/friends-locations", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
@@ -152,6 +152,16 @@ for (const width of widths) {
                 });
             });
         }
+        if (capture.groupCalendarDownload) {
+            await page.route("**/api/groups/*/calendar/*/ics", (route) =>
+                route.fulfill({
+                    status: 200,
+                    contentType: "text/calendar; charset=utf-8",
+                    headers: { "Content-Disposition": 'attachment; filename="evt_visual_upcoming.ics"' },
+                    body: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:evt_visual_upcoming\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+                }),
+            );
+        }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
         if (capture.friendListSearch) {
             const filterSummary = page.getByText("Filter fields", { exact: true });
@@ -197,6 +207,15 @@ for (const width of widths) {
                 await dialog.waitFor({ state: "detached" });
                 await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Open photo from Community Photos");
                 if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Group photo preview did not restore focus after Escape.");
+            }
+            if (capture.groupCalendarDownload) {
+                const title = page.getByText(capture.readyText, { exact: true });
+                await title.waitFor();
+                await title.click();
+                const downloadPromise = page.waitForEvent("download");
+                await page.getByRole("button", { name: "Download .ics", exact: true }).click();
+                const download = await downloadPromise;
+                if (download.suggestedFilename() !== "evt_visual_upcoming.ics") throw new Error(`Unexpected calendar filename: ${download.suggestedFilename()}`);
             }
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
             if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();

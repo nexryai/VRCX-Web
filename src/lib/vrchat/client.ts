@@ -50,6 +50,7 @@ const allowedEndpointPatterns = [
     /^groups\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/members\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     /^calendar\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     /^calendar\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[a-z0-9_-]+(?:\/follow)?$/i,
+    /^calendar\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[a-z0-9_-]+\.ics$/i,
     /^users\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/mutuals\/friends$/i,
     /^auth\/user\/friends\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i,
@@ -76,6 +77,7 @@ type VrchatRequestOptions = {
     cookies?: VrchatCookies;
     query?: Record<string, boolean | number | string | undefined>;
     body?: unknown;
+    responseType?: "json" | "text";
 };
 
 type VrchatResponse<T> = {
@@ -150,7 +152,7 @@ export async function requestVrchat<T>(endpoint: string, options: VrchatRequestO
     }
 
     const headers = new Headers({
-        Accept: "application/json",
+        Accept: options.responseType === "text" ? "text/calendar" : "application/json",
         "User-Agent": process.env.VRCHAT_USER_AGENT?.trim() || "VRCX-Web/0.1.0",
     });
     if (options.authorization) {
@@ -186,7 +188,8 @@ export async function requestVrchat<T>(endpoint: string, options: VrchatRequestO
 
     observeVrchatRateLimit(response.headers, response.status);
 
-    const data = parseJson(await response.text());
+    const responseText = await response.text();
+    const data = response.ok && options.responseType === "text" ? responseText : parseJson(responseText);
     if (!response.ok) {
         throw upstreamError(data, response.status);
     }

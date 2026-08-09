@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Bell, BellOff, Bookmark, BookmarkCheck, CalendarDays, Check, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Repeat, Search, Share2, ShieldCheck, Star, Trash2, Users, X, XCircle } from "lucide-react";
+import { Bell, BellOff, Bookmark, BookmarkCheck, CalendarDays, Check, Clipboard, Download, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Repeat, Search, Share2, ShieldCheck, Star, Trash2, Users, X, XCircle } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
@@ -652,10 +652,39 @@ function GroupCalendar({ events, loading, followingEventId, follow }: { events: 
 function GroupCalendarCard({ event, following, follow }: { event: VrchatGroupCalendarEvent; following: boolean; follow: (event: VrchatGroupCalendarEvent) => Promise<void> }) {
     const link = `https://vrchat.com/home/group/${event.ownerId}/calendar/${event.id}`;
     const [linkCopied, setLinkCopied] = useState(false);
+    const [downloadingIcs, setDownloadingIcs] = useState(false);
+    const [downloadError, setDownloadError] = useState("");
     async function copyLink() {
         await navigator.clipboard.writeText(link);
         setLinkCopied(true);
         window.setTimeout(() => setLinkCopied(false), 1_500);
+    }
+    async function downloadIcs() {
+        setDownloadingIcs(true);
+        setDownloadError("");
+        try {
+            const response = await fetch(`/api/groups/${encodeURIComponent(event.ownerId)}/calendar/${encodeURIComponent(event.id)}/ics`, { cache: "no-store" });
+            if (response.status === 401) {
+                window.location.assign("/login");
+                return;
+            }
+            if (!response.ok) {
+                const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+                throw new Error(payload?.error || "The calendar file could not be downloaded.");
+            }
+            const url = URL.createObjectURL(await response.blob());
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `${event.id}.ics`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            setDownloadError(error instanceof Error ? error.message : "The calendar file could not be downloaded.");
+        } finally {
+            setDownloadingIcs(false);
+        }
     }
     return (
         <article className="relative w-full max-w-[320px] overflow-hidden rounded-lg border border-border bg-card hover:bg-accent">
@@ -697,6 +726,10 @@ function GroupCalendarCard({ event, following, follow }: { event: VrchatGroupCal
                     </div>
                 </summary>
                 <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs">
+                    <button type="button" onClick={() => void downloadIcs()} disabled={downloadingIcs} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-xs hover:bg-muted disabled:opacity-40">
+                        {downloadingIcs ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />} Download .ics
+                    </button>
+                    {downloadError ? <p className="text-destructive">{downloadError}</p> : null}
                     <p>{event.description || "—"}</p>
                     <p className="text-muted-foreground">
                         {event.category} · {event.interestedUserCount} interested

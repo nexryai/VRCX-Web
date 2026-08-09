@@ -6,22 +6,17 @@ import { updateCachedGroupCalendarEvent } from "@/lib/mongodb/group-dialog-repos
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
-import { groupIdSchema } from "@/lib/vrchat/ids";
+import { calendarEventIdSchema, groupIdSchema } from "@/lib/vrchat/ids";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatGroupCalendarInterestUpdateSchema } from "@/lib/vrchat/types";
 
-const eventIdSchema = z
-    .string()
-    .min(1)
-    .max(128)
-    .regex(/^[a-z0-9_-]+$/i);
 const followSchema = z.object({ isFollowing: z.boolean() }).strict();
 
 export async function POST(request: NextRequest, context: RouteContext<"/api/groups/[groupId]/calendar/[eventId]/follow">) {
     if (!isMutationOriginAllowed(request)) return response({ error: "Cross-site requests are not allowed." }, 403);
     const params = await context.params;
     const groupId = groupIdSchema.safeParse(params.groupId);
-    const eventId = eventIdSchema.safeParse(params.eventId);
+    const eventId = calendarEventIdSchema.safeParse(params.eventId);
     const body = followSchema.safeParse(await request.json().catch(() => null));
     if (!groupId.success || !eventId.success || !body.success) return response({ error: "The calendar follow request is invalid." }, 400);
 

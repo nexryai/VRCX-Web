@@ -22,6 +22,11 @@ export const userIdSchema = z.string().regex(userIdPattern);
 export const worldIdSchema = z.string().regex(worldIdPattern);
 export const localFavoriteGroupIdSchema = z.string().regex(localFavoriteGroupIdPattern);
 export const favoriteObjectIdSchema = z.union([avatarIdSchema, userIdSchema, worldIdSchema]);
+export const calendarEventIdSchema = z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[a-z0-9_-]+$/i);
 
 export function isVrchatId(value: string): boolean {
     return avatarIdPattern.test(value) || groupIdPattern.test(value) || userIdPattern.test(value) || worldIdPattern.test(value);

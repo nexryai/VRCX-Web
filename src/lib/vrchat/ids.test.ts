@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { isAllowedVrchatEndpoint } from "./client";
-import { avatarIdSchema, favoriteObjectIdSchema, groupGalleryIdSchema, groupGalleryImageIdSchema, groupIdSchema, isVrchatId, localFavoriteGroupIdSchema, userIdSchema, worldIdSchema } from "./ids";
+import { avatarIdSchema, calendarEventIdSchema, favoriteObjectIdSchema, groupGalleryIdSchema, groupGalleryImageIdSchema, groupIdSchema, isVrchatId, localFavoriteGroupIdSchema, userIdSchema, worldIdSchema } from "./ids";
 
 describe("VRChat entity ID boundary", () => {
     const uuid = "00000000-0000-0000-0000-000000000001";
@@ -13,6 +13,7 @@ describe("VRChat entity ID boundary", () => {
         expect(groupIdSchema.parse(`grp_${uuid}`)).toBe(`grp_${uuid}`);
         expect(groupGalleryIdSchema.parse(`ggal_${uuid}`)).toBe(`ggal_${uuid}`);
         expect(groupGalleryImageIdSchema.parse(`ggim_${uuid}`)).toBe(`ggim_${uuid}`);
+        expect(calendarEventIdSchema.parse("evt_calendar-one_2")).toBe("evt_calendar-one_2");
         expect(localFavoriteGroupIdSchema.parse(`lfg_${uuid}`)).toBe(`lfg_${uuid}`);
         expect(favoriteObjectIdSchema.safeParse(`grp_${uuid}`).success).toBe(false);
         expect(isVrchatId(`grp_${uuid}`)).toBe(true);
@@ -34,6 +35,8 @@ describe("VRChat entity ID boundary", () => {
         expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}/evt_example/follow`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}/evt_example/follow/extra`)).toBe(false);
+        expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}/evt_example.ics`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}/evt_example.ics/extra`)).toBe(false);
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/galleries/ggal_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/galleries/ggal_${uuid}/images`)).toBe(false);
         expect(isAllowedVrchatEndpoint("users/usr_000000000000-0000-0000-000000000001")).toBe(false);
