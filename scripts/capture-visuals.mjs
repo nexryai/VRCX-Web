@@ -27,7 +27,7 @@ const captures = [
     { name: "world-dialog", path: "/favorites/worlds", readyText: "World ID", favoriteKind: "world", worldDialog: true },
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
-    { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge", groupDialog: true },
+    { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
     { name: "previous-instances-group", path: "/friends-locations", readyText: "You", groupDialog: true, previousInstances: "group" },
     { name: "group-dialog-posts", path: "/friends-locations", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
@@ -162,7 +162,7 @@ for (const width of widths) {
             // Waiting for the count prevents the persisted sidebar setting from
             // racing this click while its initial request is still resolving.
             await page.getByRole("tab", { name: /^Groups\s+1$/ }).click();
-            await page.getByText("VRCX Test Group", { exact: true }).first().click();
+            await page.getByRole("button", { name: /^VRCX Test Group\b/ }).click();
             if (capture.groupTab) await page.getByRole("tab", { name: capture.groupTab, exact: true }).click();
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
         }
