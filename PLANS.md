@@ -126,7 +126,8 @@ This inventory replaces the old browser-only scope. `Server-derived` means the f
 | My Avatars | Browser-adaptable | Port remote management and browser upload/crop workflows; persist tags/memos/cache metadata in MongoDB |
 | Dashboard | Product-excluded | Do not port it; remove the existing prototype route and navigation entry rather than rebuilding VRCX dashboard widgets |
 | Mutual Friends chart | Server-derived | Store graph, opt-outs, cursors, and rate-limited fetch jobs in MongoDB |
-| Instance Activity and Hot Worlds charts | Server-derived, fidelity investigation required | Determine whether continuously observed remote friend locations can truthfully reproduce each metric; label or omit fields needing local instance occupancy |
+| Hot Worlds chart | Server-derived | Rank remotely observed friend GPS transitions from MongoDB with explicit coverage limits and VRCX-equivalent period trends |
+| Instance Activity chart | Local-VRChat-only | Exclude it because VRCX requires local `OnPlayerLeft` rows for every player, exact overlap, and local instance occupancy |
 | Previous instances for users/worlds/groups | Server-derived | Build from remotely observed locations with explicit observation-source semantics |
 | Game Log — sessions view only | Server-derived | Port the VRCX session list from remote observations of the active account's location, including world/group metadata, observed start/end and duration, current state, remotely observed self Feed events within each session, search, date filtering, collapse, and incremental loading; omit table mode and unavailable local-log event controls |
 | Browser notifications | Browser-adaptable | Optional browser delivery may mirror eligible VRCX notifications after permission is granted |
@@ -289,6 +290,14 @@ Mutual fetching is a server-owned, rate-limited VRChat API job rather than a bro
 
 The Sigma/Graphology/Louvain worker rendering pipeline is translated to a browser-safe React/SVG renderer so the root build does not depend on the reference checkout. It preserves the visible graph vocabulary and deterministic force layout, but very large-graph performance and community placement must still be compared against the running VRCX reference before visual parity is considered complete. Full fetches are intentionally operator-triggered, as in VRCX, because scanning every friend consumes rate-limited API calls; once triggered, they no longer depend on an open page.
 
+## Hot Worlds and Instance Activity Scope
+
+`VRCX/src/views/Charts/components/HotWorlds.vue`, its English localization, the Charts router/navigation constants, and `getHotWorlds` plus `getHotWorldFriendDetail` in `VRCX/src/services/database/feed.js` define Hot Worlds. The maintained `/charts/hot-worlds` route closely translates its 7/30/90-day selector, unique-friend-first ranking, visit counts, first-period/second-period rising and cooling comparison, two-column desktop list, single-column narrow list, proportional bars, summary counters, empty/loading/error states, world links, and right-side friend detail sheet. Search is unnecessary because VRCX does not expose one on this screen.
+
+The server derives each visit from an owner-scoped friend `GPS` transition already persisted by the always-on monitor. It deliberately excludes the active identity, Online baselines, status events, malformed/private locations, and another retained identity, matching VRCX's friend-GPS query rather than turning every presence observation into a visit. The existing `owner_type_occurred` index supports all three bounded periods. Cached world names are joined at query time; when an old event has no resolvable cache entry, the canonical world ID remains visible instead of discarding the remotely observed fact as VRCX's nonempty-name SQL does. Counts therefore represent observed transitions, not unique local game launches, and private/unobservable visits cannot be recovered. The UI states this limitation and owns no durable chart data or settings.
+
+Instance Activity is conclusively `Local-VRChat-only`. `VRCX/src/views/Charts/components/InstanceActivity.vue`, `InstanceActivityDetail.vue`, `useInstanceActivityData.js`, and `getInstanceActivity`/`getDateOfInstanceActivity` in `VRCX/src/services/database/gameLog.js` require local `gamelog_join_leave` `OnPlayerLeft` rows for the active identity and every co-present player. Those rows supply exact join/leave intervals, overlap, friend/favorite classification, solo/no-friend filters, and per-player detail. Remote APIs cannot observe an instance roster or those boundaries. Showing only the active identity's bounded `game_sessions` would duplicate Game Log while falsely presenting the defining occupancy chart, so the route, navigation item, settings, and detail controls remain absent.
+
 ## Settings Scope
 
 `VRCX/src/views/Settings/Settings.vue`, `components/SettingsGroup.vue`, `components/SettingsItem.vue`, `components/Tabs/SystemTab.vue`, and `components/Tabs/InterfaceTab.vue` define the settings page hierarchy and dense card rows. The web port exposes the working System and Interface categories, VRCX-style underlined tabs and groups, application/version/legal links, theme, navigation collapse, favorite ordering, and the current per-workflow table page sizes. Changes write through the validated singleton MongoDB settings boundary and update the live shell where applicable.
@@ -311,7 +320,7 @@ Status: In progress
 - [ ] Inventory every VRCX route, navigation item, dialog, store, realtime event, API path, setting, and database method.
 - [ ] Capture the running VRCX shell and key states at fixed desktop content viewport sizes.
 - [ ] Create a difference register mapping every current root route to its VRCX source and visible deviations.
-- [ ] Confirm remote observation feasibility for all formerly local-derived charts and histories.
+- [x] Confirm remote observation feasibility for all formerly local-derived charts and histories.
 - [ ] Capture populated, current, historical, filtered, loading, and empty Game Log session reference states.
 - [ ] Record exact exclusions without removing remotely derivable behavior.
 
@@ -366,7 +375,7 @@ Exit criteria: the root shell is visually indistinguishable from VRCX within doc
 
 ### Milestone 4 — Remote Workflows and History
 
-Status: Planned
+Status: In progress
 
 Port one complete VRCX workflow at a time in this order unless dependency discovery changes it:
 
@@ -571,3 +580,5 @@ The 2026-08-09 operator-log redaction increment passed `pnpm test` (19 files, 10
 The 2026-08-09 dependency-security increment passed `pnpm install --frozen-lockfile`, `pnpm dependencies:audit` with no known production or development vulnerabilities, `pnpm dependencies:licenses`, `pnpm test` (19 files, 103 tests), `pnpm lint` (164 files), and `pnpm build` on Next.js 16.3.0 (27 generated pages). Updating Next.js from 16.2.12 removed vulnerable transitive Sharp and PostCSS releases; the workspace override advances Next.js/PostCSS's remaining Nano ID resolution from 3.3.16 to the minimum patched 3.3.17. The exact pnpm 11.18.0 package-manager release and its Node.js 22.13 runtime floor are now declared, and release instructions include frozen installation, vulnerability audit, and shipped-package license inventory. The production inventory contains no unknown or unlicensed package; redistribution packaging must preserve the listed notices, including libvips's LGPL terms. Reverse-proxy, TLS termination, container-runtime, and authenticated live-deployment review remain outside this dependency increment, so the broad security audit remains open.
 
 The 2026-08-09 Previous Instances increment passed `pnpm test` (20 files, 108 tests), `pnpm lint` (169 files), and `pnpm build` on Next.js 16.3.0 (28 generated pages). Repository coverage verifies first-GPS prior-location recovery, current-row truthfulness, private/unobservable exclusion, active-account session projection, exact-location world/group aggregation, bounded duration totals, owner isolation, migration 26, and its query indexes; the all-route cache inventory now covers 30 GET handlers. The MongoDB-backed User, World, and Group variants each passed Escape/focus restoration and deterministic captures at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow, and representative narrow/desktop images were manually inspected. VRCX's local launch, delete, and player-info actions are deliberately absent, remote timing is visibly marked `Observed`, and a matched-state comparison with a running VRCX application plus authenticated live-history smoke remain open.
+
+The 2026-08-09 Hot Worlds increment passed `pnpm test` (21 files, 112 tests), `pnpm lint` (175 files), and `pnpm build` on Next.js 16.3.0 (29 generated pages); the cache-policy inventory now covers 31 GET handlers. Pure and MongoDB integration coverage verifies VRCX's unique-friend/visit ordering, floored half-period trend boundaries, latest observed display names, malformed and expired event exclusion, owner isolation, active-identity exclusion, type isolation, cached world names, and friend detail ordering on the existing owner/type/time index. The populated ranking and detail sheet each passed deterministic captures at 360, 768, 1280, and 1920 pixels with no page-level horizontal overflow; the detail interaction also passed Escape and focus restoration, and representative narrow/desktop images were manually inspected. This evidence resolves Charts feasibility: Hot Worlds is remotely derived, while Instance Activity is excluded because its defining all-player occupancy intervals remain local-log-only. A matched-state comparison with a running VRCX application and authenticated live GPS accumulation remain open.

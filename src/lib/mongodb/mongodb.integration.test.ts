@@ -367,6 +367,31 @@ describe("MongoDB application repositories", () => {
         expect(groupRows.map((row) => row.location)).toEqual(worldRows.map((row) => row.location));
     });
 
+    test("ranks Hot Worlds from owner-scoped friend GPS history", async () => {
+        const { listHotWorldFriends, listHotWorlds } = await import("./hot-worlds-repository");
+        const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
+        const ownerId = "usr_00000000-0000-0000-0000-0000000000c1";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-0000000000c2";
+        const friendId = "usr_00000000-0000-0000-0000-0000000000c3";
+        const otherFriendId = "usr_00000000-0000-0000-0000-0000000000c4";
+        const worldId = "wrld_00000000-0000-0000-0000-0000000000c5";
+        const now = new Date("2026-08-10T00:00:00.000Z");
+        const database = await getMongoDatabase();
+        const c = collections(database);
+        await c.worlds.insertOne({ _id: `${ownerId}:${worldId}`, ownerId, worldId, world: { id: worldId, name: "Remote Hot World" }, source: "session", observedAt: now, updatedAt: now });
+        await c.activityEvents.insertMany([
+            { _id: "hot-owner-old", ownerId, type: "GPS", subjectUserId: friendId, displayName: "Observed Friend", current: `${worldId}:111`, occurredAt: new Date("2026-07-20T00:00:00.000Z"), observedAt: now, provenance: "pipeline" },
+            { _id: "hot-owner-recent", ownerId, type: "GPS", subjectUserId: otherFriendId, displayName: "Other Friend", current: `${worldId}:222`, occurredAt: new Date("2026-08-05T00:00:00.000Z"), observedAt: now, provenance: "reconciliation" },
+            { _id: "hot-self", ownerId, type: "GPS", subjectUserId: ownerId, displayName: "Self", current: `${worldId}:333`, occurredAt: new Date("2026-08-06T00:00:00.000Z"), observedAt: now, provenance: "pipeline" },
+            { _id: "hot-other-owner", ownerId: otherOwnerId, type: "GPS", subjectUserId: friendId, displayName: "Leaked Friend", current: `${worldId}:444`, occurredAt: new Date("2026-08-07T00:00:00.000Z"), observedAt: now, provenance: "pipeline" },
+            { _id: "hot-status", ownerId, type: "Status", subjectUserId: friendId, displayName: "Observed Friend", current: `${worldId}:555`, occurredAt: new Date("2026-08-08T00:00:00.000Z"), observedAt: now, provenance: "pipeline" },
+        ]);
+
+        expect(await listHotWorlds(ownerId, 30, now)).toEqual([expect.objectContaining({ worldId, worldName: "Remote Hot World", visitCount: 2, uniqueFriends: 2, trend: "stable" })]);
+        expect(await listHotWorldFriends(ownerId, worldId, 30, now)).toEqual([expect.objectContaining({ userId: otherFriendId, displayName: "Other Friend", visitCount: 1 }), expect.objectContaining({ userId: friendId, displayName: "Observed Friend", visitCount: 1 })]);
+    });
+
     test("retains inactive favorite and moderation projections for history", async () => {
         const { clearFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection, upsertFavoriteGroupProjection } = await import("./projection-repository");
         const { getMongoDatabase } = await import("./client");

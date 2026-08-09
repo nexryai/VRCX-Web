@@ -45,7 +45,10 @@ const navigation: NavigationEntry[] = [
     {
         label: "Charts",
         icon: "ri-pie-chart-line",
-        children: [{ href: "/charts/mutual", label: "Mutual Friends", icon: "ri-group-2-line" }],
+        children: [
+            { href: "/charts/mutual", label: "Mutual Friends", icon: "ri-group-2-line" },
+            { href: "/charts/hot-worlds", label: "Hot Worlds", icon: "ri-fire-line" },
+        ],
     },
 ];
 

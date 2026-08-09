@@ -35,6 +35,8 @@ const captures = [
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/avatars", readyText: "Dance", avatars: true },
     { name: "mutual-friends", path: "/charts/mutual", readyText: "Aoi Sample" },
+    { name: "hot-worlds", path: "/charts/hot-worlds", readyText: "Sorted by unique friends" },
+    { name: "hot-worlds-detail", path: "/charts/hot-worlds", readyText: "Friends who visited", hotWorldDetail: true },
     { name: "settings", path: "/settings", readyText: "Application data" },
     { name: "settings-avatar-purge", path: "/settings", readyText: "This action cannot be undone.", avatarPurgeDialog: true },
     { name: "settings-interface", path: "/settings", readyText: "Sort favorites by", clickText: "Interface" },
@@ -169,6 +171,16 @@ for (const width of widths) {
             await page.keyboard.press("Escape");
             await dialog.waitFor({ state: "detached" });
             if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Previous Instances did not restore focus after Escape.");
+            await trigger.click();
+        }
+        if (capture.hotWorldDetail) {
+            const trigger = page.getByRole("button", { name: "Show visit details for The Great Pug", exact: true }).first();
+            await trigger.click();
+            const dialog = page.getByRole("dialog", { name: "The Great Pug", exact: true });
+            await dialog.waitFor();
+            await page.keyboard.press("Escape");
+            await dialog.waitFor({ state: "detached" });
+            if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Hot Worlds detail did not restore focus after Escape.");
             await trigger.click();
         }
         if (capture.favoriteActionLabel) {
