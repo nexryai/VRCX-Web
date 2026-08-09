@@ -3,7 +3,7 @@ import "server-only";
 import type { Collection, Db } from "mongodb";
 
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
-import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatFile, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
     algorithm: "aes-256-gcm";
@@ -154,6 +154,15 @@ export type GroupPostSnapshotDocument = {
     _id: string;
     ownerId: string;
     groupId: string;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type PersonalFileSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    tag: "gallery";
+    files: VrchatFile[];
     observedAt: Date;
     updatedAt: Date;
 };
@@ -371,6 +380,7 @@ export type Collections = {
     groups: Collection<GroupDocument>;
     groupPosts: Collection<GroupPostDocument>;
     groupPostSnapshots: Collection<GroupPostSnapshotDocument>;
+    personalFileSnapshots: Collection<PersonalFileSnapshotDocument>;
     groupMembers: Collection<GroupMemberDocument>;
     groupInstanceSnapshots: Collection<GroupInstanceSnapshotDocument>;
     groupCalendarSnapshots: Collection<GroupCalendarSnapshotDocument>;
@@ -402,6 +412,7 @@ export function collections(db: Db): Collections {
         groups: db.collection<GroupDocument>("groups"),
         groupPosts: db.collection<GroupPostDocument>("group_posts"),
         groupPostSnapshots: db.collection<GroupPostSnapshotDocument>("group_post_snapshots"),
+        personalFileSnapshots: db.collection<PersonalFileSnapshotDocument>("personal_file_snapshots"),
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupInstanceSnapshots: db.collection<GroupInstanceSnapshotDocument>("group_instance_snapshots"),
         groupCalendarSnapshots: db.collection<GroupCalendarSnapshotDocument>("group_calendar_snapshots"),

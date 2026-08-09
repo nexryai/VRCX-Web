@@ -378,6 +378,13 @@ const migrations: Migration[] = [
             await Promise.all([c.groupPostSnapshots.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }), c.groupPostSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 32,
+        name: "add-personal-file-snapshot-indexes",
+        async apply(c) {
+            await Promise.all([c.personalFileSnapshots.createIndex({ ownerId: 1, tag: 1 }, { unique: true, name: "owner_tag_unique" }), c.personalFileSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

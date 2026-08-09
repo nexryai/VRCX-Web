@@ -118,6 +118,7 @@ const currentUser = {
     state: "online",
     status: "online",
     statusDescription: "VRCX browser port",
+    tags: ["system_supporter"],
     currentAvatar: ownedAvatars[0].id,
     location: "wrld_00000000-0000-0000-0000-000000000010:12345",
     world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" },
@@ -478,6 +479,33 @@ await database.collection("group_posts").insertMany([
     },
 ]);
 await database.collection("group_post_snapshots").insertOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId, observedAt: now, updatedAt: now });
+await database.collection("personal_file_snapshots").insertOne({
+    _id: `${ownerId}:gallery`,
+    ownerId,
+    tag: "gallery",
+    files: [
+        {
+            id: "file_00000000-0000-0000-0000-000000000033",
+            ownerId,
+            name: "Creator Meetup",
+            extension: ".png",
+            mimeType: "image/png",
+            tags: ["gallery"],
+            versions: [{ version: 1, status: "complete", created_at: now.toISOString(), file: { category: "simple", fileName: "creator-meetup.png", sizeInBytes: 2048, status: "complete", uploadId: "", url: "https://assets.vrchat.com/visual-fixture/group-photo-one.svg" } }],
+        },
+        {
+            id: "file_00000000-0000-0000-0000-000000000034",
+            ownerId,
+            name: "World Hop",
+            extension: ".png",
+            mimeType: "image/png",
+            tags: ["gallery"],
+            versions: [{ version: 1, status: "complete", created_at: now.toISOString(), file: { category: "simple", fileName: "world-hop.png", sizeInBytes: 2048, status: "complete", uploadId: "", url: "https://assets.vrchat.com/visual-fixture/group-photo-two.svg" } }],
+        },
+    ],
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("group_members").insertMany([
     {
         _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:usr_00000000-0000-0000-0000-000000000071`,

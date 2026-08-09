@@ -2,15 +2,48 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Bell, BellOff, Bookmark, BookmarkCheck, CalendarDays, Check, Clipboard, Download, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, Pencil, Plus, RefreshCw, Repeat, Search, Share2, ShieldCheck, Star, Trash2, Users, X, XCircle } from "lucide-react";
+import {
+    Bell,
+    BellOff,
+    Bookmark,
+    BookmarkCheck,
+    CalendarDays,
+    Check,
+    Clipboard,
+    Download,
+    Ellipsis,
+    ExternalLink,
+    Eye,
+    History,
+    ImageIcon,
+    Loader2,
+    MessageCircle,
+    MessageCircleOff,
+    MessageSquare,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Repeat,
+    Search,
+    Share2,
+    ShieldCheck,
+    Star,
+    Trash2,
+    Upload,
+    Users,
+    X,
+    XCircle,
+} from "lucide-react";
 
+import { useCurrentUser } from "@/components/current-user-provider";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
 import { partitionGroupCalendarEvents } from "@/lib/group-calendar";
-import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
+import { latestVrchatFileUrl } from "@/lib/vrchat/gallery-files";
+import type { VrchatFile, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
 type GroupTab = "Info" | "Posts" | "Members" | "Photos" | "JSON";
 type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
@@ -34,6 +67,7 @@ function canManageGroupPosts(group: VrchatGroup) {
 }
 
 export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: string; friends: VrchatUser[]; openUser: (userId: string) => void; onClose: () => void }) {
+    const currentUser = useCurrentUser();
     const [group, setGroup] = useState<VrchatGroup | null>(null);
     const [ownerName, setOwnerName] = useState("");
     const [tab, setTab] = useState<GroupTab>("Info");
@@ -477,7 +511,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                 ) : null}
             </section>
             {previousInstancesOpen && group ? <PreviousInstancesDialog variant="group" entityId={group.id} label={group.name} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
-            {postEditor && group ? <GroupPostEditor group={group} post={postEditor === "new" ? undefined : postEditor} loading={postMutationLoading} error={error} cancel={closePostOverlay} save={savePost} /> : null}
+            {postEditor && group ? <GroupPostEditor group={group} post={postEditor === "new" ? undefined : postEditor} vrcPlus={currentUser.tags?.includes("system_supporter") === true} loading={postMutationLoading} error={error} cancel={closePostOverlay} save={savePost} /> : null}
             {postToDelete ? <GroupPostDeleteConfirmation post={postToDelete} loading={postMutationLoading} error={error} cancel={closePostOverlay} confirm={() => void deletePost()} /> : null}
         </div>
     );
@@ -895,20 +929,24 @@ function eventRange(event: VrchatGroupCalendarEvent) {
     return `${date} ${time.format(startsAt)} – ${time.format(endsAt)}`;
 }
 
-function GroupPostEditor({ group, post, loading, error, cancel, save }: { group: VrchatGroup; post?: VrchatGroupPost; loading: boolean; error: string; cancel: () => void; save: (input: GroupPostInput) => Promise<void> }) {
+function GroupPostEditor({ group, post, vrcPlus, loading, error, cancel, save }: { group: VrchatGroup; post?: VrchatGroupPost; vrcPlus: boolean; loading: boolean; error: string; cancel: () => void; save: (input: GroupPostInput) => Promise<void> }) {
     const [title, setTitle] = useState(post?.title || "");
     const [message, setMessage] = useState(post?.text || "");
     const [sendNotification, setSendNotification] = useState(true);
     const [visibility, setVisibility] = useState<"group" | "public">(post?.visibility || "group");
     const [roleIds, setRoleIds] = useState(post?.roleIds || []);
     const [imageId, setImageId] = useState<string | null>(post?.imageId || null);
+    const [imageUrl, setImageUrl] = useState(post?.imageUrl || "");
+    const [galleryOpen, setGalleryOpen] = useState(false);
     const dialog = useRef<HTMLDivElement>(null);
     const titleInput = useRef<HTMLInputElement>(null);
+    const galleryButton = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         titleInput.current?.focus();
         function handleKey(event: KeyboardEvent) {
             if (event.key === "Escape") {
+                if (document.querySelector("[data-gallery-file-picker]")) return;
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 cancel();
@@ -989,17 +1027,31 @@ function GroupPostEditor({ group, post, loading, error, cancel, save }: { group:
                             </details>
                         </div>
                     ) : null}
-                    {post?.imageUrl && imageId ? (
+                    {imageUrl && imageId ? (
                         <div>
                             <span className="block text-xs font-medium">Image</span>
                             <div className="mt-1 flex items-start gap-2">
-                                <VrchatImage src={post.imageUrl} alt="" className="size-[60px] rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" />
-                                <button type="button" onClick={() => setImageId(null)} className="h-8 rounded-md border border-input px-3 text-xs hover:bg-muted">
+                                <VrchatImage src={imageUrl} alt="" className="size-[60px] rounded-md object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setImageId(null);
+                                        setImageUrl("");
+                                    }}
+                                    className="h-8 rounded-md border border-input px-3 text-xs hover:bg-muted"
+                                >
                                     Clear selected image
                                 </button>
                             </div>
                         </div>
-                    ) : null}
+                    ) : (
+                        <div>
+                            <span className="block text-xs font-medium">Image</span>
+                            <button ref={galleryButton} type="button" onClick={() => setGalleryOpen(true)} className="mt-1 h-8 rounded-md border border-input px-3 text-xs hover:bg-muted">
+                                Select image
+                            </button>
+                        </div>
+                    )}
                     {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                     <div className="flex justify-end gap-2">
                         <button type="button" onClick={cancel} disabled={loading} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
@@ -1011,6 +1063,129 @@ function GroupPostEditor({ group, post, loading, error, cancel, save }: { group:
                         </button>
                     </div>
                 </form>
+                {galleryOpen ? (
+                    <GalleryFilePicker
+                        vrcPlus={vrcPlus}
+                        close={() => {
+                            setGalleryOpen(false);
+                            window.setTimeout(() => galleryButton.current?.focus(), 0);
+                        }}
+                        select={(file, url) => {
+                            setImageId(file.id);
+                            setImageUrl(url);
+                            setGalleryOpen(false);
+                            window.setTimeout(() => galleryButton.current?.focus(), 0);
+                        }}
+                    />
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function GalleryFilePicker({ vrcPlus, close, select }: { vrcPlus: boolean; close: () => void; select: (file: VrchatFile, url: string) => void }) {
+    const [files, setFiles] = useState<VrchatFile[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState("");
+    const dialog = useRef<HTMLDivElement>(null);
+    const noneButton = useRef<HTMLButtonElement>(null);
+    const uploadInput = useRef<HTMLInputElement>(null);
+
+    const load = useCallback(async (refresh = false) => {
+        setLoading(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/gallery/files${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+            const payload = (await response.json()) as { error?: string; files?: VrchatFile[] };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok) throw new Error(payload.error || "The personal gallery could not be loaded.");
+            setFiles(payload.files || []);
+        } catch (loadError) {
+            setError(loadError instanceof Error ? loadError.message : "The personal gallery could not be loaded.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void load();
+        noneButton.current?.focus();
+        function handleKey(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                close();
+                return;
+            }
+            if (event.key !== "Tab" || !dialog.current) return;
+            const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])"));
+            const first = focusable[0];
+            const last = focusable.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        }
+        window.addEventListener("keydown", handleKey, true);
+        return () => window.removeEventListener("keydown", handleKey, true);
+    }, [close, load]);
+
+    async function upload(file: File) {
+        setUploading(true);
+        setError("");
+        try {
+            const formData = new FormData();
+            formData.set("file", file);
+            const response = await fetch("/api/gallery/files", { method: "POST", body: formData });
+            const payload = (await response.json()) as { error?: string; file?: VrchatFile; refreshRequired?: boolean };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.file) throw new Error(payload.error || "The gallery image could not be uploaded.");
+            setFiles((current) => [payload.file as VrchatFile, ...current.filter((item) => item.id !== payload.file?.id)]);
+            if (payload.refreshRequired) void load(true);
+        } catch (uploadError) {
+            setError(uploadError instanceof Error ? uploadError.message : "The gallery image could not be uploaded.");
+        } finally {
+            setUploading(false);
+            if (uploadInput.current) uploadInput.current.value = "";
+        }
+    }
+
+    return (
+        <div data-gallery-file-picker className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3 sm:p-4">
+            <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="gallery-file-picker-title" className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[900px] overflow-y-auto rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                <h4 id="gallery-file-picker-title" className="font-semibold">
+                    Select Gallery Image
+                </h4>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span>Gallery</span>
+                    <span className="text-muted-foreground">{files.length}/64</span>
+                    <button ref={noneButton} type="button" onClick={close} className="inline-flex h-8 items-center gap-1 rounded-md border border-input px-3 hover:bg-muted">
+                        <X className="size-3.5" /> None
+                    </button>
+                    <button type="button" onClick={() => void load(true)} disabled={loading} className="inline-flex h-8 items-center gap-1 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
+                        {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Refresh
+                    </button>
+                    <input ref={uploadInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" onChange={(event) => event.target.files?.[0] && void upload(event.target.files[0])} />
+                    <button type="button" onClick={() => uploadInput.current?.click()} disabled={!vrcPlus || uploading} title={vrcPlus ? undefined : "VRChat+ is required"} className="inline-flex h-8 items-center gap-1 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
+                        {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Upload
+                    </button>
+                </div>
+                {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                <div className="mt-2.5 grid grid-cols-[repeat(auto-fill,200px)] gap-5">
+                    {files.map((file) => {
+                        const url = latestVrchatFileUrl(file);
+                        return url ? (
+                            <button key={file.id} type="button" onClick={() => select(file, url)} className="size-[200px] overflow-hidden rounded-[20px] bg-muted focus:ring-2 focus:ring-ring" aria-label={`Select gallery image ${file.name || file.id}`}>
+                                <VrchatImage src={url} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                            </button>
+                        ) : null;
+                    })}
+                </div>
+                {!loading && !files.some((file) => latestVrchatFileUrl(file)) ? <EmptyState>No gallery images.</EmptyState> : null}
             </div>
         </div>
     );

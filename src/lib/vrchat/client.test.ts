@@ -32,4 +32,17 @@ describe("VRChat response decoding", () => {
         );
         await expect(requestVrchat<{ ok: boolean }>("config")).resolves.toEqual({ data: { ok: true }, cookies: {} });
     });
+
+    it("forwards multipart gallery uploads without overriding the boundary header", async () => {
+        const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+            expect(init?.body).toBeInstanceOf(FormData);
+            expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+            return Response.json({ id: `file_${uuid}` });
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        const formData = new FormData();
+        formData.set("tag", "gallery");
+        formData.set("file", new File(["image"], "gallery.png", { type: "image/png" }));
+        await expect(requestVrchat<{ id: string }>("file/image", { method: "POST", formData })).resolves.toMatchObject({ data: { id: `file_${uuid}` } });
+    });
 });

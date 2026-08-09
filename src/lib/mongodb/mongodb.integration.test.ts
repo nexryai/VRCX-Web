@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -53,6 +53,7 @@ describe("MongoDB application repositories", () => {
         expect(sessionIndexes).toBe(true);
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
         expect(await database.collection("group_post_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("personal_file_snapshots").indexExists(["owner_tag_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -324,6 +325,19 @@ describe("MongoDB application repositories", () => {
         expect(await getCachedGroupPosts(otherOwnerId, groupId)).toEqual([]);
         expect(await listCachedGroupMembers(ownerId, groupId, 0, 100)).toMatchObject({ total: 1, members: [expect.objectContaining({ userId })] });
         expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
+    });
+
+    test("stores complete personal Gallery snapshots and uploaded files per owner", async () => {
+        const { getPersonalGallerySnapshot, replacePersonalGallerySnapshot, upsertPersonalGalleryFile } = await import("./personal-files-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000064";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000065";
+        const galleryFile = (id: string, name: string) => ({ id, ownerId, name, extension: ".png", mimeType: "image/png", tags: ["gallery"], versions: [] });
+        await replacePersonalGallerySnapshot(ownerId, []);
+        expect(await getPersonalGallerySnapshot(ownerId)).toMatchObject({ ownerId, tag: "gallery", files: [] });
+        expect(await upsertPersonalGalleryFile(ownerId, galleryFile("file_00000000-0000-0000-0000-000000000066", "Uploaded"))).toBe(true);
+        expect(await getPersonalGallerySnapshot(ownerId)).toMatchObject({ files: [expect.objectContaining({ name: "Uploaded" })] });
+        expect(await upsertPersonalGalleryFile(otherOwnerId, { ...galleryFile("file_00000000-0000-0000-0000-000000000067", "Private"), ownerId: otherOwnerId })).toBe(false);
+        expect(await getPersonalGallerySnapshot(otherOwnerId)).toBeNull();
     });
 
     test("replaces complete group-instance snapshots without crossing owners", async () => {

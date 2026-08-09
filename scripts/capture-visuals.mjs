@@ -35,6 +35,7 @@ const captures = [
     { name: "group-dialog-post-create", path: "/friends-locations", readyText: "Create/Edit Post", groupDialog: true, groupTab: "Posts", groupPostDialog: "create" },
     { name: "group-dialog-post-edit", path: "/friends-locations", readyText: "Create/Edit Post", groupDialog: true, groupTab: "Posts", groupPostDialog: "edit" },
     { name: "group-dialog-post-delete", path: "/friends-locations", readyText: "Delete post?", groupDialog: true, groupTab: "Posts", groupPostDialog: "delete" },
+    { name: "group-dialog-post-image", path: "/friends-locations", readyText: "Select Gallery Image", groupDialog: true, groupTab: "Posts", groupPostDialog: "image" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
@@ -139,7 +140,7 @@ for (const width of widths) {
                 await page.route("**/api/local-favorites?kind=friend", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ groups: [], items: [] }) }));
             }
         }
-        if (capture.groupTab === "Photos") {
+        if (capture.groupTab === "Photos" || capture.groupPostDialog === "image") {
             await page.route("https://assets.vrchat.com/visual-fixture/group-photo-*.svg", async (route) => {
                 const name = new URL(route.request().url()).pathname.split("/").at(-1) || "group-photo.svg";
                 const palettes = {
@@ -308,6 +309,23 @@ for (const width of widths) {
                 await page.getByRole("button", { name: "Delete", exact: true }).click();
                 await page.getByText("Community meetup", { exact: true }).waitFor({ state: "detached" });
                 await page.getByRole("button", { name: "Delete post", exact: true }).first().click();
+            }
+            if (capture.groupPostDialog === "image") {
+                const manage = page.getByLabel("Manage group", { exact: true });
+                await manage.click();
+                await page.getByRole("button", { name: "Create Post", exact: true }).click();
+                const trigger = page.getByRole("button", { name: "Select image", exact: true });
+                await trigger.click();
+                const dialog = page.getByRole("dialog", { name: "Select Gallery Image", exact: true });
+                await dialog.waitFor();
+                const none = page.getByRole("button", { name: "None", exact: true });
+                if (!(await none.evaluate((element) => document.activeElement === element))) throw new Error("Gallery file picker did not focus None.");
+                await page.keyboard.press("Escape");
+                await dialog.waitFor({ state: "detached" });
+                await page.waitForFunction(() => document.activeElement?.textContent?.trim() === "Select image");
+                if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Gallery file picker did not restore focus after Escape.");
+                await trigger.click();
+                await page.getByRole("button", { name: "Select gallery image Creator Meetup", exact: true }).waitFor();
             }
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
             if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();

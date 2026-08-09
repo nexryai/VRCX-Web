@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { groupGalleryIdSchema, groupGalleryImageIdSchema, groupIdSchema } from "./ids";
+import { fileIdSchema, groupGalleryIdSchema, groupGalleryImageIdSchema, groupIdSchema, userIdSchema } from "./ids";
 
 export const vrchatUserSchema = z
     .object({
@@ -322,6 +322,31 @@ export const vrchatGroupPostSchema = z
     .passthrough();
 
 export type VrchatGroupPost = z.infer<typeof vrchatGroupPostSchema>;
+
+const vrchatFileDataSchema = z
+    .object({
+        category: z.enum(["multipart", "queued", "simple"]),
+        fileName: z.string(),
+        sizeInBytes: z.number().int().nonnegative(),
+        status: z.enum(["complete", "none", "queued", "waiting"]),
+        uploadId: z.string(),
+        url: z.url(),
+    })
+    .passthrough();
+
+export const vrchatFileSchema = z
+    .object({
+        id: fileIdSchema,
+        ownerId: userIdSchema,
+        name: z.string(),
+        extension: z.string(),
+        mimeType: z.string(),
+        tags: z.array(z.string()),
+        versions: z.array(z.object({ version: z.number().int().nonnegative(), status: z.enum(["complete", "none", "queued", "waiting"]), deleted: z.boolean().optional(), file: vrchatFileDataSchema.optional() }).passthrough()),
+    })
+    .passthrough();
+
+export type VrchatFile = z.infer<typeof vrchatFileSchema>;
 
 export const vrchatGroupCalendarUserInterestSchema = z
     .object({

@@ -20,6 +20,7 @@ const allowedEndpoints = [
     "config",
     "favorite/groups",
     "favorites",
+    "files",
     "groups",
     "notifications",
     "userNotes",
@@ -28,6 +29,7 @@ const allowedEndpoints = [
     "worlds/active",
     "worlds/favorites",
     "worlds/recent",
+    "file/image",
     "auth/twofactorauth/otp/verify",
     "auth/twofactorauth/totp/verify",
     "auth/twofactorauth/emailotp/verify",
@@ -78,6 +80,7 @@ type VrchatRequestOptions = {
     cookies?: VrchatCookies;
     query?: Record<string, boolean | number | string | undefined>;
     body?: unknown;
+    formData?: FormData;
     responseType?: "json" | "text";
 };
 
@@ -144,6 +147,7 @@ function upstreamError(payload: unknown, status: number) {
  */
 export async function requestVrchat<T>(endpoint: string, options: VrchatRequestOptions = {}): Promise<VrchatResponse<T>> {
     assertAllowedEndpoint(endpoint);
+    if (options.body !== undefined && options.formData) throw new Error("A VRChat request cannot contain both JSON and multipart bodies.");
 
     const url = new URL(endpoint, VRCHAT_API_BASE);
     for (const [name, value] of Object.entries(options.query || {})) {
@@ -175,7 +179,7 @@ export async function requestVrchat<T>(endpoint: string, options: VrchatRequestO
         response = await fetch(url, {
             method: options.method || "GET",
             headers,
-            body: options.body === undefined ? undefined : JSON.stringify(options.body),
+            body: options.formData || (options.body === undefined ? undefined : JSON.stringify(options.body)),
             cache: "no-store",
             redirect: "error",
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
