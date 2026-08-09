@@ -8,8 +8,8 @@ import { collections } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
+import { avatarIdSchema } from "@/lib/vrchat/ids";
 
-const avatarIdSchema = z.string().regex(/^avtr_[0-9a-f-]{36}$/i);
 const updateSchema = z.object({
     avatarId: avatarIdSchema,
     tags: z

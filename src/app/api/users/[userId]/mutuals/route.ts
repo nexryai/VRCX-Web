@@ -8,7 +8,7 @@ import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatUserSchema } from "@/lib/vrchat/types";
 
-const userIdSchema = z.string().regex(/^usr_[0-9a-f-]{36}$/i);
+const userIdSchema = z.string().regex(/^usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const querySchema = z.object({ offset: z.coerce.number().int().min(0).max(5_000).default(0) });
 
 export async function GET(request: NextRequest, context: RouteContext<"/api/users/[userId]/mutuals">) {

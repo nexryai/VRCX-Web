@@ -1,11 +1,12 @@
+import { VRCHAT_UUID_PATTERN_SOURCE } from "@/lib/vrchat/ids";
+
 export type FavoriteTransferKind = "avatar" | "friend" | "world";
 
 export const FAVORITE_TRANSFER_MAX_FILE_BYTES = 1_000_000;
-const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
 export function parseFavoriteIds(kind: FavoriteTransferKind, input: string, limit = 1_000) {
     const prefix = kind === "avatar" ? "avtr" : kind === "friend" ? "usr" : "wrld";
-    return Array.from(new Set(input.match(new RegExp(`${prefix}_${UUID_PATTERN}(?![0-9a-f-])`, "gi")) || [])).slice(0, limit);
+    return Array.from(new Set(input.match(new RegExp(`${prefix}_${VRCHAT_UUID_PATTERN_SOURCE}(?![0-9a-f-])`, "gi")) || [])).slice(0, limit);
 }
 
 export function isVrcxCsvExport(kind: FavoriteTransferKind, input: string): boolean {

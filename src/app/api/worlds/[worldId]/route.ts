@@ -8,7 +8,7 @@ import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatWorldSchema } from "@/lib/vrchat/types";
 
-const worldIdSchema = z.string().regex(/^wrld_[0-9a-f-]{36}$/i);
+const worldIdSchema = z.string().regex(/^wrld_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 
 export async function GET(request: NextRequest, context: RouteContext<"/api/worlds/[worldId]">) {
     const worldId = worldIdSchema.safeParse((await context.params).worldId);

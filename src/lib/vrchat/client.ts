@@ -34,22 +34,22 @@ const allowedEndpoints = [
 ];
 const allowedEndpointSet = new Set(allowedEndpoints);
 const allowedEndpointPatterns = [
-    /^avatars\/avtr_[0-9a-f-]{36}$/i,
-    /^avatars\/avtr_[0-9a-f-]{36}\/select$/i,
-    /^avatars\/avtr_[0-9a-f-]{36}\/impostor\/enqueue$/i,
-    /^users\/usr_[0-9a-f-]{36}$/i,
-    /^user\/usr_[0-9a-f-]{36}\/friendRequest$/i,
-    /^users\/usr_[0-9a-f-]{36}\/groups$/i,
-    /^worlds\/wrld_[0-9a-f-]{36}$/i,
-    /^groups\/grp_[0-9a-f-]{36}$/i,
-    /^groups\/grp_[0-9a-f-]{36}\/(posts|members)$/i,
-    /^groups\/grp_[0-9a-f-]{36}\/(block|join|leave|representation|requests)$/i,
-    /^groups\/grp_[0-9a-f-]{36}\/members\/usr_[0-9a-f-]{36}$/i,
-    /^users\/usr_[0-9a-f-]{36}\/mutuals\/friends$/i,
-    /^auth\/user\/friends\/usr_[0-9a-f-]{36}$/i,
+    /^avatars\/avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    /^avatars\/avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/select$/i,
+    /^avatars\/avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/impostor\/enqueue$/i,
+    /^users\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    /^user\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/friendRequest$/i,
+    /^users\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/groups$/i,
+    /^worlds\/wrld_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    /^groups\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    /^groups\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(posts|members)$/i,
+    /^groups\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(block|join|leave|representation|requests)$/i,
+    /^groups\/grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/members\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    /^users\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/mutuals\/friends$/i,
+    /^auth\/user\/friends\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     /^auth\/user\/notifications\/not_[a-z0-9_-]+\/(accept|hide|see)$/i,
-    /^favorites\/(usr|wrld|avtr)_[0-9a-f-]{36}$/i,
-    /^favorite\/group\/(avatar|friend|world|vrcPlusWorld)\/[a-z0-9_-]+\/usr_[0-9a-f-]{36}$/i,
+    /^favorites\/(usr|wrld|avtr)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    /^favorite\/group\/(avatar|friend|world|vrcPlusWorld)\/[a-z0-9_-]+\/usr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     /^notifications\/not_[a-z0-9_-]+$/i,
     /^notifications\/not_[a-z0-9_-]+\/(respond|see)$/i,
 ];
@@ -90,8 +90,12 @@ export class VrchatApiError extends Error {
     }
 }
 
+export function isAllowedVrchatEndpoint(endpoint: string): boolean {
+    return allowedEndpointSet.has(endpoint) || allowedEndpointPatterns.some((pattern) => pattern.test(endpoint));
+}
+
 function assertAllowedEndpoint(endpoint: string) {
-    if (!allowedEndpointSet.has(endpoint) && !allowedEndpointPatterns.some((pattern) => pattern.test(endpoint))) {
+    if (!isAllowedVrchatEndpoint(endpoint)) {
         throw new Error(`VRChat endpoint is not allowlisted: ${endpoint}`);
     }
 }

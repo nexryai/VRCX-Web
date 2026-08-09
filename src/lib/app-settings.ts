@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { userIdSchema } from "@/lib/vrchat/ids";
+
 export const appSettingsUpdateSchema = z
     .object({
         theme: z.enum(["dark", "light"]).optional(),
@@ -41,10 +43,7 @@ export const appSettingsUpdateSchema = z
         mutualGraphLayoutSpacing: z.number().int().min(8).max(240).optional(),
         mutualGraphEdgeCurvature: z.number().min(0).max(0.2).optional(),
         mutualGraphCommunitySeparation: z.number().min(0).max(3).optional(),
-        mutualGraphExcludedFriendIds: z
-            .array(z.string().regex(/^usr_[0-9a-f-]{36}$/i))
-            .max(10_000)
-            .optional(),
+        mutualGraphExcludedFriendIds: z.array(userIdSchema).max(10_000).optional(),
         avatarAutoCleanupDays: z.union([z.literal(0), z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).optional(),
     })
     .strict()

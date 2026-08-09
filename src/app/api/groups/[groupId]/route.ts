@@ -8,7 +8,7 @@ import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatGroupSchema } from "@/lib/vrchat/types";
 
-const groupIdSchema = z.string().regex(/^grp_[0-9a-f-]{36}$/i);
+const groupIdSchema = z.string().regex(/^grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 
 export async function GET(request: NextRequest, context: RouteContext<"/api/groups/[groupId]">) {
     const groupId = groupIdSchema.safeParse((await context.params).groupId);

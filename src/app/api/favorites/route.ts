@@ -10,6 +10,7 @@ import { upsertFavoriteProjection } from "@/lib/mongodb/projection-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
+import { avatarIdSchema, userIdSchema, worldIdSchema } from "@/lib/vrchat/ids";
 import type { VrchatCookies } from "@/lib/vrchat/protocol";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema, vrchatFavoriteLimitsSchema, vrchatFavoriteSchema, vrchatWorldSchema } from "@/lib/vrchat/types";
@@ -30,9 +31,9 @@ const querySchema = z.discriminatedUnion("section", [
 
 const favoriteTagSchema = z.string().regex(/^[a-z0-9_-]+$/i);
 const addSchema = z.discriminatedUnion("type", [
-    z.object({ type: z.literal("avatar"), favoriteId: z.string().regex(/^avtr_[0-9a-f-]{36}$/i), tags: favoriteTagSchema }),
-    z.object({ type: z.literal("friend"), favoriteId: z.string().regex(/^usr_[0-9a-f-]{36}$/i), tags: favoriteTagSchema }),
-    z.object({ type: z.enum(["vrcPlusWorld", "world"]), favoriteId: z.string().regex(/^wrld_[0-9a-f-]{36}$/i), tags: favoriteTagSchema }),
+    z.object({ type: z.literal("avatar"), favoriteId: avatarIdSchema, tags: favoriteTagSchema }),
+    z.object({ type: z.literal("friend"), favoriteId: userIdSchema, tags: favoriteTagSchema }),
+    z.object({ type: z.enum(["vrcPlusWorld", "world"]), favoriteId: worldIdSchema, tags: favoriteTagSchema }),
 ]);
 
 export async function GET(request: NextRequest) {

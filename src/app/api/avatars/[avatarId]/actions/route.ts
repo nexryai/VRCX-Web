@@ -6,7 +6,7 @@ import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 
-const avatarIdSchema = z.string().regex(/^avtr_[0-9a-f-]{36}$/i);
+const avatarIdSchema = z.string().regex(/^avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const actionSchema = z.object({ action: z.enum(["enqueue-impostor", "select"]) });
 
 export async function POST(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]/actions">) {

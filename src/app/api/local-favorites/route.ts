@@ -6,15 +6,14 @@ import { addLocalFavorite, createLocalFavoriteGroup, deleteLocalFavorite, delete
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { VrchatApiError } from "@/lib/vrchat/client";
+import { favoriteObjectIdSchema, localFavoriteGroupIdSchema } from "@/lib/vrchat/ids";
 
 const kindSchema = z.enum(["avatar", "friend", "world"]);
-const groupIdSchema = z.string().regex(/^lfg_[0-9a-f-]{36}$/i);
-const objectIdSchema = z.string().regex(/^(avtr|usr|wrld)_[0-9a-f-]{36}$/i);
 const groupNameSchema = z.string().trim().min(1).max(64);
-const querySchema = z.object({ kind: kindSchema, groupId: groupIdSchema.optional() });
-const createSchema = z.discriminatedUnion("action", [z.object({ action: z.literal("create-group"), kind: kindSchema, name: groupNameSchema }), z.object({ action: z.literal("add"), kind: kindSchema, groupId: groupIdSchema, objectId: objectIdSchema })]);
-const renameSchema = z.object({ groupId: groupIdSchema, name: groupNameSchema });
-const deleteSchema = z.discriminatedUnion("action", [z.object({ action: z.literal("group"), groupId: groupIdSchema }), z.object({ action: z.literal("item"), groupId: groupIdSchema, objectId: objectIdSchema })]);
+const querySchema = z.object({ kind: kindSchema, groupId: localFavoriteGroupIdSchema.optional() });
+const createSchema = z.discriminatedUnion("action", [z.object({ action: z.literal("create-group"), kind: kindSchema, name: groupNameSchema }), z.object({ action: z.literal("add"), kind: kindSchema, groupId: localFavoriteGroupIdSchema, objectId: favoriteObjectIdSchema })]);
+const renameSchema = z.object({ groupId: localFavoriteGroupIdSchema, name: groupNameSchema });
+const deleteSchema = z.discriminatedUnion("action", [z.object({ action: z.literal("group"), groupId: localFavoriteGroupIdSchema }), z.object({ action: z.literal("item"), groupId: localFavoriteGroupIdSchema, objectId: favoriteObjectIdSchema })]);
 
 export async function GET(request: NextRequest) {
     const query = querySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));

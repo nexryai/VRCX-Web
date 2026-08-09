@@ -8,7 +8,7 @@ import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatGroupMemberSchema } from "@/lib/vrchat/types";
 
-const groupIdSchema = z.string().regex(/^grp_[0-9a-f-]{36}$/i);
+const groupIdSchema = z.string().regex(/^grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const offsetSchema = z.coerce.number().int().min(0).max(5_000).default(0);
 const pageSize = 100;
 

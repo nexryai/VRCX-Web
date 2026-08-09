@@ -8,6 +8,7 @@ import { ensureMongoSchema } from "@/lib/mongodb/migrations";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { cancelMutualGraphJob, startMutualGraphJob } from "@/lib/mutual-graph-job";
 import { isMutationOriginAllowed } from "@/lib/request-security";
+import { userIdSchema } from "@/lib/vrchat/ids";
 import { requireVrchatCookies } from "@/lib/vrchat/session";
 
 export async function GET() {
@@ -39,10 +40,7 @@ export async function POST(request: NextRequest) {
     if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const body = z
         .object({
-            friendId: z
-                .string()
-                .regex(/^usr_[0-9a-f-]{36}$/i)
-                .optional(),
+            friendId: userIdSchema.optional(),
         })
         .safeParse(await request.json().catch(() => ({})));
     if (!body.success) return NextResponse.json({ error: "The mutual graph request is invalid." }, { status: 400 });

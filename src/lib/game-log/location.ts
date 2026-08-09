@@ -5,8 +5,8 @@ export type ParsedLocation = {
     groupId?: string;
 };
 
-const WORLD_ID_PATTERN = /^wrld_[0-9a-f-]{36}$/i;
-const GROUP_TAG_PATTERN = /(?:^|~)group\((grp_[0-9a-f-]{36})\)/i;
+const WORLD_ID_PATTERN = /^wrld_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const GROUP_TAG_PATTERN = /(?:^|~)group\((grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)/i;
 
 /**
  * VRChat uses sentinel values such as offline/private/traveling alongside

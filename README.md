@@ -44,6 +44,7 @@ One monitor leader owns the active VRChat session, realtime connection, backgrou
 - VRChat credentials, cookies, tokens, MongoDB connection strings, and encryption keys remain server-side and must never enter browser storage or logs.
 - Restart-persistent VRChat session material is encrypted with AES-256-GCM before storage in MongoDB; its encryption key is configured outside MongoDB and the repository.
 - Upstream requests use typed, fixed-host, allowlisted service boundaries rather than a general-purpose proxy.
+- VRChat user, world, avatar, and group IDs must use their expected prefix and canonical UUID separator positions at browser, route, stored-setting, location-parser, and upstream allowlist boundaries; a merely 36-character hex-and-hyphen suffix is rejected.
 - Single-user operation does not remove normal XSS, CSRF, request-forgery, validation, cache, and secret-handling requirements.
 
 ## Development

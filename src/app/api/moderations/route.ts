@@ -9,10 +9,11 @@ import { deactivateModeration } from "@/lib/mongodb/projection-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
+import { userIdSchema } from "@/lib/vrchat/ids";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 
 const deleteSchema = z.object({
-    moderated: z.string().regex(/^usr_[0-9a-f-]{36}$/i),
+    moderated: userIdSchema,
     type: z.string().trim().min(1).max(64),
 });
 

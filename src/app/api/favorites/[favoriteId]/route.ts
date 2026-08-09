@@ -1,18 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { z } from "zod";
-
 import { deactivateFavorite } from "@/lib/mongodb/projection-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
+import { favoriteObjectIdSchema } from "@/lib/vrchat/ids";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
-
-const favoriteIdSchema = z.string().regex(/^(avtr|usr|wrld)_[0-9a-f-]{36}$/i);
 
 export async function DELETE(request: NextRequest, context: RouteContext<"/api/favorites/[favoriteId]">) {
     if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
-    const favoriteId = favoriteIdSchema.safeParse((await context.params).favoriteId);
+    const favoriteId = favoriteObjectIdSchema.safeParse((await context.params).favoriteId);
     if (!favoriteId.success) return NextResponse.json({ error: "The favorite ID is invalid." }, { status: 400 });
 
     let expectedAuthCookie: string | undefined;

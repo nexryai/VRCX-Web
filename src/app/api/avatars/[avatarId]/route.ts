@@ -9,7 +9,7 @@ import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema } from "@/lib/vrchat/types";
 
-const avatarIdSchema = z.string().regex(/^avtr_[0-9a-f-]{36}$/i);
+const avatarIdSchema = z.string().regex(/^avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const updateSchema = z
     .object({
         name: z.string().trim().min(1).max(64).optional(),

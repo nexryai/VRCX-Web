@@ -51,6 +51,7 @@ Browser <------ VRCX-parity React UI <------ Next.js routes/server actions <--- 
 - Run one logical monitor leader. If the deployment has multiple Node.js processes, use a MongoDB-backed lease with expiry and renewal to prevent duplicate Pipeline connections and jobs.
 - Start monitoring after a stored session is validated. Authentication-required state is durable and visible to the operator.
 - Keep interactive API requests and background synchronization behind the same typed, allowlisted VRChat client and coordinated rate-limit budget.
+- Validate entity identifiers with the shared canonical VRChat prefix/UUID schemas. Dynamic route parameters, JSON bodies, stored setting IDs, Game Log location/group parsing, and every variable upstream allowlist path reject missing, repeated, misplaced, or trailing separators before a request can leave the server.
 
 ### Observation Model
 
@@ -388,6 +389,7 @@ Status: Planned
 - [x] Accept and validate the browser-compatible VRCX Favorites, friend-list, and owned-avatar CSV ID exports without runtime access to `./VRCX/`.
 - [ ] Test prolonged operation, rate limits, upstream outages, malformed events, session expiry, MongoDB interruption, process restart, and lease failover.
 - [ ] Audit route allowlists, XSS, CSRF, request forgery, cache behavior, secrets, encryption, logging, and accidental public exposure.
+- [x] Audit and harden VRChat entity-ID validation across route parameters, mutation bodies, stored settings, location parsing, and the upstream endpoint allowlist.
 - [ ] Verify MongoDB backup/restore and retention/cleanup workflows.
 - [x] Verify the isolated backup/restore mechanism with MongoDB Database Tools 100.17.0 and retain automated fingerprint coverage.
 - [ ] Complete keyboard, focus, labels, contrast, reduced-motion, touch, and responsive audits.
@@ -536,3 +538,5 @@ The 2026-08-09 MongoDB recovery-proof increment passed `pnpm test` (13 files, 57
 The 2026-08-09 legacy-browser-settings increment passed `pnpm test` (14 files, 61 tests), `pnpm lint` (154 files), and `pnpm build` (27 generated pages). Git history inspection confirmed the three-key migration boundary. Automated coverage verifies exact historical parsing, malformed and unrelated storage isolation, imported-key cleanup, migration 25, MongoDB evidence, and atomic first-import-wins behavior. A fixture-backed HTTP proof returned 200 for the first three-value import, 409 for a conflicting second import, and retained the first MongoDB values. Browser interaction capture was attempted but Chromium could not launch because this workspace lacks `libglib-2.0.so.0`; the pure browser-storage behavior and server route are verified separately, while rendered confirmation/message evidence remains outstanding. Browser-compatible VRCX export handling is classified and verified in the following increment.
 
 The 2026-08-09 VRCX CSV compatibility increment passed `pnpm test` (14 files, 62 tests), `pnpm lint` (154 files), and `pnpm build` (27 generated pages). Regression fixtures are taken from the five eligible VRCX export layouts and cover headers appearing at either end of the CSV, kind isolation, deduplication, and malformed UUID rejection. Favorites now labels a recognized VRCX CSV before processing, bounds file input to 1 MB, and reports file-read failures without issuing upstream requests. Actual item resolution, MongoDB local-group import, remote capacity enforcement, cancellation, and CSV formula neutralization remain covered by the existing Favorites workflow. Registry backup remains explicitly local-only, and no nonexistent general VRCX export format is claimed.
+
+The 2026-08-09 entity-ID hardening increment passed `pnpm test` (15 files, 65 tests), `pnpm lint` (156 files), and `pnpm build` (27 generated pages). The audit replaced every permissive `[0-9a-f-]{36}` check in root source: 26 API input boundaries, both Game Log world/group extractors, and 15 variable upstream endpoint patterns now require canonical UUID separator positions. Shared Zod schemas cover reusable mutation, setting, memo, favorite, and tag bodies; regression tests reject missing, repeated, misplaced, and trailing separators and prove that malformed IDs cannot match the fixed-host upstream allowlist. The broader XSS, cache, logging, deployment-exposure, and remaining security checklist stays open.

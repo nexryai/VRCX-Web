@@ -10,7 +10,7 @@ import type { VrchatCookies } from "@/lib/vrchat/protocol";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatGroupSchema } from "@/lib/vrchat/types";
 
-const groupIdSchema = z.string().regex(/^grp_[0-9a-f-]{36}$/i);
+const groupIdSchema = z.string().regex(/^grp_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 const actionSchema = z.discriminatedUnion("action", [
     z.object({ action: z.enum(["block", "cancel-request", "join", "leave", "unblock"]) }).strict(),
     z.object({ action: z.literal("representation"), value: z.boolean() }).strict(),
