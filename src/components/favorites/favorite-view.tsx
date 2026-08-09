@@ -6,7 +6,7 @@ import { Download, Ellipsis, ImageIcon, Loader2, Pencil, Plus, RefreshCcw, Refre
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { useFriends } from "@/components/friends/friends-provider";
-import { formatFavoriteCsv, parseFavoriteIds } from "@/lib/favorites-transfer";
+import { FAVORITE_TRANSFER_MAX_FILE_BYTES, formatFavoriteCsv, isVrcxCsvExport, parseFavoriteIds } from "@/lib/favorites-transfer";
 import { locationLabel } from "@/lib/friends";
 import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatFavoriteLimits, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
@@ -814,6 +814,7 @@ function FavoriteImportDialog({ kind, remoteGroups, localGroups, close, complete
 
     const ids = parsedIds();
     const validCount = candidates.filter((candidate) => candidate.item).length;
+    const vrcxCsv = isVrcxCsvExport(kind, input);
     return (
         <DialogFrame
             title={`Import favorite ${kind}s`}
@@ -823,7 +824,7 @@ function FavoriteImportDialog({ kind, remoteGroups, localGroups, close, complete
             }}
             wide
         >
-            <p className="mt-3 text-xs text-muted-foreground">Paste a list containing VRChat {kind} IDs, or load a text/CSV file. The server validates each item through the allowlisted VRChat API before it can enter a local group.</p>
+            <p className="mt-3 text-xs text-muted-foreground">Paste a list containing VRChat {kind} IDs, or load a VRCX-compatible text/CSV export. The server validates each item through the allowlisted VRChat API before it can enter a local group.</p>
             <textarea
                 value={input}
                 onChange={(event) => {
@@ -832,6 +833,7 @@ function FavoriteImportDialog({ kind, remoteGroups, localGroups, close, complete
                     setResult("");
                 }}
                 rows={6}
+                maxLength={FAVORITE_TRANSFER_MAX_FILE_BYTES}
                 className="mt-3 w-full resize-y rounded-md border border-input bg-background p-2 font-mono text-xs"
                 placeholder={`${kind === "avatar" ? "avtr" : kind === "friend" ? "usr" : "wrld"}_...`}
             />
@@ -843,7 +845,22 @@ function FavoriteImportDialog({ kind, remoteGroups, localGroups, close, complete
                     className="sr-only"
                     onChange={(event) => {
                         const file = event.target.files?.[0];
-                        if (file) void file.text().then(setInput);
+                        if (!file) return;
+                        event.currentTarget.value = "";
+                        if (file.size > FAVORITE_TRANSFER_MAX_FILE_BYTES) {
+                            setInput("");
+                            setCandidates([]);
+                            setResult("Import failed: The file is larger than 1 MB.");
+                            return;
+                        }
+                        void file
+                            .text()
+                            .then((value) => {
+                                setInput(value);
+                                setCandidates([]);
+                                setResult("");
+                            })
+                            .catch(() => setResult("Import failed: The file could not be read."));
                     }}
                 />
                 <button type="button" onClick={() => fileInput.current?.click()} className="inline-flex h-8 items-center gap-2 rounded-md border border-input px-3 text-xs">
@@ -861,6 +878,12 @@ function FavoriteImportDialog({ kind, remoteGroups, localGroups, close, complete
                 {processing ? (
                     <span className="text-xs tabular-nums text-muted-foreground">
                         {progress} / {candidates.length ? Math.max(candidates.length, ids.length) : ids.length}
+                    </span>
+                ) : null}
+                {ids.length ? (
+                    <span className="text-xs text-muted-foreground">
+                        {vrcxCsv ? "VRCX CSV detected · " : ""}
+                        {ids.length} unique {kind} {ids.length === 1 ? "ID" : "IDs"}
                     </span>
                 ) : null}
             </div>
