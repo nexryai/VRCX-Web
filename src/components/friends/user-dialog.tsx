@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { CalendarDays, Clipboard, ExternalLink, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import { CalendarDays, Clipboard, ExternalLink, History, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
+import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
@@ -46,7 +47,9 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
     const [tabLoading, setTabLoading] = useState(false);
     const [tabLoaded, setTabLoaded] = useState<Set<UserTab>>(new Set(["Info", "JSON"]));
     const [tabSearch, setTabSearch] = useState("");
+    const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
+    const previousInstancesButton = useRef<HTMLButtonElement>(null);
     const friendsRef = useRef(friends);
     friendsRef.current = friends;
 
@@ -62,6 +65,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
         setGroups([]);
         setWorlds([]);
         setActivity([]);
+        setPreviousInstancesOpen(false);
         fetch(`/api/users/${encodeURIComponent(userId)}`, { cache: "no-store", signal: controller.signal })
             .then(async (response) => {
                 const payload = (await response.json()) as { error?: string; user?: VrchatUser };
@@ -265,7 +269,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                         <Loader2 className="size-5 animate-spin text-muted-foreground" aria-label={`Loading ${activeTab}`} />
                                     </div>
                                 ) : null}
-                                {!tabLoading && activeTab === "Info" ? <InfoTab user={user} onNoteChange={(note) => setUser((current) => (current ? { ...current, note } : current))} /> : null}
+                                {!tabLoading && activeTab === "Info" ? <InfoTab user={user} onNoteChange={(note) => setUser((current) => (current ? { ...current, note } : current))} onOpenPreviousInstances={() => setPreviousInstancesOpen(true)} previousInstancesButton={previousInstancesButton} /> : null}
                                 {!tabLoading && activeTab === "Mutual" ? <MutualTab users={mutuals} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Mutual", true)} openUser={openUser} /> : null}
                                 {!tabLoading && activeTab === "Groups" ? <GroupsTab groups={groups} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Groups", true)} openGroup={openGroup} /> : null}
                                 {!tabLoading && activeTab === "Worlds" ? <WorldsTab worlds={worlds} search={tabSearch} setSearch={setTabSearch} refresh={() => void loadTab("Worlds", true)} openWorld={openWorld} /> : null}
@@ -276,6 +280,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                     </div>
                 ) : null}
             </section>
+            {previousInstancesOpen && user ? <PreviousInstancesDialog variant="user" entityId={user.id} label={user.displayName} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
         </div>
     );
 }
@@ -481,7 +486,7 @@ function UserNoteField({ user, onNoteChange }: { user: VrchatUser; onNoteChange:
     );
 }
 
-function InfoTab({ user, onNoteChange }: { user: VrchatUser; onNoteChange: (note: string) => void }) {
+function InfoTab({ user, onNoteChange, onOpenPreviousInstances, previousInstancesButton }: { user: VrchatUser; onNoteChange: (note: string) => void; onOpenPreviousInstances: () => void; previousInstancesButton: React.RefObject<HTMLButtonElement | null> }) {
     return (
         <div className="space-y-2">
             <section className="rounded-xl bg-background p-1.5">
@@ -500,6 +505,9 @@ function InfoTab({ user, onNoteChange }: { user: VrchatUser; onNoteChange: (note
                     </div>
                     <VrchatImage src={user.world?.thumbnailImageUrl} alt="" className="h-16 w-24 rounded-lg object-cover" loading="lazy" />
                 </div>
+                <button ref={previousInstancesButton} type="button" onClick={onOpenPreviousInstances} className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                    <History className="size-3.5" /> Previous Instances
+                </button>
             </section>
             <section className="rounded-xl bg-background p-3">
                 <SectionTitle>Bio</SectionTitle>

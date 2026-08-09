@@ -200,6 +200,7 @@ export type ActivityEventDocument = {
     displayName: string;
     previous?: string;
     current?: string;
+    previousSnapshotObservedAt?: Date;
     occurredAt: Date;
     observedAt: Date;
     provenance: "pipeline" | "reconciliation";

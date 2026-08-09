@@ -222,7 +222,11 @@ await database.collection("favorite_groups").insertMany([
     { _id: `${ownerId}:world:worlds1`, ownerId, groupId: "world:worlds1", group: { id: "world:worlds1", name: "worlds1", displayName: "Cozy Worlds", type: "world", visibility: "private" }, active: true, observedAt: now, updatedAt: now },
     { _id: `${ownerId}:avatar:avatars1`, ownerId, groupId: "avatar:avatars1", group: { id: "avatar:avatars1", name: "avatars1", displayName: "Daily Avatars", type: "avatar", visibility: "public" }, active: true, observedAt: now, updatedAt: now },
 ]);
-await database.collection("worlds").insertOne({ _id: `${ownerId}:${favoriteWorld.id}`, ownerId, worldId: favoriteWorld.id, world: favoriteWorld, source: "favorite", observedAt: now, updatedAt: now });
+await database.collection("worlds").insertMany([
+    { _id: `${ownerId}:${favoriteWorld.id}`, ownerId, worldId: favoriteWorld.id, world: favoriteWorld, source: "favorite", observedAt: now, updatedAt: now },
+    { _id: `${ownerId}:wrld_00000000-0000-0000-0000-000000000010`, ownerId, worldId: "wrld_00000000-0000-0000-0000-000000000010", world: { id: "wrld_00000000-0000-0000-0000-000000000010", name: "The Great Pug" }, source: "session", observedAt: now, updatedAt: now },
+    { _id: `${ownerId}:wrld_00000000-0000-0000-0000-000000000011`, ownerId, worldId: "wrld_00000000-0000-0000-0000-000000000011", world: { id: "wrld_00000000-0000-0000-0000-000000000011", name: "Midnight Rooftop" }, source: "session", observedAt: now, updatedAt: now },
+]);
 await database.collection("avatars").insertOne({ _id: `${ownerId}:${favoriteAvatar.id}`, ownerId, avatarId: favoriteAvatar.id, avatar: favoriteAvatar, source: "favorite", observedAt: now, updatedAt: now });
 await database.collection("avatars").insertMany(ownedAvatars.map((avatar) => ({ _id: `${ownerId}:${avatar.id}`, ownerId, avatarId: avatar.id, avatar, source: "owned", observedAt: now, updatedAt: now })));
 await database.collection("avatar_tags").insertMany([
@@ -399,6 +403,7 @@ await database.collection("activity_events").insertMany([
         displayName: friends[0].displayName,
         previous: "wrld_00000000-0000-0000-0000-000000000011:54321",
         current: friends[0].location,
+        previousSnapshotObservedAt: new Date(now.getTime() - 95 * 60_000),
         occurredAt: new Date(now.getTime() - 5 * 60_000),
         observedAt: now,
         provenance: "pipeline",
@@ -557,6 +562,25 @@ await database.collection("game_sessions").insertMany([
         endSource: "pipeline",
         firstObservedAt: new Date(now.getTime() - 4 * 60 * 60_000),
         lastObservedAt: new Date(now.getTime() - 2 * 60 * 60_000),
+        current: false,
+        closeReason: "location-change",
+        updatedAt: now,
+    },
+    {
+        _id: "session-favorite-world",
+        ownerId,
+        location: `${favoriteWorld.id}:67890~region(jp)`,
+        worldId: favoriteWorld.id,
+        instanceId: "67890",
+        worldName: favoriteWorld.name,
+        startedAt: new Date(now.getTime() - 8 * 60 * 60_000),
+        endedAt: new Date(now.getTime() - 7 * 60 * 60_000),
+        startPrecision: "observed",
+        startSource: "reconciliation",
+        endPrecision: "observed",
+        endSource: "reconciliation",
+        firstObservedAt: new Date(now.getTime() - 8 * 60 * 60_000),
+        lastObservedAt: new Date(now.getTime() - 7 * 60 * 60_000),
         current: false,
         closeReason: "location-change",
         updatedAt: now,

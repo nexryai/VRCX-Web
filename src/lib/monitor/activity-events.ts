@@ -60,6 +60,7 @@ export async function persistActivityTransitions({ ownerId, events, previousDocu
                 displayName: event.displayName,
                 ...(event.previous !== undefined ? { previous: event.previous } : {}),
                 ...(event.current !== undefined ? { current: event.current } : {}),
+                ...(previous ? { previousSnapshotObservedAt: previous.updatedAt } : {}),
                 occurredAt: Number.isNaN(occurredAt.getTime()) ? observedAt : occurredAt,
                 observedAt,
                 provenance,

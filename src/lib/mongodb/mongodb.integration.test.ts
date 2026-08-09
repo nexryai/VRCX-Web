@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -49,7 +49,7 @@ describe("MongoDB application repositories", () => {
             mutualGraphExcludedFriendIds: [],
             legacyBrowserSettingsImportVersion: 0,
         });
-        const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner"]);
+        const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner", "owner_world_started", "owner_group_started"]);
         expect(sessionIndexes).toBe(true);
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
@@ -337,6 +337,36 @@ describe("MongoDB application repositories", () => {
         expect(sessions[1]).toMatchObject({ location: secondLocation, current: true, lastObservedAt: new Date("2026-08-02T12:20:00.000Z") });
     });
 
+    test("queries Previous Instances from durable self sessions without local game-log data", async () => {
+        const { observeGameSession } = await import("@/lib/game-log/session-repository");
+        const { listPreviousInstances } = await import("./previous-instances-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000091";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000094";
+        const worldId = "wrld_00000000-0000-0000-0000-000000000092";
+        const groupId = "grp_00000000-0000-0000-0000-000000000093";
+        const firstLocation = `${worldId}:111~group(${groupId})~region(us)`;
+        const secondLocation = `${worldId}:222~group(${groupId})~region(eu)`;
+
+        await observeGameSession({ ownerId, location: firstLocation, worldName: "Observed World", groupName: "Observed Group", observedAt: new Date("2026-08-09T13:00:00.000Z"), provenance: "pipeline" });
+        await observeGameSession({ ownerId, location: secondLocation, worldName: "Observed World", groupName: "Observed Group", observedAt: new Date("2026-08-09T13:10:00.000Z"), provenance: "pipeline" });
+        await observeGameSession({ ownerId, location: firstLocation, worldName: "Observed World", groupName: "Observed Group", observedAt: new Date("2026-08-09T13:30:00.000Z"), provenance: "reconciliation" });
+        await observeGameSession({ ownerId, location: "private", observedAt: new Date("2026-08-09T13:50:00.000Z"), provenance: "reconciliation" });
+        await observeGameSession({ ownerId: otherOwnerId, location: firstLocation, observedAt: new Date("2026-08-09T12:00:00.000Z"), provenance: "pipeline" });
+        await observeGameSession({ ownerId: otherOwnerId, location: "offline", observedAt: new Date("2026-08-09T14:00:00.000Z"), provenance: "pipeline" });
+
+        const userRows = await listPreviousInstances(ownerId, "user", ownerId);
+        expect(userRows).toHaveLength(3);
+        expect(userRows.map((row) => row.source)).toEqual(["active-account-session", "active-account-session", "active-account-session"]);
+
+        const worldRows = await listPreviousInstances(ownerId, "world", worldId);
+        expect(worldRows).toHaveLength(2);
+        expect(worldRows.find((row) => row.location === firstLocation)).toMatchObject({ worldName: "Observed World", groupName: "Observed Group", observationCount: 2, durationMs: 30 * 60_000, current: false });
+        expect(worldRows.find((row) => row.location === secondLocation)).toMatchObject({ observationCount: 1, durationMs: 20 * 60_000 });
+
+        const groupRows = await listPreviousInstances(ownerId, "group", groupId);
+        expect(groupRows.map((row) => row.location)).toEqual(worldRows.map((row) => row.location));
+    });
+
     test("retains inactive favorite and moderation projections for history", async () => {
         const { clearFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection, upsertFavoriteGroupProjection } = await import("./projection-repository");
         const { getMongoDatabase } = await import("./client");
@@ -449,7 +479,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         expect(await database.collection("activity_events").countDocuments({ ownerId, type: "Friend" })).toBe(1);
         expect(await database.collection("activity_events").countDocuments({ ownerId, type: "GPS" })).toBe(1);
-        expect(await database.collection("activity_events").findOne({ ownerId, type: "GPS" })).toMatchObject({ provenance: "pipeline", observedAt: new Date("2026-08-02T15:05:00.000Z") });
+        expect(await database.collection("activity_events").findOne({ ownerId, type: "GPS" })).toMatchObject({ provenance: "pipeline", observedAt: new Date("2026-08-02T15:05:00.000Z"), previousSnapshotObservedAt: previous.updatedAt });
 
         const unfriended: FriendActivity = { id: "unfriend", type: "Unfriend", userId: friendId, displayName: "Retry Friend", createdAt: "2026-08-02T15:10:00.000Z" };
         await persistActivityTransitions({ ownerId, events: [unfriended], previousDocuments: [previous], observedAt: new Date(unfriended.createdAt), provenance: "pipeline" });

@@ -324,6 +324,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ legacyBrowserSettingsImportVersion: { $exists: false } }, { $set: { legacyBrowserSettingsImportVersion: 0, updatedAt: new Date() } });
         },
     },
+    {
+        version: 26,
+        name: "add-previous-instance-query-indexes",
+        async apply(c) {
+            await Promise.all([c.gameSessions.createIndex({ ownerId: 1, worldId: 1, startedAt: -1 }, { name: "owner_world_started" }), c.gameSessions.createIndex({ ownerId: 1, groupId: 1, startedAt: -1 }, { name: "owner_group_started" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

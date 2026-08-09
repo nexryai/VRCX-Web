@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Bell, BellOff, Bookmark, BookmarkCheck, Check, Clipboard, Ellipsis, ExternalLink, Eye, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Search, ShieldCheck, Trash2, Users, X, XCircle } from "lucide-react";
+import { Bell, BellOff, Bookmark, BookmarkCheck, Check, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Search, ShieldCheck, Trash2, Users, X, XCircle } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
+import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
@@ -34,7 +35,9 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [search, setSearch] = useState("");
     const [actionLoading, setActionLoading] = useState<GroupActionName | "">("");
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+    const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
     const closeButton = useRef<HTMLButtonElement>(null);
+    const previousInstancesButton = useRef<HTMLButtonElement>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -110,6 +113,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setSearch("");
         setActionLoading("");
         setConfirmAction(null);
+        setPreviousInstancesOpen(false);
         void Promise.all([load(), loadPosts()]);
         closeButton.current?.focus();
     }, [load, loadPosts]);
@@ -241,7 +245,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                     <Loader2 className="size-5 animate-spin text-muted-foreground" />
                                 </div>
                             ) : null}
-                            {!tabLoading && tab === "Info" ? <GroupInfo group={group} friends={groupFriends} announcement={posts[0]} openUser={openUser} copy={copy} /> : null}
+                            {!tabLoading && tab === "Info" ? <GroupInfo group={group} friends={groupFriends} announcement={posts[0]} openUser={openUser} copy={copy} onOpenPreviousInstances={() => setPreviousInstancesOpen(true)} previousInstancesButton={previousInstancesButton} /> : null}
                             {!tabLoading && tab === "Posts" ? <GroupPosts posts={posts} search={search} setSearch={setSearch} refresh={() => void loadPosts(true)} openUser={openUser} /> : null}
                             {!tabLoading && tab === "Members" ? <GroupMembers group={group} members={members} search={search} setSearch={setSearch} refresh={() => void loadMembers(0, true)} loadMore={() => void loadMembers(members.length, true)} hasMore={hasMoreMembers} openUser={openUser} /> : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(group, null, 2)}</pre> : null}
@@ -249,6 +253,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                     </>
                 ) : null}
             </section>
+            {previousInstancesOpen && group ? <PreviousInstancesDialog variant="group" entityId={group.id} label={group.name} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
         </div>
     );
 }
@@ -367,7 +372,23 @@ function GroupActionConfirmation({ group, action, loading, cancel, confirm }: { 
     );
 }
 
-function GroupInfo({ group, friends, announcement, openUser, copy }: { group: VrchatGroup; friends: VrchatUser[]; announcement?: VrchatGroupPost; openUser: (userId: string) => void; copy: (value: string) => Promise<void> }) {
+function GroupInfo({
+    group,
+    friends,
+    announcement,
+    openUser,
+    copy,
+    onOpenPreviousInstances,
+    previousInstancesButton,
+}: {
+    group: VrchatGroup;
+    friends: VrchatUser[];
+    announcement?: VrchatGroupPost;
+    openUser: (userId: string) => void;
+    copy: (value: string) => Promise<void>;
+    onOpenPreviousInstances: () => void;
+    previousInstancesButton: React.RefObject<HTMLButtonElement | null>;
+}) {
     const instances = Array.from(new Set(friends.map((friend) => friend.location).filter((location): location is string => Boolean(location))));
     const links = (group.links || []).map((link) => safeExternalHttpUrl(link)).filter(Boolean);
     return (
@@ -409,6 +430,12 @@ function GroupInfo({ group, friends, announcement, openUser, copy }: { group: Vr
                 <FullInfo label="Rules" value={group.rules || "—"} />
                 <Info label="Members" value={`${number(group.memberCount)} (${number(group.onlineMemberCount)})`} icon={<Users className="size-3.5" />} />
                 <Info label="Created" value={date(group.createdAt)} />
+                <button ref={previousInstancesButton} type="button" onClick={onOpenPreviousInstances} aria-label="Previous Instances" className="box-border w-[167px] rounded p-1.5 text-left text-[13px] hover:bg-muted">
+                    <span className="flex items-center gap-1 font-medium leading-[18px]">
+                        <History className="size-3.5" /> Previous Instances
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">Remote visit history</span>
+                </button>
                 <Info label="Join state" value={group.joinState || "—"} />
                 <Info label="Privacy" value={group.privacy === "default" ? "public" : group.privacy || "—"} />
                 <Info label="Roles" value={number(group.roles?.length)} />

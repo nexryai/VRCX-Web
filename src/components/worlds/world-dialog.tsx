@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, Clipboard, ExternalLink, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, User, X } from "lucide-react";
+import { Apple, Clipboard, ExternalLink, History, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, User, X } from "lucide-react";
 
 import { FavoriteAction } from "@/components/favorite-action";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { MemoField } from "@/components/memo-field";
+import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import type { VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 
@@ -18,7 +19,9 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [copied, setCopied] = useState("");
+    const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
     const closeButton = useRef<HTMLButtonElement>(null);
+    const previousInstancesButton = useRef<HTMLButtonElement>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -42,6 +45,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     useEffect(() => {
         setWorld(null);
         setTab("Info");
+        setPreviousInstancesOpen(false);
         void load();
         closeButton.current?.focus();
     }, [load]);
@@ -138,7 +142,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                             ))}
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-card p-3">
-                            {tab === "Info" ? <WorldInfo world={world} copy={copy} copied={copied} /> : null}
+                            {tab === "Info" ? <WorldInfo world={world} copy={copy} copied={copied} onOpenPreviousInstances={() => setPreviousInstancesOpen(true)} previousInstancesButton={previousInstancesButton} /> : null}
                             {tab === "Instances" ? (
                                 <WorldInstances
                                     world={world}
@@ -154,11 +158,12 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                     </>
                 ) : null}
             </section>
+            {previousInstancesOpen && world ? <PreviousInstancesDialog variant="world" entityId={world.id} label={world.name} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
         </div>
     );
 }
 
-function WorldInfo({ world, copy, copied }: { world: VrchatWorld; copy: (value: string, label: string) => Promise<void>; copied: string }) {
+function WorldInfo({ world, copy, copied, onOpenPreviousInstances, previousInstancesButton }: { world: VrchatWorld; copy: (value: string, label: string) => Promise<void>; copied: string; onOpenPreviousInstances: () => void; previousInstancesButton: React.RefObject<HTMLButtonElement | null> }) {
     const favoriteRate = world.visits ? `${Math.round(((world.favorites || 0) / world.visits) * 10_000) / 100}%` : "—";
     const platforms = worldPlatforms(world).map(platformLabel).join(", ") || "Unknown";
     const occupants = world.occupants ?? (world.publicOccupants !== undefined || world.privateOccupants !== undefined ? (world.publicOccupants || 0) + (world.privateOccupants || 0) : undefined);
@@ -172,6 +177,12 @@ function WorldInfo({ world, copy, copied }: { world: VrchatWorld; copy: (value: 
             <Info label="Capacity" value={`${world.recommendedCapacity ?? world.capacity ?? "—"} / ${world.capacity ?? "—"}`} />
             <Info label="Favorites" value={number(world.favorites)} />
             <Info label="Visits" value={number(world.visits)} />
+            <button ref={previousInstancesButton} type="button" onClick={onOpenPreviousInstances} aria-label="Previous Instances" className="box-border min-w-0 rounded p-1.5 text-left text-[13px] hover:bg-muted">
+                <span className="flex items-center gap-1 font-medium leading-[18px]">
+                    <History className="size-3.5" /> Previous Instances
+                </span>
+                <span className="block truncate text-xs text-muted-foreground">Remote visit history</span>
+            </button>
             <Info label="Favorite rate" value={favoriteRate} />
             <Info label="Created" value={date(world.created_at)} />
             <Info label="Last updated" value={date(world.updated_at)} />
