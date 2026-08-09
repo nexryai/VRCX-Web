@@ -19,16 +19,16 @@ type NavigationEntry = NavigationItem | { label: string; icon: string; children:
 // excluded destinations are intentionally absent rather than disabled.
 const navigation: NavigationEntry[] = [
     { href: "/feed", label: "Feed", icon: "ri-rss-line" },
-    { href: "/", label: "Friends Locations", icon: "ri-user-location-line" },
+    { href: "/friends-locations", label: "Friends Locations", icon: "ri-user-location-line" },
     { href: "/game-log", label: "Game Log", icon: "ri-history-line" },
     { href: "/search", label: "Search", icon: "ri-search-line" },
     {
         label: "Favorites",
         icon: "ri-star-line",
         children: [
-            { href: "/favorite/friends", label: "Favorite Friends", icon: "ri-user-heart-line" },
-            { href: "/favorite/worlds", label: "Favorite Worlds", icon: "ri-earth-line" },
-            { href: "/favorite/avatars", label: "Favorite Avatars", icon: "ri-empathize-line" },
+            { href: "/favorites/friends", label: "Favorite Friends", icon: "ri-user-heart-line" },
+            { href: "/favorites/worlds", label: "Favorite Worlds", icon: "ri-earth-line" },
+            { href: "/favorites/avatars", label: "Favorite Avatars", icon: "ri-empathize-line" },
         ],
     },
     {
@@ -41,7 +41,7 @@ const navigation: NavigationEntry[] = [
         ],
     },
     { href: "/notification", label: "Notifications", icon: "ri-notification-2-line" },
-    { href: "/avatars", label: "My Avatars", icon: "ri-contacts-book-3-line" },
+    { href: "/my-avatars", label: "My Avatars", icon: "ri-contacts-book-3-line" },
     {
         label: "Charts",
         icon: "ri-pie-chart-line",

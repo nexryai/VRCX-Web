@@ -8,7 +8,7 @@ The original source in `./VRCX/` is the behavior, implementation, and visual ref
 
 The MongoDB foundation, encrypted server-owned VRChat session, monitor leadership, Pipeline connection, scheduled friend/notification reconciliation, activity projections, remote-derived Game Log session storage, Hot Worlds aggregation, and server-owned Mutual Friends fetch jobs are implemented. Durable settings and completed graph snapshots no longer use browser storage. The explicitly excluded Dashboard route and navigation entry have been removed.
 
-This remains an in-progress port: several remote workflows still call VRChat interactively instead of reading complete MongoDB projections, and screen-by-screen visual parity work is not finished. See [PLANS.md](./PLANS.md) for the remaining acceptance work.
+This remains an in-progress port: several remote workflows still call VRChat interactively instead of reading complete MongoDB projections, and screen-by-screen visual parity work is not finished. See [PLANS.md](./PLANS.md) for the remaining acceptance work and the maintained [VRCX route difference register](./docs/vrcx-route-difference-register.md) for the source and open differences of every shipped page.
 
 ## Target Product
 
