@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost } from "@/lib/vrchat/types";
+import type { VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost } from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
@@ -89,4 +89,24 @@ export async function replaceAllCachedGroupInstances(ownerId: string, groupIds: 
         );
     }
     await collection.deleteMany({ ownerId, ...(uniqueGroupIds.length ? { groupId: { $nin: uniqueGroupIds } } : {}) });
+}
+
+export async function getCachedGroupCalendar(ownerId: string, groupId: string) {
+    await ensureMongoSchema();
+    const document = await collections(await getMongoDatabase()).groupCalendarSnapshots.findOne({ _id: `${ownerId}:${groupId}` });
+    if (!document) return null;
+    return { events: document.events, hasNext: document.hasNext, totalCount: document.totalCount, observedAt: document.observedAt };
+}
+
+export async function replaceCachedGroupCalendar(ownerId: string, groupId: string, events: VrchatGroupCalendarEvent[], hasNext: boolean, totalCount: number, observedAt = new Date()) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).groupCalendarSnapshots.updateOne({ _id: `${ownerId}:${groupId}` }, { $set: { ownerId, groupId, events, hasNext, totalCount, observedAt, updatedAt: observedAt } }, { upsert: true });
+}
+
+export async function updateCachedGroupCalendarEvent(ownerId: string, groupId: string, event: VrchatGroupCalendarInterestUpdate, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).groupCalendarSnapshots;
+    const result = await collection.updateOne({ _id: `${ownerId}:${groupId}`, "events.id": event.id }, { $set: { "events.$.userInterest": event.userInterest, updatedAt } });
+    if (!result.matchedCount) return false;
+    return true;
 }

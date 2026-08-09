@@ -29,6 +29,9 @@ describe("VRChat entity ID boundary", () => {
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/instances/groups/grp_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/instances/groups`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/instances/groups/grp_${uuid}/extra`)).toBe(false);
+        expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}/evt_example/follow`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`calendar/grp_${uuid}/evt_example/follow/extra`)).toBe(false);
         expect(isAllowedVrchatEndpoint("users/usr_000000000000-0000-0000-000000000001")).toBe(false);
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}-suffix`)).toBe(false);
     });

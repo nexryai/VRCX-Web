@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Bell, BellOff, Bookmark, BookmarkCheck, Check, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Search, ShieldCheck, Trash2, Users, X, XCircle } from "lucide-react";
+import { Bell, BellOff, Bookmark, BookmarkCheck, CalendarDays, Check, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, MessageCircle, MessageCircleOff, MessageSquare, RefreshCw, Repeat, Search, Share2, ShieldCheck, Star, Trash2, Users, X, XCircle } from "lucide-react";
 
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
-import type { VrchatGroup, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
+import { partitionGroupCalendarEvents } from "@/lib/group-calendar";
+import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
 type GroupTab = "Info" | "Posts" | "Members" | "JSON";
 type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
@@ -29,6 +30,9 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [posts, setPosts] = useState<VrchatGroupPost[]>([]);
     const [instances, setInstances] = useState<VrchatGroupInstance[]>([]);
     const [instancesLoading, setInstancesLoading] = useState(false);
+    const [calendar, setCalendar] = useState<VrchatGroupCalendarEvent[]>([]);
+    const [calendarLoading, setCalendarLoading] = useState(false);
+    const [followingEventId, setFollowingEventId] = useState("");
     const [members, setMembers] = useState<VrchatGroupMember[]>([]);
     const [hasMoreMembers, setHasMoreMembers] = useState(false);
     const [tabLoading, setTabLoading] = useState(false);
@@ -103,6 +107,24 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         [groupId],
     );
 
+    const loadCalendar = useCallback(
+        async (refresh = false) => {
+            setCalendarLoading(true);
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/calendar${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; events?: VrchatGroupCalendarEvent[] };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok) throw new Error(payload.error || "Group calendar could not be loaded.");
+                setCalendar(payload.events || []);
+            } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : "Group calendar could not be loaded.");
+            } finally {
+                setCalendarLoading(false);
+            }
+        },
+        [groupId],
+    );
+
     const loadMembers = useCallback(
         async (offset = 0, refresh = false) => {
             setTabLoading(true);
@@ -128,6 +150,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setTab("Info");
         setPosts([]);
         setInstances([]);
+        setCalendar([]);
         setMembers([]);
         setPostsLoaded(false);
         setMembersLoaded(false);
@@ -135,9 +158,10 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setActionLoading("");
         setConfirmAction(null);
         setPreviousInstancesOpen(false);
-        void Promise.all([load(), loadPosts(), loadInstances()]);
+        setFollowingEventId("");
+        void Promise.all([load(), loadPosts(), loadInstances(), loadCalendar()]);
         closeButton.current?.focus();
-    }, [load, loadInstances, loadPosts]);
+    }, [load, loadCalendar, loadInstances, loadPosts]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
@@ -175,6 +199,26 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
             setError(actionError instanceof Error ? actionError.message : "The group action could not be completed.");
         } finally {
             setActionLoading("");
+        }
+    }
+
+    async function followCalendarEvent(event: VrchatGroupCalendarEvent) {
+        setFollowingEventId(event.id);
+        setError("");
+        try {
+            const response = await fetch(`/api/groups/${encodeURIComponent(groupId)}/calendar/${encodeURIComponent(event.id)}/follow`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isFollowing: !event.userInterest?.isFollowing }),
+            });
+            const payload = (await response.json()) as { error?: string; event?: VrchatGroupCalendarInterestUpdate };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.event) throw new Error(payload.error || "The calendar follow request could not be completed.");
+            setCalendar((current) => current.map((item) => (item.id === payload.event?.id ? { ...item, userInterest: payload.event.userInterest } : item)));
+        } catch (followError) {
+            setError(followError instanceof Error ? followError.message : "The calendar follow request could not be completed.");
+        } finally {
+            setFollowingEventId("");
         }
     }
 
@@ -226,8 +270,14 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                             </div>
                             <div className="flex shrink-0 items-end gap-2 sm:mt-12 sm:items-start">
                                 <GroupPrimaryAction group={group} loading={actionLoading} runAction={runAction} />
-                                <button type="button" onClick={() => void Promise.all([load(true), loadInstances(true)])} disabled={loading || instancesLoading} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh group">
-                                    <RefreshCw className={`size-4 ${loading || instancesLoading ? "animate-spin" : ""}`} />
+                                <button
+                                    type="button"
+                                    onClick={() => void Promise.all([load(true), loadInstances(true), loadCalendar(true)])}
+                                    disabled={loading || instancesLoading || calendarLoading}
+                                    className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40"
+                                    aria-label="Refresh group"
+                                >
+                                    <RefreshCw className={`size-4 ${loading || instancesLoading || calendarLoading ? "animate-spin" : ""}`} />
                                 </button>
                                 <button type="button" onClick={() => void copy(`https://vrchat.com/home/group/${group.id}`)} className="inline-flex h-9 items-center gap-1 rounded-full border border-input px-3 text-xs">
                                     <Clipboard className="size-4" /> {copied ? "Copied" : "Share"}
@@ -267,7 +317,21 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                 </div>
                             ) : null}
                             {!tabLoading && tab === "Info" ? (
-                                <GroupInfo group={group} friends={groupFriends} instances={instances} instancesLoading={instancesLoading} announcement={posts[0]} openUser={openUser} copy={copy} onOpenPreviousInstances={() => setPreviousInstancesOpen(true)} previousInstancesButton={previousInstancesButton} />
+                                <GroupInfo
+                                    group={group}
+                                    friends={groupFriends}
+                                    instances={instances}
+                                    instancesLoading={instancesLoading}
+                                    calendar={calendar}
+                                    calendarLoading={calendarLoading}
+                                    followingEventId={followingEventId}
+                                    followCalendarEvent={followCalendarEvent}
+                                    announcement={posts[0]}
+                                    openUser={openUser}
+                                    copy={copy}
+                                    onOpenPreviousInstances={() => setPreviousInstancesOpen(true)}
+                                    previousInstancesButton={previousInstancesButton}
+                                />
                             ) : null}
                             {!tabLoading && tab === "Posts" ? <GroupPosts posts={posts} search={search} setSearch={setSearch} refresh={() => void loadPosts(true)} openUser={openUser} /> : null}
                             {!tabLoading && tab === "Members" ? <GroupMembers group={group} members={members} search={search} setSearch={setSearch} refresh={() => void loadMembers(0, true)} loadMore={() => void loadMembers(members.length, true)} hasMore={hasMoreMembers} openUser={openUser} /> : null}
@@ -400,6 +464,10 @@ function GroupInfo({
     friends,
     instances,
     instancesLoading,
+    calendar,
+    calendarLoading,
+    followingEventId,
+    followCalendarEvent,
     announcement,
     openUser,
     copy,
@@ -410,6 +478,10 @@ function GroupInfo({
     friends: VrchatUser[];
     instances: VrchatGroupInstance[];
     instancesLoading: boolean;
+    calendar: VrchatGroupCalendarEvent[];
+    calendarLoading: boolean;
+    followingEventId: string;
+    followCalendarEvent: (event: VrchatGroupCalendarEvent) => Promise<void>;
     announcement?: VrchatGroupPost;
     openUser: (userId: string) => void;
     copy: (value: string) => Promise<void>;
@@ -481,6 +553,9 @@ function GroupInfo({
             <div className="mt-3 flex flex-wrap items-start px-1">
                 <FullInfo label="Announcement" value={announcement ? `${announcement.title}${announcement.text ? `\n${announcement.text}` : ""}` : "—"} />
                 <FullInfo label="Rules" value={group.rules || "—"} />
+            </div>
+            <GroupCalendar events={calendar} loading={calendarLoading} followingEventId={followingEventId} follow={followCalendarEvent} />
+            <div className="flex flex-wrap items-start px-1">
                 <Info label="Members" value={`${number(group.memberCount)} (${number(group.onlineMemberCount)})`} icon={<Users className="size-3.5" />} />
                 <Info label="Created" value={date(group.createdAt)} />
                 <button ref={previousInstancesButton} type="button" onClick={onOpenPreviousInstances} aria-label="Previous Instances" className="box-border w-[167px] rounded p-1.5 text-left text-[13px] hover:bg-muted">
@@ -508,6 +583,105 @@ function GroupInfo({
             ) : null}
         </div>
     );
+}
+
+function GroupCalendar({ events, loading, followingEventId, follow }: { events: VrchatGroupCalendarEvent[]; loading: boolean; followingEventId: string; follow: (event: VrchatGroupCalendarEvent) => Promise<void> }) {
+    const { past, upcoming } = partitionGroupCalendarEvents(events);
+    return (
+        <div className="px-2 pb-2 text-[13px]">
+            <h3 className="font-medium leading-[18px]">Upcoming Events</h3>
+            {loading && !events.length ? (
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-3.5 animate-spin" /> Loading calendar…
+                </div>
+            ) : upcoming.length ? (
+                <div className="mt-2 flex max-h-[360px] flex-wrap gap-4 overflow-y-auto py-1">
+                    {upcoming.map((event) => (
+                        <GroupCalendarCard key={event.id} event={event} following={followingEventId === event.id} follow={follow} />
+                    ))}
+                </div>
+            ) : (
+                <span className="block text-xs">—</span>
+            )}
+            {past.length ? (
+                <>
+                    <h3 className="mt-3 font-medium leading-[18px]">Past Events</h3>
+                    <div className="mt-2 flex max-h-[360px] flex-wrap gap-4 overflow-y-auto py-1">
+                        {past.map((event) => (
+                            <GroupCalendarCard key={event.id} event={event} following={followingEventId === event.id} follow={follow} />
+                        ))}
+                    </div>
+                </>
+            ) : null}
+        </div>
+    );
+}
+
+function GroupCalendarCard({ event, following, follow }: { event: VrchatGroupCalendarEvent; following: boolean; follow: (event: VrchatGroupCalendarEvent) => Promise<void> }) {
+    const link = `https://vrchat.com/home/group/${event.ownerId}/calendar/${event.id}`;
+    const [linkCopied, setLinkCopied] = useState(false);
+    async function copyLink() {
+        await navigator.clipboard.writeText(link);
+        setLinkCopied(true);
+        window.setTimeout(() => setLinkCopied(false), 1_500);
+    }
+    return (
+        <article className="relative w-full max-w-[320px] overflow-hidden rounded-lg border border-border bg-card hover:bg-accent">
+            <VrchatImage
+                src={event.imageUrl}
+                alt=""
+                className="h-[100px] w-full object-cover"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                fallback={
+                    <div className="flex h-[100px] w-full items-center justify-center bg-muted">
+                        <CalendarDays className="size-6 text-muted-foreground" />
+                    </div>
+                }
+            />
+            <div className="absolute top-1 right-1 flex gap-1.5">
+                <button type="button" onClick={() => void copyLink()} className="inline-flex size-6 items-center justify-center rounded-full bg-secondary shadow" aria-label={`Copy event link for ${event.title}`}>
+                    {linkCopied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />}
+                </button>
+                <button
+                    type="button"
+                    onClick={() => void follow(event)}
+                    disabled={following}
+                    className={`inline-flex size-6 items-center justify-center rounded-full shadow disabled:opacity-50 ${event.userInterest?.isFollowing ? "bg-primary text-primary-foreground" : "bg-secondary"}`}
+                    aria-label={`${event.userInterest?.isFollowing ? "Unfollow" : "Follow"} ${event.title}`}
+                >
+                    {following ? <Loader2 className="size-3.5 animate-spin" /> : <Star className={`size-3.5 ${event.userInterest?.isFollowing ? "fill-current" : ""}`} />}
+                </button>
+            </div>
+            <details className="group/event px-3 pt-2 pb-3">
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                    <p className="text-sm font-bold leading-tight">
+                        {event.seriesId ? <Repeat className="mr-1 inline size-4" /> : null}
+                        {event.title}
+                    </p>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-medium">{eventRange(event)}</span>
+                        <span className="capitalize">{event.accessType}</span>
+                    </div>
+                </summary>
+                <div className="mt-2 space-y-1 border-t border-border pt-2 text-xs">
+                    <p>{event.description || "—"}</p>
+                    <p className="text-muted-foreground">
+                        {event.category} · {event.interestedUserCount} interested
+                    </p>
+                </div>
+            </details>
+        </article>
+    );
+}
+
+function eventRange(event: VrchatGroupCalendarEvent) {
+    const startsAt = new Date(event.startsAt);
+    const endsAt = new Date(event.endsAt);
+    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return `${event.startsAt} – ${event.endsAt}`;
+    const date = new Intl.DateTimeFormat("en", { dateStyle: "short" }).format(startsAt);
+    const time = new Intl.DateTimeFormat("en", { timeStyle: "short" });
+    return `${date} ${time.format(startsAt)} – ${time.format(endsAt)}`;
 }
 
 function GroupPosts({ posts, search, setSearch, refresh, openUser }: { posts: VrchatGroupPost[]; search: string; setSearch: (value: string) => void; refresh: () => void; openUser: (userId: string) => void }) {

@@ -317,6 +317,58 @@ await database.collection("group_instance_snapshots").insertOne({
     observedAt: now,
     updatedAt: now,
 });
+const calendarEventBase = {
+    ownerId: groupId,
+    description: "A remotely published group calendar event rendered from MongoDB.",
+    accessType: "group",
+    category: "hangout",
+    closeInstanceAfterEndMinutes: 5,
+    createdAt: new Date(now.getTime() - 7 * 86_400_000).toISOString(),
+    deletedAt: null,
+    durationInMs: 3_600_000,
+    featured: false,
+    guestEarlyJoinMinutes: 10,
+    hostEarlyJoinMinutes: 20,
+    imageId: null,
+    interestedUserCount: 24,
+    isDraft: false,
+    languages: ["eng", "jpn"],
+    occurrenceKind: "single",
+    platforms: ["standalonewindows", "android"],
+    recurrence: null,
+    roleIds: null,
+    seriesId: null,
+    tags: [],
+    type: "event",
+    updatedAt: new Date(now.getTime() - 60 * 60_000).toISOString(),
+    usesInstanceOverflow: false,
+};
+await database.collection("group_calendar_snapshots").insertOne({
+    _id: `${ownerId}:${groupId}`,
+    ownerId,
+    groupId,
+    events: [
+        {
+            ...calendarEventBase,
+            id: "evt_visual_upcoming",
+            title: "Remote Creator Meetup",
+            startsAt: new Date(now.getTime() + 24 * 60 * 60_000).toISOString(),
+            endsAt: new Date(now.getTime() + 25 * 60 * 60_000).toISOString(),
+            userInterest: { createdAt: now.toISOString(), isFollowing: true, updatedAt: now.toISOString() },
+        },
+        {
+            ...calendarEventBase,
+            id: "evt_visual_past",
+            title: "Previous World Hop",
+            startsAt: new Date(now.getTime() - 49 * 60 * 60_000).toISOString(),
+            endsAt: new Date(now.getTime() - 48 * 60 * 60_000).toISOString(),
+        },
+    ],
+    hasNext: false,
+    totalCount: 2,
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("group_posts").insertMany([
     {
         _id: `${ownerId}:grp_00000000-0000-0000-0000-000000000020:gpos_visual_announcement`,

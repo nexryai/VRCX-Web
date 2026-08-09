@@ -28,6 +28,7 @@ const captures = [
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
+    { name: "group-dialog-calendar", path: "/friends-locations", readyText: "Remote Creator Meetup", groupDialog: true, groupCalendar: true },
     { name: "previous-instances-group", path: "/friends-locations", readyText: "You", groupDialog: true, previousInstances: "group" },
     { name: "group-dialog-posts", path: "/friends-locations", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
@@ -163,8 +164,10 @@ for (const width of widths) {
             // racing this click while its initial request is still resolving.
             await page.getByRole("tab", { name: /^Groups\s+1$/ }).click();
             await page.getByRole("button", { name: /^VRCX Test Group\b/ }).click();
+            await page.getByText("Visual Operator", { exact: true }).waitFor();
             if (capture.groupTab) await page.getByRole("tab", { name: capture.groupTab, exact: true }).click();
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
+            if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();
         }
         if (capture.avatarDialog) {
             await page.getByText("Favorite Browser Avatar", { exact: true }).first().click();

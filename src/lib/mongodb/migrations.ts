@@ -357,6 +357,13 @@ const migrations: Migration[] = [
             await Promise.all([c.groupInstanceSnapshots.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }), c.groupInstanceSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 29,
+        name: "add-group-calendar-snapshot-indexes",
+        async apply(c) {
+            await Promise.all([c.groupCalendarSnapshots.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }), c.groupCalendarSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

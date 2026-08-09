@@ -283,6 +283,69 @@ export const vrchatGroupPostSchema = z
 
 export type VrchatGroupPost = z.infer<typeof vrchatGroupPostSchema>;
 
+export const vrchatGroupCalendarUserInterestSchema = z
+    .object({
+        createdAt: z.string().nullable().optional(),
+        isFollowing: z.boolean(),
+        updatedAt: z.string().nullable().optional(),
+    })
+    .passthrough();
+
+export const vrchatGroupCalendarEventSchema = z
+    .object({
+        id: z.string(),
+        ownerId: z.string(),
+        title: z.string(),
+        description: z.string().default(""),
+        startsAt: z.string(),
+        endsAt: z.string(),
+        accessType: z.string(),
+        category: z.string(),
+        closeInstanceAfterEndMinutes: z.number(),
+        createdAt: z.string(),
+        deletedAt: z.string().nullable(),
+        durationInMs: z.number(),
+        featured: z.boolean(),
+        guestEarlyJoinMinutes: z.number(),
+        hostEarlyJoinMinutes: z.number(),
+        imageId: z.string().nullable(),
+        imageUrl: z.string().optional(),
+        interestedUserCount: z.number().int().nonnegative(),
+        isDraft: z.boolean(),
+        languages: z.array(z.string()),
+        occurrenceKind: z.string(),
+        platforms: z.array(z.string()),
+        recurrence: z.string().nullable(),
+        roleIds: z.array(z.string()).nullable(),
+        seriesId: z.string().nullable(),
+        tags: z.array(z.string()),
+        type: z.string(),
+        updatedAt: z.string(),
+        usesInstanceOverflow: z.boolean(),
+        userInterest: vrchatGroupCalendarUserInterestSchema.optional(),
+    })
+    .passthrough();
+
+export type VrchatGroupCalendarEvent = z.infer<typeof vrchatGroupCalendarEventSchema>;
+
+export const vrchatGroupCalendarInterestUpdateSchema = z
+    .object({
+        id: z.string(),
+        ownerId: z.string().optional(),
+        userInterest: vrchatGroupCalendarUserInterestSchema,
+    })
+    .passthrough();
+
+export type VrchatGroupCalendarInterestUpdate = z.infer<typeof vrchatGroupCalendarInterestUpdateSchema>;
+
+export const vrchatGroupCalendarResponseSchema = z
+    .object({
+        results: z.array(vrchatGroupCalendarEventSchema).default([]),
+        hasNext: z.boolean().optional(),
+        totalCount: z.number().int().nonnegative().optional(),
+    })
+    .passthrough();
+
 export const vrchatGroupMemberSchema = z
     .object({
         id: z.string(),

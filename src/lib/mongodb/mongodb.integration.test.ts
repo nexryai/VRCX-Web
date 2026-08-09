@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -54,6 +54,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_posts").indexExists("owner_group_post_unique")).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
@@ -351,6 +352,53 @@ describe("MongoDB application repositories", () => {
         await replaceCachedGroupInstances(ownerId, groupId, [], undefined, emptyObservedAt);
         expect(await getCachedGroupInstances(ownerId, groupId)).toEqual({ instances: [], upstreamFetchedAt: undefined, observedAt: emptyObservedAt });
         expect((await getCachedGroupInstances(otherOwnerId, groupId))?.instances).toEqual([instance]);
+    });
+
+    test("replaces and updates complete group-calendar snapshots without crossing owners", async () => {
+        const { getCachedGroupCalendar, replaceCachedGroupCalendar, updateCachedGroupCalendarEvent } = await import("./group-dialog-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000065";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000066";
+        const groupId = "grp_00000000-0000-0000-0000-000000000067";
+        const calendarEvent = {
+            id: "evt_calendar_one",
+            ownerId: groupId,
+            title: "Calendar One",
+            description: "Remote event",
+            startsAt: "2026-08-10T10:00:00.000Z",
+            endsAt: "2026-08-10T11:00:00.000Z",
+            accessType: "group",
+            category: "hangout",
+            closeInstanceAfterEndMinutes: 5,
+            createdAt: "2026-08-01T00:00:00.000Z",
+            deletedAt: null,
+            durationInMs: 3_600_000,
+            featured: false,
+            guestEarlyJoinMinutes: 0,
+            hostEarlyJoinMinutes: 0,
+            imageId: null,
+            interestedUserCount: 4,
+            isDraft: false,
+            languages: ["eng"],
+            occurrenceKind: "single",
+            platforms: ["standalonewindows"],
+            recurrence: null,
+            roleIds: null,
+            seriesId: null,
+            tags: [],
+            type: "event",
+            updatedAt: "2026-08-01T00:00:00.000Z",
+            usesInstanceOverflow: false,
+        };
+        const observedAt = new Date("2026-08-09T11:00:00.000Z");
+        await replaceCachedGroupCalendar(ownerId, groupId, [calendarEvent], false, 1, observedAt);
+        await replaceCachedGroupCalendar(otherOwnerId, groupId, [calendarEvent], false, 1, observedAt);
+        expect(await updateCachedGroupCalendarEvent(ownerId, groupId, { ...calendarEvent, userInterest: { isFollowing: true } })).toBe(true);
+        expect((await getCachedGroupCalendar(ownerId, groupId))?.events[0].userInterest?.isFollowing).toBe(true);
+        expect((await getCachedGroupCalendar(otherOwnerId, groupId))?.events[0].userInterest).toBeUndefined();
+
+        await replaceCachedGroupCalendar(ownerId, groupId, [], false, 0);
+        expect((await getCachedGroupCalendar(ownerId, groupId))?.events).toEqual([]);
+        expect(await updateCachedGroupCalendarEvent(ownerId, groupId, { id: calendarEvent.id, userInterest: { isFollowing: false } })).toBe(false);
     });
 
     test("updates group membership projection without crossing owners", async () => {
