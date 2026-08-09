@@ -88,6 +88,8 @@ Collection names are provisional until each VRCX storage path is traced, but the
 
 Detailed schemas, retention, and VRCX SQLite/JSON mappings must be added before implementing each repository. MongoDB migrations must be versioned, idempotent, and restart-safe.
 
+Whole-database recovery is an operator workflow and is deliberately separate from the browser-safe Settings preference export. `pnpm mongodb:backup-smoke` uses MongoDB Database Tools through a protected temporary configuration file, rejects a changing source snapshot, restores only into a generated isolated namespace, fingerprints documents, collection options, and indexes, verifies retained-session decryptability, and removes its temporary database and archive. A retained production archive and its matching `VRCHAT_SESSION_ENCRYPTION_KEY` must be backed up separately; neither is product state that belongs in MongoDB.
+
 ## Definition of Done
 
 The port is ready when:
@@ -306,6 +308,7 @@ Status: In progress
 
 - [x] Add the MongoDB driver, validated environment configuration, connection lifecycle, health check, and test database strategy.
 - [ ] Define versioned migrations, indexes, repository boundaries, retention, backup, and restore behavior.
+- [x] Add a fail-closed, isolated `mongodump`/`mongorestore` proof covering documents, collection options, indexes, encrypted-session decryptability, source consistency, and cleanup.
 - [x] Implement singleton settings and active-identity records.
 - [ ] Move current durable browser state into MongoDB with an explicit one-time migration/import path.
 - [x] Implement encrypted server-side VRChat session persistence with the key supplied outside MongoDB.
@@ -380,6 +383,7 @@ Status: Planned
 - [ ] Test prolonged operation, rate limits, upstream outages, malformed events, session expiry, MongoDB interruption, process restart, and lease failover.
 - [ ] Audit route allowlists, XSS, CSRF, request forgery, cache behavior, secrets, encryption, logging, and accidental public exposure.
 - [ ] Verify MongoDB backup/restore and retention/cleanup workflows.
+- [x] Verify the isolated backup/restore mechanism with MongoDB Database Tools 100.17.0 and retain automated fingerprint coverage.
 - [ ] Complete keyboard, focus, labels, contrast, reduced-motion, touch, and responsive audits.
 - [ ] Complete matched-state VRCX visual comparisons for every shipped screen.
 - [ ] Run the full test, lint, production build, and authenticated operator smoke suite.
@@ -520,3 +524,5 @@ The 2026-08-08 monitor restart-harness increment passed `pnpm test` (12 files, 5
 The 2026-08-08 Avatar Feed cleanup increment passed `pnpm test` (12 files, 52 tests), `pnpm lint` (147 files), and `pnpm build` (26 generated pages). It ports VRCX's automatic and manual Avatar Feed purge choices to an owner-scoped MongoDB deletion, adds the weekly always-on monitor guard and cleanup status, and preserves all non-Avatar activity and Game Log sessions. The destructive confirmation passed a 360-pixel Chromium capture with Escape and focus-restoration smoke coverage; matched running-VRCX comparison and a production backup-and-purge operator drill remain outstanding.
 
 The 2026-08-08 self-activity increment passed `pnpm test` (12 files, 55 tests), `pnpm lint` (148 files), and `pnpm build` (26 generated pages). Migration 24 adds an owner-unique `self_snapshots` baseline, and both Pipeline `user-update`/`user-location` ingestion and HTTP reconciliation now persist the active identity's non-relationship changes through the same deterministic `activity_events` path used for friends. Integration coverage verifies first-observation suppression, duplicate retry safety, isolation from the friend projection, GPS/Offline session-boundary association, and pagination-boundary deduplication. Synthetic self Status and Avatar events were manually inspected in Feed and nested Game Log rows at 360, 768, 1280, and 1920 pixels after all eight captures passed the page-overflow gate; the updated purge dialog also passed its 360-pixel interaction capture. Live authenticated self status/avatar/location changes and matched running-VRCX comparison remain operator checks.
+
+The 2026-08-09 MongoDB recovery-proof increment passed `pnpm test` (13 files, 57 tests), `pnpm lint` (150 files), and `pnpm build` (26 generated pages). It also exercised MongoDB Database Tools 100.17.0 against an isolated in-memory server: a compressed archive containing three collections, three representative documents, ordered indexes, an empty indexed collection, BSON dates, and an AES-256-GCM VRChat session was restored to a generated namespace, fingerprinted byte-for-byte at the BSON Extended JSON boundary, decrypted with the retained key, and automatically removed. Automated coverage separately rejects unsafe database names and detects document or index mismatches. A production archive retention drill and deliberate restore under the operator's actual MongoDB authentication/topology remain open, so the broad release-hardening item is not marked complete.

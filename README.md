@@ -86,14 +86,26 @@ pnpm build
 pnpm start
 ```
 
-Do not deploy to a scale-to-zero or request-only runtime. Back up both MongoDB and `VRCHAT_SESSION_ENCRYPTION_KEY`; the database backup alone cannot decrypt the retained session. A standard backup and restore flow is:
+Do not deploy to a scale-to-zero or request-only runtime. Back up both MongoDB and `VRCHAT_SESSION_ENCRYPTION_KEY`; the database backup alone cannot decrypt the retained session.
+
+### MongoDB backup and isolated restore proof
+
+Install [MongoDB Database Tools](https://www.mongodb.com/docs/database-tools/installation/installation/) 100.3 or newer, stop application writers, and run:
 
 ```bash
-mongodump --uri="$MONGODB_URI" --db="$MONGODB_DATABASE" --archive=vrcx.archive --gzip
-mongorestore --uri="$MONGODB_URI" --nsInclude="$MONGODB_DATABASE.*" --archive=vrcx.archive --gzip
+pnpm mongodb:backup-smoke
 ```
 
-Test restores against a separate database before relying on them. Stop application writers or otherwise take a consistent database snapshot during recovery. Never commit archives, environment files, or encryption keys.
+The command requires `MONGODB_URI`, `MONGODB_DATABASE` when the database is not named `vrcx`, and the matching `VRCHAT_SESSION_ENCRYPTION_KEY`. `MONGODUMP_BINARY` and `MONGORESTORE_BINARY` may point to non-default Database Tools binaries. The proof keeps the URI out of process arguments by writing a mode-0600 temporary `--config` file, creates a temporary compressed archive, restores it into a generated `vrcx_restore_smoke_*` database, and compares every document, collection option, and relevant index. When an encrypted VRChat session exists, it also proves that the configured key decrypts the restored representation. The generated database and archive are removed whether the proof passes or fails; the source database is never a restore target. The command rejects a dump if the source changes while it is being captured, so stopping writers remains required for useful evidence.
+
+The smoke test proves recoverability but deliberately does not retain a backup. For an operator-owned archive, put the connection URI in a mode-0600 [Database Tools configuration file](https://www.mongodb.com/docs/database-tools/mongorestore/mongorestore-examples/#hide-password-in-a-configuration-file) and use a separate restore namespace:
+
+```bash
+mongodump --config=/secure/path/mongodb-tools.yml --db="$MONGODB_DATABASE" --archive=vrcx.archive.gz --gzip
+mongorestore --config=/secure/path/mongodb-tools.yml --archive=vrcx.archive.gz --gzip --nsFrom="${MONGODB_DATABASE}.*" --nsTo="vrcx_restore_YYYYMMDD.*"
+```
+
+Inspect and test the isolated restore before any deliberate recovery of the application namespace. Stop application writers or otherwise take a consistent database snapshot during backup and recovery. Never commit archives, environment files, Database Tools configuration files, or encryption keys. See the official [`mongodump`](https://www.mongodb.com/docs/database-tools/mongodump/) and [`mongorestore`](https://www.mongodb.com/docs/database-tools/mongorestore/) documentation for deployment-specific authentication, topology, and compatibility requirements.
 
 ### Authenticated monitor restart proof
 
