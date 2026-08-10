@@ -36,6 +36,7 @@ const captures = [
     { name: "group-dialog-post-edit", path: "/friends-locations", readyText: "Create/Edit Post", groupDialog: true, groupTab: "Posts", groupPostDialog: "edit" },
     { name: "group-dialog-post-delete", path: "/friends-locations", readyText: "Delete post?", groupDialog: true, groupTab: "Posts", groupPostDialog: "delete" },
     { name: "group-dialog-post-image", path: "/friends-locations", readyText: "Select Gallery Image", groupDialog: true, groupTab: "Posts", groupPostDialog: "image" },
+    { name: "group-dialog-invite", path: "/friends-locations", readyText: "Invite To Group", groupDialog: true, groupInvite: true },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
@@ -203,6 +204,13 @@ for (const width of widths) {
                 return route.fallback();
             });
         }
+        if (capture.groupInvite) {
+            await page.route("**/api/groups/*/invites", async (route) => {
+                const body = route.request().postDataJSON();
+                if (route.request().method() !== "POST" || body.userIds?.[0] !== "usr_00000000-0000-0000-0000-000000000002") throw new Error("Unexpected group invitation payload.");
+                return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ succeededUserIds: body.userIds }) });
+            });
+        }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
         if (capture.friendListSearch) {
             const filterSummary = page.getByText("Filter fields", { exact: true });
@@ -326,6 +334,33 @@ for (const width of widths) {
                 if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Gallery file picker did not restore focus after Escape.");
                 await trigger.click();
                 await page.getByRole("button", { name: "Select gallery image Creator Meetup", exact: true }).waitFor();
+            }
+            if (capture.groupInvite) {
+                const manage = page.getByLabel("Manage group", { exact: true });
+                await manage.click();
+                await page.getByRole("button", { name: "Invite To Group", exact: true }).click();
+                const dialog = page.getByRole("dialog", { name: "Invite To Group", exact: true });
+                await dialog.waitFor();
+                const search = page.getByRole("textbox", { name: "Choose Friends", exact: true });
+                if (!(await search.evaluate((element) => document.activeElement === element))) throw new Error("Group invite dialog did not focus friend search.");
+                await page.keyboard.press("Shift+Tab");
+                await page.keyboard.press("Tab");
+                if (!(await search.evaluate((element) => document.activeElement === element))) throw new Error("Group invite dialog did not trap focus.");
+                await page.keyboard.press("Escape");
+                await dialog.waitFor({ state: "detached" });
+                await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Manage group");
+                await manage.click();
+                await page.getByRole("button", { name: "Invite To Group", exact: true }).click();
+                await dialog.getByText("Aoi Sample", { exact: true }).click();
+                await page.getByRole("button", { name: "Invite", exact: true }).click();
+                const confirmation = page.getByRole("alertdialog", { name: "Confirm", exact: true });
+                await confirmation.waitFor();
+                const confirmationCancel = confirmation.getByRole("button", { name: "Cancel", exact: true });
+                if (!(await confirmationCancel.evaluate((element) => document.activeElement === element))) throw new Error("Group invite confirmation did not focus Cancel.");
+                await page.getByRole("button", { name: "Invite", exact: true }).click();
+                await dialog.waitFor({ state: "detached" });
+                await manage.click();
+                await page.getByRole("button", { name: "Invite To Group", exact: true }).click();
             }
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
             if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();

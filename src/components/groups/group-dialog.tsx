@@ -97,9 +97,11 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [postEditor, setPostEditor] = useState<VrchatGroupPost | "new" | null>(null);
     const [postToDelete, setPostToDelete] = useState<VrchatGroupPost | null>(null);
     const [postMutationLoading, setPostMutationLoading] = useState(false);
+    const [inviteOpen, setInviteOpen] = useState(false);
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
     const postActionReturnFocus = useRef<HTMLElement | null>(null);
+    const inviteReturnFocus = useRef<HTMLElement | null>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -243,13 +245,14 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
         setPostEditor(null);
         setPostToDelete(null);
         setPostMutationLoading(false);
+        setInviteOpen(false);
         void Promise.all([load(), loadPosts(), loadInstances(), loadCalendar()]);
         closeButton.current?.focus();
     }, [load, loadCalendar, loadInstances, loadPosts]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
-            if (event.key === "Escape" && !document.querySelector("[data-group-post-overlay]")) onClose();
+            if (event.key === "Escape" && !document.querySelector("[data-group-post-overlay], [data-group-invite-overlay]")) onClose();
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
@@ -431,7 +434,17 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                 <a href={`https://vrchat.com/home/group/${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer" className="inline-flex size-9 items-center justify-center rounded-full border border-input" aria-label="Open on VRChat">
                                     <ExternalLink className="size-4" />
                                 </a>
-                                <GroupManageMenu group={group} loading={actionLoading} runAction={runAction} confirm={setConfirmAction} createPost={(trigger) => openPostEditor("new", trigger)} />
+                                <GroupManageMenu
+                                    group={group}
+                                    loading={actionLoading}
+                                    runAction={runAction}
+                                    confirm={setConfirmAction}
+                                    createPost={(trigger) => openPostEditor("new", trigger)}
+                                    invite={(trigger) => {
+                                        inviteReturnFocus.current = trigger;
+                                        setInviteOpen(true);
+                                    }}
+                                />
                             </div>
                         </header>
                         {confirmAction ? <GroupActionConfirmation group={group} action={confirmAction} loading={actionLoading !== ""} cancel={() => setConfirmAction(null)} confirm={() => void runAction(confirmAction)} /> : null}
@@ -513,6 +526,16 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
             {previousInstancesOpen && group ? <PreviousInstancesDialog variant="group" entityId={group.id} label={group.name} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
             {postEditor && group ? <GroupPostEditor group={group} post={postEditor === "new" ? undefined : postEditor} vrcPlus={currentUser.tags?.includes("system_supporter") === true} loading={postMutationLoading} error={error} cancel={closePostOverlay} save={savePost} /> : null}
             {postToDelete ? <GroupPostDeleteConfirmation post={postToDelete} loading={postMutationLoading} error={error} cancel={closePostOverlay} confirm={() => void deletePost()} /> : null}
+            {inviteOpen && group ? (
+                <GroupInviteDialog
+                    group={group}
+                    friends={friends}
+                    close={() => {
+                        setInviteOpen(false);
+                        window.setTimeout(() => inviteReturnFocus.current?.focus(), 0);
+                    }}
+                />
+            ) : null}
         </div>
     );
 }
@@ -552,7 +575,21 @@ function GroupPrimaryAction({ group, loading, runAction }: { group: VrchatGroup;
     );
 }
 
-function GroupManageMenu({ group, loading, runAction, confirm, createPost }: { group: VrchatGroup; loading: GroupActionName | ""; runAction: (action: GroupActionName, value?: boolean | string) => Promise<void>; confirm: (action: ConfirmAction) => void; createPost: (trigger: HTMLElement) => void }) {
+function GroupManageMenu({
+    group,
+    loading,
+    runAction,
+    confirm,
+    createPost,
+    invite,
+}: {
+    group: VrchatGroup;
+    loading: GroupActionName | "";
+    runAction: (action: GroupActionName, value?: boolean | string) => Promise<void>;
+    confirm: (action: ConfirmAction) => void;
+    createPost: (trigger: HTMLElement) => void;
+    invite: (trigger: HTMLElement) => void;
+}) {
     const member = inGroup(group) && group.myMember;
     const closeAndRun = (event: React.MouseEvent<HTMLButtonElement>, action: () => void) => {
         event.currentTarget.closest("details")?.removeAttribute("open");
@@ -572,6 +609,17 @@ function GroupManageMenu({ group, loading, runAction, confirm, createPost }: { g
                             disabled={loading !== ""}
                             action={(event) => closeAndRun(event, () => void runAction("announcements", !group.myMember?.isSubscribedToAnnouncements))}
                         />
+                        {(group.myMember?.permissions || []).some((permission) => permission === "*" || permission === "group-invites-manage") ? (
+                            <GroupMenuButton
+                                icon={<Users />}
+                                label="Invite To Group"
+                                disabled={loading !== ""}
+                                action={(event) => {
+                                    const returnFocus = event.currentTarget.closest("details")?.querySelector<HTMLElement>("summary") || event.currentTarget;
+                                    closeAndRun(event, () => invite(returnFocus));
+                                }}
+                            />
+                        ) : null}
                         <GroupMenuButton
                             icon={group.myMember?.isSubscribedToEventAnnouncements === false ? <MessageCircle /> : <MessageCircleOff />}
                             label={group.myMember?.isSubscribedToEventAnnouncements === false ? "Subscribe to event announcements" : "Unsubscribe from event announcements"}
@@ -927,6 +975,116 @@ function eventRange(event: VrchatGroupCalendarEvent) {
     const date = new Intl.DateTimeFormat("en", { dateStyle: "short" }).format(startsAt);
     const time = new Intl.DateTimeFormat("en", { timeStyle: "short" });
     return `${date} ${time.format(startsAt)} – ${time.format(endsAt)}`;
+}
+
+function GroupInviteDialog({ group, friends, close }: { group: VrchatGroup; friends: VrchatUser[]; close: () => void }) {
+    const [selected, setSelected] = useState<string[]>([]);
+    const [search, setSearch] = useState("");
+    const [confirming, setConfirming] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+    const dialog = useRef<HTMLDivElement>(null);
+    const searchInput = useRef<HTMLInputElement>(null);
+    const confirmationCancel = useRef<HTMLButtonElement>(null);
+    const visible = friends.filter((friend) => !search.trim() || friend.displayName.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+
+    useEffect(() => {
+        if (confirming) confirmationCancel.current?.focus();
+        else searchInput.current?.focus();
+        function handleKey(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (confirming) setConfirming(false);
+                else close();
+                return;
+            }
+            if (event.key !== "Tab" || !dialog.current) return;
+            const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])"));
+            const first = focusable[0];
+            const last = focusable.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        }
+        window.addEventListener("keydown", handleKey, true);
+        return () => window.removeEventListener("keydown", handleKey, true);
+    }, [close, confirming]);
+
+    async function send() {
+        setLoading(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/invites`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userIds: selected }) });
+            const payload = (await response.json()) as { error?: string; succeededUserIds?: string[]; failed?: { userId: string; error: string } };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok && response.status !== 207) throw new Error(payload.error || "The invitations could not be sent.");
+            const succeeded = new Set(payload.succeededUserIds || []);
+            setSelected((current) => current.filter((userId) => !succeeded.has(userId)));
+            if (payload.failed) {
+                setError(`${payload.failed.error} (${friends.find((friend) => friend.id === payload.failed?.userId)?.displayName || payload.failed.userId})`);
+                setConfirming(false);
+            } else close();
+        } catch (sendError) {
+            setError(sendError instanceof Error ? sendError.message : "The invitations could not be sent.");
+            setConfirming(false);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return (
+        <div data-group-invite-overlay className="absolute inset-0 z-[90] flex items-center justify-center bg-black/65 p-3 sm:p-4">
+            <div ref={dialog} role={confirming ? "alertdialog" : "dialog"} aria-modal="true" aria-labelledby="group-invite-title" className="w-full max-w-[450px] rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                <h3 id="group-invite-title" className="font-semibold">
+                    {confirming ? "Confirm" : "Invite To Group"}
+                </h3>
+                {confirming ? (
+                    <>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                            Invite {selected.length} selected friend{selected.length === 1 ? "" : "s"} to {group.name}?
+                        </p>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button ref={confirmationCancel} type="button" onClick={() => setConfirming(false)} disabled={loading} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                                Cancel
+                            </button>
+                            <button type="button" onClick={() => void send()} disabled={loading} className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-4 text-xs text-primary-foreground disabled:opacity-40">
+                                {loading ? <Loader2 className="size-3.5 animate-spin" /> : null} Invite
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <p className="mt-2 text-xs">Invite your friends to {group.name}.</p>
+                        <input ref={searchInput} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Choose Friends" aria-label="Choose Friends" className="mt-4 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring" />
+                        <div className="mt-2 max-h-[360px] overflow-y-auto rounded-md border border-border p-1">
+                            {visible.map((friend) => (
+                                <label key={friend.id} className="flex cursor-pointer items-center gap-2 rounded p-2 text-xs hover:bg-muted">
+                                    <input type="checkbox" checked={selected.includes(friend.id)} onChange={(event) => setSelected((current) => (event.target.checked ? [...current, friend.id] : current.filter((userId) => userId !== friend.id)))} className="size-4 accent-primary" />
+                                    <FriendAvatar friend={friend} size="sm" />
+                                    <span className="min-w-0 flex-1 truncate font-medium">{friend.displayName}</span>
+                                </label>
+                            ))}
+                            {!visible.length ? <EmptyState>No friends found.</EmptyState> : null}
+                        </div>
+                        {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button type="button" onClick={close} className="h-9 rounded-md bg-secondary px-4 text-xs">
+                                Cancel
+                            </button>
+                            <button type="button" onClick={() => setConfirming(true)} disabled={!selected.length} className="h-9 rounded-md bg-primary px-4 text-xs text-primary-foreground disabled:opacity-40">
+                                Invite
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    );
 }
 
 function GroupPostEditor({ group, post, vrcPlus, loading, error, cancel, save }: { group: VrchatGroup; post?: VrchatGroupPost; vrcPlus: boolean; loading: boolean; error: string; cancel: () => void; save: (input: GroupPostInput) => Promise<void> }) {
