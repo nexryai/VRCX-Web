@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { VrchatFavorite, VrchatFavoriteGroup, VrchatPlayerModeration } from "@/lib/vrchat/types";
+import type { VrchatAvatarModeration, VrchatFavorite, VrchatFavoriteGroup, VrchatPlayerModeration } from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
@@ -72,6 +72,42 @@ export async function replaceModerationProjection(ownerId: string, moderations: 
     const active = await collection.find({ ownerId, active: true }, { projection: { _id: 1, targetUserId: 1, moderationType: 1 } }).toArray();
     const staleIds = active.filter((document) => !keys.has(`${document.targetUserId}:${document.moderationType}`)).map((document) => document._id);
     if (staleIds.length) await collection.updateMany({ _id: { $in: staleIds } }, { $set: { active: false, updatedAt: observedAt } });
+}
+
+export async function replaceAvatarModerationProjection(ownerId: string, moderations: VrchatAvatarModeration[], observedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).avatarModerations;
+    const targetAvatarIds = new Set(moderations.map((moderation) => moderation.targetAvatarId));
+    if (moderations.length) {
+        await collection.bulkWrite(
+            moderations.map((moderation) => ({
+                updateOne: {
+                    filter: { _id: `${ownerId}:${moderation.targetAvatarId}:block` },
+                    update: { $set: { ownerId, targetAvatarId: moderation.targetAvatarId, moderationType: "block", moderation, active: true, observedAt, updatedAt: observedAt } },
+                    upsert: true,
+                },
+            })),
+            { ordered: false },
+        );
+    }
+    const active = await collection.find({ ownerId, active: true }, { projection: { _id: 1, targetAvatarId: 1 } }).toArray();
+    const staleIds = active.filter((document) => !targetAvatarIds.has(document.targetAvatarId)).map((document) => document._id);
+    if (staleIds.length) await collection.updateMany({ _id: { $in: staleIds } }, { $set: { active: false, updatedAt: observedAt } });
+}
+
+export async function upsertAvatarModeration(ownerId: string, moderation: VrchatAvatarModeration, observedAt = new Date()) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).avatarModerations.updateOne({ _id: `${ownerId}:${moderation.targetAvatarId}:block` }, { $set: { ownerId, targetAvatarId: moderation.targetAvatarId, moderationType: "block", moderation, active: true, observedAt, updatedAt: observedAt } }, { upsert: true });
+}
+
+export async function deactivateAvatarModeration(ownerId: string, targetAvatarId: string, observedAt = new Date()) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).avatarModerations.updateMany({ ownerId, targetAvatarId, moderationType: "block", active: true }, { $set: { active: false, updatedAt: observedAt } });
+}
+
+export async function isAvatarBlocked(ownerId: string, targetAvatarId: string) {
+    await ensureMongoSchema();
+    return Boolean(await collections(await getMongoDatabase()).avatarModerations.findOne({ ownerId, targetAvatarId, moderationType: "block", active: true }, { projection: { _id: 1 } }));
 }
 
 export async function deactivateFavorite(ownerId: string, objectId: string) {

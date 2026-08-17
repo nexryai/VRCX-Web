@@ -461,6 +461,16 @@ export const vrchatPlayerModerationSchema = z
 
 export type VrchatPlayerModeration = z.infer<typeof vrchatPlayerModerationSchema>;
 
+export const vrchatAvatarModerationSchema = z
+    .object({
+        avatarModerationType: z.literal("block"),
+        created: z.union([z.string().datetime({ offset: true }), z.number().int().nonnegative()]),
+        targetAvatarId: z.string().regex(/^avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
+    })
+    .passthrough();
+
+export type VrchatAvatarModeration = z.infer<typeof vrchatAvatarModerationSchema>;
+
 export const vrchatNotificationSchema = z
     .object({
         id: z.string(),

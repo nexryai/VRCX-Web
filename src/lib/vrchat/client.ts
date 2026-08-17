@@ -13,6 +13,7 @@ const allowedEndpoints = [
     "avatars/favorites",
     "auth/user/favoritelimits",
     "auth/user",
+    "auth/user/avatarmoderations",
     "auth/user/friends",
     "auth/user/notifications",
     "auth/user/playermoderations",

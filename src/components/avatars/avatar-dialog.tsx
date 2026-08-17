@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, CheckCircle, Clipboard, ExternalLink, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, X } from "lucide-react";
+import { Apple, CheckCircle, Ellipsis, ImageIcon, Loader2, Monitor, RefreshCw, Share2, Smartphone, X, XCircle } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
@@ -11,6 +11,7 @@ import { VrchatImage } from "@/components/vrchat-image";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
 type AvatarTab = "Info" | "JSON";
+type AvatarModerationAction = "block" | "unblock";
 
 export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string; openUser: (userId: string) => void; onClose: () => void }) {
     const currentUser = useCurrentUser();
@@ -19,9 +20,19 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const [loading, setLoading] = useState(true);
     const [selecting, setSelecting] = useState(false);
     const [selected, setSelected] = useState(currentUser.currentAvatar === avatarId);
+    const [isBlocked, setIsBlocked] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [moderationAction, setModerationAction] = useState<AvatarModerationAction | null>(null);
+    const [moderating, setModerating] = useState(false);
     const [error, setError] = useState("");
+    const [status, setStatus] = useState("");
     const [copied, setCopied] = useState("");
     const closeButton = useRef<HTMLButtonElement>(null);
+    const menu = useRef<HTMLDivElement>(null);
+    const manageButton = useRef<HTMLButtonElement>(null);
+    const confirmationDialog = useRef<HTMLDivElement>(null);
+    const confirmationCancel = useRef<HTMLButtonElement>(null);
+    const previousModerationAction = useRef<AvatarModerationAction | null>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -29,10 +40,11 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             setError("");
             try {
                 const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
-                const payload = (await response.json()) as { error?: string; avatar?: VrchatAvatar };
+                const payload = (await response.json()) as { error?: string; avatar?: VrchatAvatar; isBlocked?: boolean };
                 if (response.status === 401) window.location.assign("/login");
                 if (!response.ok || !payload.avatar) throw new Error(payload.error || "The avatar could not be loaded.");
                 setAvatar(payload.avatar);
+                setIsBlocked(payload.isBlocked === true);
             } catch (loadError) {
                 setError(loadError instanceof Error ? loadError.message : "The avatar could not be loaded.");
             } finally {
@@ -46,17 +58,45 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         setAvatar(null);
         setTab("Info");
         setSelected(currentUser.currentAvatar === avatarId);
+        setIsBlocked(false);
+        setMenuOpen(false);
+        setModerationAction(null);
+        setStatus("");
         void load();
         closeButton.current?.focus();
     }, [avatarId, currentUser.currentAvatar, load]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
-            if (event.key === "Escape") onClose();
+            if (event.key !== "Escape") return;
+            if (moderationAction) {
+                setModerationAction(null);
+                return;
+            }
+            if (menuOpen) {
+                setMenuOpen(false);
+                return;
+            }
+            onClose();
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [onClose]);
+    }, [menuOpen, moderationAction, onClose]);
+
+    useEffect(() => {
+        if (moderationAction) confirmationCancel.current?.focus();
+        else if (previousModerationAction.current) manageButton.current?.focus();
+        previousModerationAction.current = moderationAction;
+    }, [moderationAction]);
+
+    useEffect(() => {
+        if (!menuOpen) return;
+        function closeOutside(event: PointerEvent) {
+            if (!menu.current?.contains(event.target as Node)) setMenuOpen(false);
+        }
+        window.addEventListener("pointerdown", closeOutside);
+        return () => window.removeEventListener("pointerdown", closeOutside);
+    }, [menuOpen]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
@@ -77,6 +117,48 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             setError(selectError instanceof Error ? selectError.message : "The avatar could not be selected.");
         } finally {
             setSelecting(false);
+        }
+    }
+
+    function requestModeration(action: AvatarModerationAction) {
+        setMenuOpen(false);
+        setError("");
+        setModerationAction(action);
+    }
+
+    function trapConfirmationFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+        if (event.key !== "Tab") return;
+        const focusable = Array.from(confirmationDialog.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first)?.focus();
+        }
+    }
+
+    async function moderateAvatar() {
+        if (!moderationAction) return;
+        setModerating(true);
+        setError("");
+        setStatus("");
+        try {
+            const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}/actions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: moderationAction }),
+            });
+            const payload = (await response.json()) as { error?: string; isBlocked?: boolean };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok) throw new Error(payload.error || "The avatar moderation could not be changed.");
+            setIsBlocked(payload.isBlocked === true);
+            setStatus(moderationAction === "block" ? "Avatar blocked" : "Avatar unblocked");
+            setModerationAction(null);
+        } catch (moderationError) {
+            setError(moderationError instanceof Error ? moderationError.message : "The avatar moderation could not be changed.");
+        } finally {
+            setModerating(false);
         }
     }
 
@@ -136,19 +218,64 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                 >
                                     {selecting ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle className="size-4" />}
                                 </button>
-                                <button type="button" onClick={() => void load(true)} disabled={loading} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh avatar">
-                                    <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-                                </button>
-                                <button type="button" onClick={() => void copy(`https://vrchat.com/home/avatar/${avatar.id}`, "URL")} className="inline-flex h-9 items-center gap-1 rounded-full border border-input px-3 text-xs">
-                                    <Clipboard className="size-4" />
-                                    {copied === "URL" ? "Copied" : "Share"}
-                                </button>
-                                <a href={`https://vrchat.com/home/avatar/${encodeURIComponent(avatar.id)}`} target="_blank" rel="noreferrer" className="inline-flex size-9 items-center justify-center rounded-full border border-input" aria-label="Open on VRChat">
-                                    <ExternalLink className="size-4" />
-                                </a>
+                                <div ref={menu} className="relative">
+                                    <button
+                                        ref={manageButton}
+                                        type="button"
+                                        onClick={() => setMenuOpen((value) => !value)}
+                                        className={`inline-flex size-9 items-center justify-center rounded-full border ${isBlocked ? "border-destructive bg-destructive text-white" : "border-input hover:bg-muted"}`}
+                                        aria-label="Manage avatar"
+                                        aria-haspopup="menu"
+                                        aria-expanded={menuOpen}
+                                    >
+                                        <Ellipsis className="size-4" />
+                                    </button>
+                                    {menuOpen ? (
+                                        <div role="menu" className="absolute top-11 left-0 z-50 min-w-48 rounded-md border border-border bg-popover p-1 text-xs shadow-xl sm:right-0 sm:left-auto">
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    setMenuOpen(false);
+                                                    void load(true);
+                                                }}
+                                                disabled={loading}
+                                                className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted disabled:opacity-40"
+                                            >
+                                                <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+                                            </button>
+                                            <button
+                                                type="button"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    setMenuOpen(false);
+                                                    void copy(`https://vrchat.com/home/avatar/${avatar.id}`, "URL");
+                                                }}
+                                                className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted"
+                                            >
+                                                <Share2 className="size-4" /> {copied === "URL" ? "Copied" : "Share"}
+                                            </button>
+                                            <div className="my-1 border-t border-border" />
+                                            {isBlocked ? (
+                                                <button type="button" role="menuitem" onClick={() => requestModeration("unblock")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10">
+                                                    <CheckCircle className="size-4" /> Unblock Avatar
+                                                </button>
+                                            ) : (
+                                                <button type="button" role="menuitem" onClick={() => requestModeration("block")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                    <XCircle className="size-4" /> Block Avatar
+                                                </button>
+                                            )}
+                                        </div>
+                                    ) : null}
+                                </div>
                             </div>
                         </header>
-                        {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                        {error && !moderationAction ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                        {status ? (
+                            <p className="sr-only" role="status">
+                                {status}
+                            </p>
+                        ) : null}
                         <div className="mt-3 flex shrink-0 overflow-x-auto border-b border-border" role="tablist" aria-label="Avatar details">
                             {(["Info", "JSON"] as AvatarTab[]).map((item) => (
                                 <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={`h-10 flex-1 shrink-0 border-b-2 px-4 text-xs ${tab === item ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
@@ -160,6 +287,27 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                             {tab === "Info" ? <AvatarInfo avatar={avatar} copied={copied} copy={copy} /> : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(avatar, null, 2)}</pre> : null}
                         </div>
+                        {moderationAction ? (
+                            <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+                                <div ref={confirmationDialog} role="alertdialog" aria-modal="true" aria-labelledby="avatar-moderation-title" aria-describedby="avatar-moderation-description" onKeyDown={trapConfirmationFocus} className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                                    <h3 id="avatar-moderation-title" className="text-sm font-semibold">
+                                        Confirm
+                                    </h3>
+                                    <p id="avatar-moderation-description" className="mt-2 text-xs text-muted-foreground">
+                                        Are you sure you want to {moderationAction === "block" ? "Block Avatar" : "Unblock Avatar"}?
+                                    </p>
+                                    {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}
+                                    <div className="mt-5 flex justify-end gap-2">
+                                        <button ref={confirmationCancel} type="button" onClick={() => setModerationAction(null)} disabled={moderating} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                                            Cancel
+                                        </button>
+                                        <button type="button" onClick={() => void moderateAvatar()} disabled={moderating} className={`inline-flex h-9 items-center gap-1 rounded-md px-4 text-xs disabled:opacity-40 ${moderationAction === "block" ? "bg-destructive text-white" : "bg-primary text-primary-foreground"}`}>
+                                            {moderating ? <Loader2 className="size-4 animate-spin" /> : null} Confirm
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
                     </>
                 ) : null}
             </section>

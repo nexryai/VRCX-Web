@@ -49,6 +49,10 @@ const captures = [
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
+    { name: "avatar-dialog-block-menu", path: "/favorites/avatars", readyText: "Block Avatar", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: false, avatarMenu: true },
+    { name: "avatar-dialog-block-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Block Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: false, avatarConfirm: "block" },
+    { name: "avatar-dialog-unblock-menu", path: "/favorites/avatars", readyText: "Unblock Avatar", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: true, avatarMenu: true },
+    { name: "avatar-dialog-unblock-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Unblock Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: true, avatarConfirm: "unblock" },
     { name: "avatar-favorite-dialog", path: "/favorites/avatars", readyText: "VRChat Favorites", favoriteKind: "avatar", avatarDialog: true, favoriteActionLabel: "Manage favorites for Favorite Browser Avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/my-avatars", readyText: "Dance", avatars: true },
@@ -117,6 +121,15 @@ for (const width of widths) {
                         : [{ id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" }];
                 await page.route(`**/api/favorites?section=items&type=${capture.favoriteKind}`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) }));
             }
+        }
+        if (capture.avatarModerationState !== undefined) {
+            await page.route("**/api/avatars/**", async (route) => {
+                const requestUrl = new URL(route.request().url());
+                if (route.request().method() !== "GET" || requestUrl.pathname !== "/api/avatars/avtr_00000000-0000-0000-0000-000000000052") return route.fallback();
+                const response = await route.fetch();
+                const payload = await response.json();
+                return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, isBlocked: capture.avatarModerationState }) });
+            });
         }
         if (capture.avatars) {
             await page.route("**/api/avatars?offset=*", (route) => {
@@ -455,6 +468,23 @@ for (const width of widths) {
         }
         if (capture.avatarDialog) {
             await page.getByText("Favorite Browser Avatar", { exact: true }).first().click();
+            if (capture.avatarMenu || capture.avatarConfirm) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
+            if (capture.avatarConfirm) {
+                const actionLabel = capture.avatarConfirm === "block" ? "Block Avatar" : "Unblock Avatar";
+                await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+                const confirmation = page.getByRole("alertdialog", { name: "Confirm", exact: true });
+                await confirmation.waitFor();
+                await page.keyboard.press("Shift+Tab");
+                if (!(await confirmation.getByRole("button", { name: "Confirm", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("Avatar moderation confirmation did not trap focus.");
+                await page.keyboard.press("Tab");
+                if (!(await confirmation.getByRole("button", { name: "Cancel", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("Avatar moderation confirmation did not cycle focus.");
+                await page.keyboard.press("Escape");
+                await confirmation.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage avatar", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar moderation confirmation did not restore focus.");
+                await manage.click();
+                await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+            }
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();

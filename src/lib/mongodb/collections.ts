@@ -5,6 +5,7 @@ import type { Collection, Db } from "mongodb";
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
 import type {
     VrchatAvatar,
+    VrchatAvatarModeration,
     VrchatFavorite,
     VrchatFavoriteGroup,
     VrchatFile,
@@ -415,6 +416,17 @@ export type ModerationDocument = {
     updatedAt: Date;
 };
 
+export type AvatarModerationDocument = {
+    _id: string;
+    ownerId: string;
+    targetAvatarId: string;
+    moderationType: "block";
+    moderation: VrchatAvatarModeration;
+    active: boolean;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
 export type SchemaMigrationDocument = {
     _id: number;
     name: string;
@@ -451,6 +463,7 @@ export type Collections = {
     localFavoriteGroups: Collection<LocalFavoriteGroupDocument>;
     localFavorites: Collection<LocalFavoriteDocument>;
     moderations: Collection<ModerationDocument>;
+    avatarModerations: Collection<AvatarModerationDocument>;
     schemaMigrations: Collection<SchemaMigrationDocument>;
     mutualGraph: Collection<MutualGraphDocument>;
 };
@@ -486,6 +499,7 @@ export function collections(db: Db): Collections {
         localFavoriteGroups: db.collection<LocalFavoriteGroupDocument>("local_favorite_groups"),
         localFavorites: db.collection<LocalFavoriteDocument>("local_favorites"),
         moderations: db.collection<ModerationDocument>("moderations"),
+        avatarModerations: db.collection<AvatarModerationDocument>("avatar_moderations"),
         schemaMigrations: db.collection<SchemaMigrationDocument>("schema_migrations"),
         mutualGraph: db.collection<MutualGraphDocument>("mutual_graph"),
     };

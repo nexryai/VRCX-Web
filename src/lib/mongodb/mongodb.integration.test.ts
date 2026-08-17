@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -58,6 +58,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_ban_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_invite_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_audit_log_snapshots").indexExists(["owner_group_filter_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("avatar_moderations").indexExists(["owner_target_type_unique", "owner_active_updated"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -640,24 +641,32 @@ describe("MongoDB application repositories", () => {
     });
 
     test("retains inactive favorite and moderation projections for history", async () => {
-        const { clearFavoriteGroupProjection, replaceFavoriteProjection, replaceModerationProjection, upsertFavoriteGroupProjection } = await import("./projection-repository");
+        const { clearFavoriteGroupProjection, isAvatarBlocked, replaceAvatarModerationProjection, replaceFavoriteProjection, replaceModerationProjection, upsertFavoriteGroupProjection } = await import("./projection-repository");
         const { getMongoDatabase } = await import("./client");
         const ownerId = "usr_00000000-0000-0000-0000-000000000001";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000002";
         const favorite = { id: "fvrt_1", favoriteId: "wrld_00000000-0000-0000-0000-000000000010", type: "world", tags: ["world1"] };
         const favoriteGroup = { id: "favorite-group-1", ownerId, name: "world1", displayName: "Worlds", type: "world", visibility: "private" };
         const moderation = { type: "block", sourceUserId: ownerId, targetUserId: "usr_00000000-0000-0000-0000-000000000003" };
+        const avatarModeration = { avatarModerationType: "block" as const, created: "2026-08-17T12:00:00.000Z", targetAvatarId: "avtr_00000000-0000-0000-0000-000000000010" };
 
         await replaceFavoriteProjection(ownerId, [favorite]);
         await upsertFavoriteGroupProjection(ownerId, favoriteGroup);
         await clearFavoriteGroupProjection(ownerId, "world", "world1");
         await replaceModerationProjection(ownerId, [moderation]);
+        await replaceAvatarModerationProjection(ownerId, [avatarModeration]);
+        expect(await isAvatarBlocked(ownerId, avatarModeration.targetAvatarId)).toBe(true);
+        expect(await isAvatarBlocked(otherOwnerId, avatarModeration.targetAvatarId)).toBe(false);
         await replaceFavoriteProjection(ownerId, []);
         await replaceModerationProjection(ownerId, []);
+        await replaceAvatarModerationProjection(ownerId, []);
 
         const database = await getMongoDatabase();
         expect(await database.collection("favorites").findOne({ ownerId, recordId: favorite.id })).toMatchObject({ active: false, objectId: favorite.favoriteId });
         expect(await database.collection("favorite_groups").findOne({ ownerId, groupId: favoriteGroup.id })).toMatchObject({ active: true, group: favoriteGroup });
         expect(await database.collection("moderations").findOne({ ownerId, targetUserId: moderation.targetUserId })).toMatchObject({ active: false, moderationType: "block" });
+        expect(await database.collection("avatar_moderations").findOne({ ownerId, targetAvatarId: avatarModeration.targetAvatarId })).toMatchObject({ active: false, moderationType: "block" });
+        expect(await isAvatarBlocked(ownerId, avatarModeration.targetAvatarId)).toBe(false);
     });
 
     test("applies typed Pipeline friend events directly and records provenance", async () => {

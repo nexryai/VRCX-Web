@@ -406,6 +406,13 @@ const migrations: Migration[] = [
             await Promise.all([c.groupAuditLogSnapshots.createIndex({ ownerId: 1, groupId: 1, filterKey: 1 }, { unique: true, name: "owner_group_filter_unique" }), c.groupAuditLogSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 36,
+        name: "add-avatar-moderation-projection-indexes",
+        async apply(c) {
+            await Promise.all([c.avatarModerations.createIndex({ ownerId: 1, targetAvatarId: 1, moderationType: 1 }, { unique: true, name: "owner_target_type_unique" }), c.avatarModerations.createIndex({ ownerId: 1, active: 1, updatedAt: -1 }, { name: "owner_active_updated" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getCachedAvatar, removeCachedAvatar, upsertCachedAvatars } from "@/lib/mongodb/entity-repository";
+import { isAvatarBlocked } from "@/lib/mongodb/projection-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/avat
     const ownerId = await requireActiveUserId();
     if (!refresh) {
         const cached = await getCachedAvatar(ownerId, avatarId.data);
-        if (cached?.authorId && Array.isArray(cached.unityPackages)) return avatarResponse({ avatar: cached });
+        if (cached?.authorId && Array.isArray(cached.unityPackages)) return avatarResponse({ avatar: cached, isBlocked: await isAvatarBlocked(ownerId, avatarId.data) });
     }
     let expectedAuthCookie: string | undefined;
     try {
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/avat
         const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { cookies });
         const avatar = vrchatAvatarSchema.parse(upstream.data);
         await upsertCachedAvatars(ownerId, [avatar], "lookup");
-        const response = avatarResponse({ avatar });
+        const response = avatarResponse({ avatar, isBlocked: await isAvatarBlocked(ownerId, avatarId.data) });
         await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         return response;
     } catch (error) {
