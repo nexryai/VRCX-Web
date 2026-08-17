@@ -16,7 +16,7 @@ type AvatarConfirmAction = "block" | "delete-avatar" | "delete-impostor" | "enqu
 type AvatarEditField = "description" | "name";
 type AvatarMetadataDialog = "content" | "styles";
 
-export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string; openUser: (userId: string) => void; onClose: () => void }) {
+export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: { avatarId: string; initialMetadata?: AvatarMetadataDialog; openUser: (userId: string) => void; onClose: () => void }) {
     const currentUser = useCurrentUser();
     const [avatar, setAvatar] = useState<VrchatAvatar | null>(null);
     const [tab, setTab] = useState<AvatarTab>("Info");
@@ -64,6 +64,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const metadataDialogRef = useRef<HTMLDivElement>(null);
     const metadataInitialFocus = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(null);
     const previousMetadataDialog = useRef<AvatarMetadataDialog | null>(null);
+    const initialMetadataOpened = useRef(false);
 
     const loadGallery = useCallback(
         async (refresh = false) => {
@@ -121,9 +122,19 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         setEditField(null);
         setEditValue("");
         setMetadataDialog(null);
+        initialMetadataOpened.current = false;
         void load();
         closeButton.current?.focus();
     }, [avatarId, currentUser.currentAvatar, load]);
+
+    // The command is intentionally consumed once per avatar load; depending on
+    // the render-local dispatcher would reopen it on every render.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: guarded one-shot dialog command
+    useEffect(() => {
+        if (!avatar || avatar.authorId !== currentUser.id || !initialMetadata || initialMetadataOpened.current) return;
+        initialMetadataOpened.current = true;
+        void requestMetadataDialog(initialMetadata);
+    }, [avatar, currentUser.id, initialMetadata]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {

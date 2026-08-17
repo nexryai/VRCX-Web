@@ -68,6 +68,8 @@ const captures = [
     { name: "avatar-favorite-dialog", path: "/favorites/avatars", readyText: "VRChat Favorites", favoriteKind: "avatar", avatarDialog: true, favoriteActionLabel: "Manage favorites for Favorite Browser Avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/my-avatars", readyText: "Dance", avatars: true },
+    { name: "my-avatars-content-tags", path: "/my-avatars", readyText: "Select All", avatars: true, myAvatarMetadata: "content" },
+    { name: "my-avatars-styles", path: "/my-avatars", readyText: "Primary Style", avatars: true, myAvatarMetadata: "styles" },
     { name: "mutual-friends", path: "/charts/mutual", readyText: "Aoi Sample" },
     { name: "hot-worlds", path: "/charts/hot-worlds", readyText: "Sorted by unique friends" },
     { name: "hot-worlds-detail", path: "/charts/hot-worlds", readyText: "Friends who visited", hotWorldDetail: true },
@@ -115,7 +117,7 @@ for (const width of widths) {
         });
         // Groups live in VRCX's desktop friends sidebar. Open the selected group
         // before resizing so the dialog itself can still be verified at narrow widths.
-        const navigationWidth = capture.groupDialog && width < 1280 ? 1280 : width;
+        const navigationWidth = (capture.groupDialog || capture.myAvatarMetadata) && width < 1280 ? 1280 : width;
         const page = await browser.newPage({ viewport: { width: navigationWidth, height: 800 }, deviceScaleFactor: 1 });
         page.setDefaultNavigationTimeout(60_000);
         if (capture.searchQuery) {
@@ -221,6 +223,39 @@ for (const width of widths) {
                         : [];
                 return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ avatars }) });
             });
+        }
+        if (capture.myAvatarMetadata) {
+            await page.route("**/api/favorites?section=records&offset=*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ favorites: [] }) }));
+            await page.route("**/api/favorites?section=groups&offset=*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ groups: [] }) }));
+            await page.route("**/api/favorites?section=limits", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ limits: { maxFavoriteGroups: { avatar: 6 }, maxFavoritesPerGroup: { avatar: 50 } } }) }));
+            await page.route("**/api/local-favorites?kind=avatar", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ groups: [] }) }));
+            await page.route("**/api/avatars/avtr_00000000-0000-0000-0000-000000000061", (route) =>
+                route.fulfill({
+                    status: 200,
+                    contentType: "application/json",
+                    body: JSON.stringify({
+                        avatar: {
+                            id: "avtr_00000000-0000-0000-0000-000000000061",
+                            name: "Browser Dance Avatar",
+                            description: "Responsive avatar fixture",
+                            authorId: "usr_00000000-0000-0000-0000-000000000001",
+                            authorName: "Visual Operator",
+                            releaseStatus: "public",
+                            version: 12,
+                            created_at: "2026-02-03T12:00:00.000Z",
+                            updated_at: "2026-07-31T12:00:00.000Z",
+                            tags: ["content_gore", "author_tag_dancer"],
+                            styles: { primary: "Realistic", secondary: "Human" },
+                            unityPackages: [
+                                { platform: "standalonewindows", performanceRating: "Good" },
+                                { platform: "android", performanceRating: "Medium" },
+                            ],
+                        },
+                        isBlocked: false,
+                    }),
+                }),
+            );
+            await page.route("**/api/avatars/avtr_00000000-0000-0000-0000-000000000061/gallery", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ files: [], cached: true }) }));
         }
         if (capture.previousInstances) {
             if (capture.previousInstances === "user") {
@@ -599,6 +634,28 @@ for (const width of widths) {
                 if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Avatar gallery preview did not restore focus.");
                 await trigger.click();
             }
+        }
+        if (capture.myAvatarMetadata) {
+            const actionLabel = capture.myAvatarMetadata === "content" ? "Change content tags" : "Change styles/author tags";
+            const dialogName = capture.myAvatarMetadata === "content" ? "Set Avatar Tags" : "Set Avatar Styles";
+            const cardMenu = page.getByLabel("Manage Browser Dance Avatar", { exact: true });
+            await cardMenu.waitFor();
+            await cardMenu.click();
+            await page.getByRole("button", { name: actionLabel, exact: true }).click();
+            const editor = page.getByRole("dialog", { name: dialogName, exact: true });
+            await editor.waitFor();
+            const initial = capture.myAvatarMetadata === "content" ? editor.getByRole("checkbox").first() : editor.getByRole("combobox").first();
+            const initialHandle = await initial.elementHandle();
+            await page.waitForFunction((element) => document.activeElement === element, initialHandle);
+            await page.keyboard.press("Shift+Tab");
+            if (!(await editor.getByRole("button", { name: "Save", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("My Avatars tag/style editor did not trap focus.");
+            await page.keyboard.press("Escape");
+            await editor.waitFor({ state: "detached" });
+            const manage = page.getByRole("button", { name: "Manage avatar", exact: true });
+            if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("My Avatars tag/style editor did not restore focus inside Avatar Dialog.");
+            await manage.click();
+            await page.getByRole("menuitem", { name: capture.myAvatarMetadata === "content" ? "Change Content Tags" : "Change Styles and Author Tags", exact: true }).click();
+            if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();

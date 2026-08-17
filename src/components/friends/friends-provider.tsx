@@ -19,7 +19,7 @@ type FriendsContextValue = {
     openUser: (userId: string) => void;
     openWorld: (worldId: string) => void;
     openGroup: (groupId: string) => void;
-    openAvatar: (avatarId: string) => void;
+    openAvatar: (avatarId: string, initialMetadata?: "content" | "styles") => void;
     removeFriend: (userId: string) => void;
     patchFriendMetadata: (userId: string, fields: Partial<Pick<FriendListUser, "note" | "$memo">>) => void;
 };
@@ -35,6 +35,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     const [selectedWorldId, setSelectedWorldId] = useState("");
     const [selectedGroupId, setSelectedGroupId] = useState("");
     const [selectedAvatarId, setSelectedAvatarId] = useState("");
+    const [selectedAvatarMetadata, setSelectedAvatarMetadata] = useState<"content" | "styles" | undefined>();
     const controllerRef = useRef<AbortController | null>(null);
 
     const load = useCallback(async (reconcile: boolean) => {
@@ -92,13 +93,17 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
         setSelectedGroupId(groupId);
     }, []);
     const closeGroup = useCallback(() => setSelectedGroupId(""), []);
-    const openAvatar = useCallback((avatarId: string) => {
+    const openAvatar = useCallback((avatarId: string, initialMetadata?: "content" | "styles") => {
         setSelectedUserId("");
         setSelectedWorldId("");
         setSelectedGroupId("");
+        setSelectedAvatarMetadata(initialMetadata);
         setSelectedAvatarId(avatarId);
     }, []);
-    const closeAvatar = useCallback(() => setSelectedAvatarId(""), []);
+    const closeAvatar = useCallback(() => {
+        setSelectedAvatarId("");
+        setSelectedAvatarMetadata(undefined);
+    }, []);
     const removeFriend = useCallback((userId: string) => {
         setFriends((current) => current.filter((friend) => friend.id !== userId));
         setAllFriends((current) => current.filter((friend) => friend.id !== userId));
@@ -127,7 +132,7 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
             {selectedUserId ? <UserDialog userId={selectedUserId} onClose={closeUser} /> : null}
             {selectedWorldId ? <WorldDialog worldId={selectedWorldId} friends={allFriends} openUser={openUser} onClose={closeWorld} /> : null}
             {selectedGroupId ? <GroupDialog groupId={selectedGroupId} friends={allFriends} openUser={openUser} onClose={closeGroup} /> : null}
-            {selectedAvatarId ? <AvatarDialog avatarId={selectedAvatarId} openUser={openUser} onClose={closeAvatar} /> : null}
+            {selectedAvatarId ? <AvatarDialog avatarId={selectedAvatarId} initialMetadata={selectedAvatarMetadata} openUser={openUser} onClose={closeAvatar} /> : null}
         </FriendsContext.Provider>
     );
 }

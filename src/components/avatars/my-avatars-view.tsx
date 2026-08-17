@@ -15,6 +15,7 @@ type ViewMode = "grid" | "table";
 type PageSize = 20 | 50 | 100;
 type AvatarTag = { tag: string; color: string | null };
 type EditMode = "description" | "name";
+type DetailMode = "content" | "styles";
 
 const tagPalette = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899"];
 
@@ -229,8 +230,8 @@ export function MyAvatarsView() {
         setUpdatingId("");
     }
 
-    function showDetails(avatar: VrchatAvatar) {
-        openAvatar(avatar.id);
+    function showDetails(avatar: VrchatAvatar, mode?: DetailMode) {
+        openAvatar(avatar.id, mode);
     }
 
     return (
@@ -335,7 +336,7 @@ export function MyAvatarsView() {
                                 active={avatar.id === currentAvatarId}
                                 busy={updatingId === avatar.id}
                                 wear={() => void runAction(avatar, "select")}
-                                details={() => showDetails(avatar)}
+                                details={(mode) => showDetails(avatar, mode)}
                                 manageTags={() => setManagingTags(avatar)}
                                 edit={(mode) => setEditing({ avatar, mode })}
                                 visibility={() => void mutateAvatar(avatar, { releaseStatus: avatar.releaseStatus === "public" ? "private" : "public" }, `${avatar.name} visibility was updated.`)}
@@ -413,7 +414,7 @@ function RangeSetting({ label, value, min, max, step, changed }: { label: string
     );
 }
 
-type CardProps = { avatar: VrchatAvatar; tags: AvatarTag[]; scale: number; active: boolean; busy: boolean; wear: () => void; details: () => void; manageTags: () => void; edit: (mode: EditMode) => void; visibility: () => void; impostor: () => void };
+type CardProps = { avatar: VrchatAvatar; tags: AvatarTag[]; scale: number; active: boolean; busy: boolean; wear: () => void; details: (mode?: DetailMode) => void; manageTags: () => void; edit: (mode: EditMode) => void; visibility: () => void; impostor: () => void };
 
 function AvatarCard(props: CardProps) {
     const { avatar, tags, scale, active, busy, wear } = props;
@@ -478,8 +479,8 @@ function ActionMenu(props: CardProps & { table?: boolean }) {
                 <MenuButton icon={<User />} label={avatar.releaseStatus === "public" ? "Make private" : "Make public"} action={visibility} />
                 <MenuButton icon={<Pencil />} label="Rename" action={() => edit("name")} />
                 <MenuButton icon={<Pencil />} label="Change description" action={() => edit("description")} />
-                <MenuButton icon={<ExternalLink />} label="Change content tags" action={details} />
-                <MenuButton icon={<ExternalLink />} label="Change styles/author tags" action={details} />
+                <MenuButton icon={<ExternalLink />} label="Change content tags" action={() => details("content")} />
+                <MenuButton icon={<ExternalLink />} label="Change styles/author tags" action={() => details("styles")} />
                 <MenuButton icon={<Sparkles />} label="Create impostor" action={impostor} />
             </div>
         </details>
@@ -513,7 +514,7 @@ type TableProps = {
     currentAvatarId: string;
     busyId: string;
     sort: (key: "created" | "name" | "updated" | "version") => void;
-    details: (avatar: VrchatAvatar) => void;
+    details: (avatar: VrchatAvatar, mode?: DetailMode) => void;
     wear: (avatar: VrchatAvatar) => void;
     manageTags: (avatar: VrchatAvatar) => void;
     edit: (avatar: VrchatAvatar, mode: EditMode) => void;
