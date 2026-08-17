@@ -587,6 +587,16 @@ await database.collection("group_ban_snapshots").insertOne({
     observedAt: now,
     updatedAt: now,
 });
+await database.collection("group_invite_snapshots").insertOne({
+    _id: `${ownerId}:${groupId}`,
+    ownerId,
+    groupId,
+    invites: [{ id: "ginv_visual_sent", groupId, userId: "usr_00000000-0000-0000-0000-000000000074", roleIds: [], managerNotes: "Invited after the creator meetup.", user: { id: "usr_00000000-0000-0000-0000-000000000074", displayName: "Sent Invite Sample", tags: ["system_trust_known"] } }],
+    joinRequests: [{ id: "greq_visual_join", groupId, userId: "usr_00000000-0000-0000-0000-000000000075", roleIds: [], managerNotes: "Application pending host review.", user: { id: "usr_00000000-0000-0000-0000-000000000075", displayName: "Join Request Sample", tags: [] } }],
+    blockedRequests: [{ id: "greq_visual_blocked", groupId, userId: "usr_00000000-0000-0000-0000-000000000076", roleIds: [], managerNotes: "Request blocked by a moderator.", user: { id: "usr_00000000-0000-0000-0000-000000000076", displayName: "Blocked Request Sample", tags: [] } }],
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("mutual_graph").insertOne({
     _id: ownerId,
     ownerId,

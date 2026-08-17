@@ -43,6 +43,7 @@ const captures = [
     { name: "group-dialog-moderation-bans", path: "/friends-locations", readyText: "Cobalt Banned User", groupDialog: true, groupModeration: "bans" },
     { name: "group-dialog-moderation-bans-export", path: "/friends-locations", readyText: "Export Bans", groupDialog: true, groupModeration: "bans-export" },
     { name: "group-dialog-moderation-bans-import", path: "/friends-locations", readyText: "Import Bans", groupDialog: true, groupModeration: "bans-import" },
+    { name: "group-dialog-moderation-invites", path: "/friends-locations", readyText: "Sent Invite Sample", groupDialog: true, groupModeration: "invites" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
@@ -400,6 +401,10 @@ for (const width of widths) {
                 if (capture.groupModeration === true) {
                     await page.getByLabel("Select Aoi Sample", { exact: true }).check();
                     await overlay.getByText("Selected Users", { exact: true }).scrollIntoViewIfNeeded();
+                } else if (capture.groupModeration === "invites") {
+                    await overlay.getByRole("button", { name: "Invites", exact: true }).click();
+                    await overlay.getByText("Sent Invite Sample", { exact: true }).waitFor();
+                    await page.getByLabel("Select invitation Sent Invite Sample", { exact: true }).check();
                 } else {
                     await overlay.getByRole("button", { name: "Bans", exact: true }).click();
                     await overlay.getByText("Cobalt Banned User", { exact: true }).waitFor();

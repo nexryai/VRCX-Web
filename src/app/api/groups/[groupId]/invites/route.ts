@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { invalidateCachedGroupInvites } from "@/lib/mongodb/group-dialog-repository";
+import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { groupInviteRequestSchema } from "@/lib/vrchat/group-invites";
@@ -14,7 +16,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/gro
     if (!groupId.success || !body.success) return response({ error: "The group invitation is invalid." }, 400);
     let expectedAuthCookie: string | undefined;
     try {
-        const cookies = await requireVrchatCookies();
+        const [ownerId, cookies] = await Promise.all([requireActiveUserId(), requireVrchatCookies()]);
         expectedAuthCookie = cookies.auth;
         const permission = await assertGroupPermission(groupId.data, "group-invites-manage", cookies);
         Object.assign(cookies, permission.cookies);
@@ -33,8 +35,8 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/gro
         // Sending an invite is not idempotent. Once any upstream mutation has
         // succeeded, a local cookie-persistence failure must not invite a retry
         // that could send the same invitation twice.
-        const [session] = await Promise.allSettled([persistRotatedVrchatCookies(cookies, expectedAuthCookie)]);
-        return response({ succeededUserIds, ...(failed ? { failed } : {}), refreshRequired: session.status === "rejected" }, failed ? 207 : 200);
+        const [projection, session] = await Promise.allSettled([succeededUserIds.length ? invalidateCachedGroupInvites(ownerId, groupId.data) : Promise.resolve(), persistRotatedVrchatCookies(cookies, expectedAuthCookie)]);
+        return response({ succeededUserIds, ...(failed ? { failed } : {}), refreshRequired: projection.status === "rejected" || session.status === "rejected" }, failed ? 207 : 200);
     } catch (error) {
         const status = error instanceof VrchatApiError ? error.status : 502;
         if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);

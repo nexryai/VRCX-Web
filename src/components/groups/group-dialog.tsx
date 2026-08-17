@@ -1134,7 +1134,7 @@ type GroupMemberModerationAction = "add-role" | "ban" | "kick" | "remove-role" |
 // Members/Bans tabs, transfer dialogs, selection composable, and sequential
 // batch-operation behavior.
 function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: { group: VrchatGroup; currentUserId: string; openUser: (userId: string) => void; close: () => void }) {
-    const [activeTab, setActiveTab] = useState<"Members" | "Bans">("Members");
+    const [activeTab, setActiveTab] = useState<"Members" | "Bans" | "Invites">("Members");
     const [members, setMembers] = useState<VrchatGroupMember[]>([]);
     const [searchResults, setSearchResults] = useState<VrchatGroupMember[]>([]);
     const [selected, setSelected] = useState<Record<string, VrchatGroupMember>>({});
@@ -1346,7 +1346,7 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                             {group.name}
                         </h3>
                         <div className="mt-2 flex text-xs">
-                            {(["Members", "Bans"] as const).map((tabName) => (
+                            {(["Members", "Bans", "Invites"] as const).map((tabName) => (
                                 <button
                                     key={tabName}
                                     type="button"
@@ -1356,7 +1356,7 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                                         setError("");
                                         setNotice("");
                                     }}
-                                    disabled={tabName === "Bans" && !hasGroupPermission(group, "group-bans-manage")}
+                                    disabled={(tabName === "Bans" && !hasGroupPermission(group, "group-bans-manage")) || (tabName === "Invites" && !hasGroupPermission(group, "group-invites-manage"))}
                                     className={`border-b-2 px-4 pb-2 disabled:opacity-40 ${activeTab === tabName ? "border-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                                 >
                                     {tabName}
@@ -1510,8 +1510,10 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                                 </button>
                             </div>
                         </>
-                    ) : (
+                    ) : activeTab === "Bans" ? (
                         <GroupModerationBansTab group={group} selected={selected} setSelected={setSelected} openUser={openUser} refreshGeneration={moderationRefresh} busy={busy} reportError={setError} reportNotice={setNotice} />
+                    ) : (
+                        <GroupModerationInvitesTab group={group} selected={selected} setSelected={setSelected} openUser={openUser} busy={busy} reportError={setError} reportNotice={setNotice} />
                     )}
 
                     <section className="mt-5 space-y-3 text-xs">
@@ -1789,6 +1791,226 @@ function GroupModerationBansTab({
                     }}
                 />
             ) : null}
+        </div>
+    );
+}
+
+type GroupInviteModerationKind = "accept" | "block" | "delete-blocked" | "delete-invite" | "reject";
+type GroupInviteModerationSnapshot = { invites: VrchatGroupMember[]; joinRequests: VrchatGroupMember[]; blockedRequests: VrchatGroupMember[] };
+
+function GroupModerationInvitesTab({
+    group,
+    selected,
+    setSelected,
+    openUser,
+    busy,
+    reportError,
+    reportNotice,
+}: {
+    group: VrchatGroup;
+    selected: Record<string, VrchatGroupMember>;
+    setSelected: Dispatch<SetStateAction<Record<string, VrchatGroupMember>>>;
+    openUser: (userId: string) => void;
+    busy: boolean;
+    reportError: (error: string) => void;
+    reportNotice: (notice: string) => void;
+}) {
+    const [snapshot, setSnapshot] = useState<GroupInviteModerationSnapshot>({ invites: [], joinRequests: [], blockedRequests: [] });
+    const [activeTab, setActiveTab] = useState<"sent" | "join" | "blocked">("sent");
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(15);
+    const [loading, setLoading] = useState(true);
+    const [progress, setProgress] = useState({ current: 0, total: 0 });
+    const continueBatch = useRef(true);
+
+    const loadInvites = useCallback(
+        async (refresh = false) => {
+            setLoading(true);
+            reportError("");
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/moderation/invites${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as Partial<GroupInviteModerationSnapshot> & { error?: string };
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!response.ok) throw new Error(payload.error || "Group invitations could not be loaded.");
+                setSnapshot({ invites: payload.invites || [], joinRequests: payload.joinRequests || [], blockedRequests: payload.blockedRequests || [] });
+            } catch (loadError) {
+                reportError(loadError instanceof Error ? loadError.message : "Group invitations could not be loaded.");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [group.id, reportError],
+    );
+
+    useEffect(() => {
+        void loadInvites();
+    }, [loadInvites]);
+    const rows = activeTab === "sent" ? snapshot.invites : activeTab === "join" ? snapshot.joinRequests : snapshot.blockedRequests;
+    const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+    const effectivePage = Math.min(page, pageCount - 1);
+    const pageRows = rows.slice(effectivePage * pageSize, effectivePage * pageSize + pageSize);
+    const actionBusy = progress.total > 0;
+
+    function toggle(row: VrchatGroupMember, checked: boolean) {
+        setSelected((current) => {
+            const next = { ...current };
+            if (checked) next[row.userId] = row;
+            else delete next[row.userId];
+            return next;
+        });
+    }
+
+    async function runInviteAction(action: GroupInviteModerationKind) {
+        const users = Object.values(selected);
+        if (!users.length) return;
+        reportError("");
+        continueBatch.current = true;
+        setProgress({ current: 0, total: users.length });
+        let completed = 0;
+        let failures = 0;
+        let lastFailure = "";
+        for (const [index, user] of users.entries()) {
+            if (!continueBatch.current) break;
+            setProgress({ current: index + 1, total: users.length });
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/moderation/invites/${encodeURIComponent(user.userId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+                const payload = (await response.json()) as { error?: string };
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!response.ok) throw new Error(payload.error || `The ${action} action failed.`);
+            } catch (actionError) {
+                failures += 1;
+                lastFailure = actionError instanceof Error ? actionError.message : `The ${action} action failed.`;
+            }
+            completed += 1;
+        }
+        setProgress({ current: 0, total: 0 });
+        setSelected({});
+        reportNotice(`${completed} selected user${completed === 1 ? "" : "s"} processed${failures ? ` with ${failures} failure${failures === 1 ? "" : "s"}` : ""}.`);
+        await loadInvites(true);
+        if (lastFailure) reportError(lastFailure);
+    }
+
+    const disabled = busy || actionBusy || !Object.keys(selected).length;
+    return (
+        <div className="text-xs">
+            <button type="button" onClick={() => void loadInvites(true)} disabled={loading || busy || actionBusy} className="inline-flex size-8 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh group invitations">
+                {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            </button>
+            <div className="mt-2 flex overflow-x-auto border-b border-border">
+                {(
+                    [
+                        ["sent", "Sent Invites", snapshot.invites.length],
+                        ["join", "Join Requests", snapshot.joinRequests.length],
+                        ["blocked", "Blocked Requests", snapshot.blockedRequests.length],
+                    ] as const
+                ).map(([value, label, count]) => (
+                    <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                            setActiveTab(value);
+                            setSelected({});
+                            setPage(0);
+                        }}
+                        className={`shrink-0 border-b-2 px-4 py-2 text-base font-bold ${activeTab === value ? "border-primary" : "border-transparent text-muted-foreground"}`}
+                    >
+                        {label} <span className="ml-1.5 text-xs font-normal text-muted-foreground">{count}</span>
+                    </button>
+                ))}
+            </div>
+            <button type="button" onClick={() => setSelected(Object.fromEntries(rows.map((row) => [row.userId, row])))} disabled={!rows.length || actionBusy} className="mt-2 h-8 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
+                Select All
+            </button>
+            <div className="mt-2 overflow-x-auto rounded-md border border-border">
+                <table className="w-full min-w-[620px] table-fixed text-left">
+                    <thead className="bg-muted/70 text-muted-foreground">
+                        <tr>
+                            <th className="w-12 p-2" />
+                            <th className="w-16 p-2">Avatar</th>
+                            <th className="w-48 p-2">Display Name</th>
+                            <th className="p-2">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pageRows.map((row) => (
+                            <tr key={row.userId} className="border-t border-border hover:bg-muted/50">
+                                <td className="p-2 text-center">
+                                    <input type="checkbox" checked={Boolean(selected[row.userId])} onChange={(event) => toggle(row, event.target.checked)} aria-label={`Select invitation ${row.user?.displayName || row.userId}`} className="size-4 accent-primary" />
+                                </td>
+                                <td className="p-2">{row.user ? <FriendAvatar friend={row.user} size="sm" /> : null}</td>
+                                <td className="truncate p-2">
+                                    <button type="button" onClick={() => openUser(row.userId)} className="font-medium hover:underline">
+                                        {row.user?.displayName || row.userId}
+                                    </button>
+                                </td>
+                                <td className="truncate p-2" title={row.managerNotes}>
+                                    {row.managerNotes || "—"}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {!loading && !pageRows.length ? <EmptyState>No requests available.</EmptyState> : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                <label>
+                    Rows{" "}
+                    <select
+                        value={pageSize}
+                        onChange={(event) => {
+                            setPageSize(Number(event.target.value));
+                            setPage(0);
+                        }}
+                        className="ml-1 h-8 rounded-md border border-input bg-background px-2"
+                    >
+                        <option value="15">15</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </label>
+                <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={effectivePage <= 0} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                    Previous
+                </button>
+                <span>
+                    {effectivePage + 1}/{pageCount}
+                </span>
+                <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={effectivePage >= pageCount - 1} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                    Next
+                </button>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                {activeTab === "sent" ? <ModerationActionButton label="Delete Sent Invite" disabled={disabled} action={() => void runInviteAction("delete-invite")} /> : null}
+                {activeTab === "join" ? (
+                    <>
+                        <ModerationActionButton label="Accept Join Requests" disabled={disabled} action={() => void runInviteAction("accept")} />
+                        <ModerationActionButton label="Reject Join Requests" disabled={disabled} action={() => void runInviteAction("reject")} />
+                        <ModerationActionButton label="Block Join Requests" disabled={disabled} action={() => void runInviteAction("block")} />
+                    </>
+                ) : null}
+                {activeTab === "blocked" ? <ModerationActionButton label="Delete Blocked Requests" disabled={disabled} action={() => void runInviteAction("delete-blocked")} /> : null}
+                {actionBusy ? (
+                    <>
+                        <span className="inline-flex items-center gap-2">
+                            <Loader2 className="size-3.5 animate-spin" /> Progress {progress.current}/{progress.total}
+                        </span>
+                        <ModerationActionButton
+                            label="Cancel"
+                            secondary
+                            disabled={false}
+                            action={() => {
+                                continueBatch.current = false;
+                            }}
+                        />
+                    </>
+                ) : null}
+            </div>
         </div>
     );
 }

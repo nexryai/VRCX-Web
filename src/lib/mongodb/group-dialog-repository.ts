@@ -109,6 +109,56 @@ function validateGroupBan(groupId: string, value: unknown) {
     return ban;
 }
 
+export type GroupInviteSnapshot = {
+    invites: VrchatGroupMember[];
+    joinRequests: VrchatGroupMember[];
+    blockedRequests: VrchatGroupMember[];
+};
+
+export async function getCachedGroupInvites(ownerId: string, groupId: string): Promise<GroupInviteSnapshot | null> {
+    await ensureMongoSchema();
+    const snapshot = await collections(await getMongoDatabase()).groupInviteSnapshots.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+    if (!snapshot) return null;
+    return {
+        invites: snapshot.invites.map((row) => validateGroupBan(groupId, row)),
+        joinRequests: snapshot.joinRequests.map((row) => validateGroupBan(groupId, row)),
+        blockedRequests: snapshot.blockedRequests.map((row) => validateGroupBan(groupId, row)),
+    };
+}
+
+export async function replaceCachedGroupInvites(ownerId: string, groupId: string, snapshot: GroupInviteSnapshot, observedAt = new Date()) {
+    await ensureMongoSchema();
+    const validated = {
+        invites: snapshot.invites.map((row) => validateGroupBan(groupId, row)),
+        joinRequests: snapshot.joinRequests.map((row) => validateGroupBan(groupId, row)),
+        blockedRequests: snapshot.blockedRequests.map((row) => validateGroupBan(groupId, row)),
+    };
+    await collections(await getMongoDatabase()).groupInviteSnapshots.updateOne({ _id: `${ownerId}:${groupId}` }, { $set: { ownerId, groupId, ...validated, observedAt, updatedAt: observedAt } }, { upsert: true });
+}
+
+export async function invalidateCachedGroupInvites(ownerId: string, groupId: string) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).groupInviteSnapshots.deleteOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+}
+
+export async function projectGroupInviteAction(ownerId: string, groupId: string, userId: string, action: "accept" | "block" | "delete-blocked" | "delete-invite" | "reject", updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).groupInviteSnapshots;
+    const snapshot = await collection.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+    if (!snapshot) return false;
+    const joinRequest = snapshot.joinRequests.find((row) => row.userId === userId);
+    const update =
+        action === "delete-invite"
+            ? { invites: snapshot.invites.filter((row) => row.userId !== userId) }
+            : action === "delete-blocked"
+              ? { blockedRequests: snapshot.blockedRequests.filter((row) => row.userId !== userId) }
+              : action === "block"
+                ? { joinRequests: snapshot.joinRequests.filter((row) => row.userId !== userId), blockedRequests: joinRequest ? [joinRequest, ...snapshot.blockedRequests.filter((row) => row.userId !== userId)] : snapshot.blockedRequests }
+                : { joinRequests: snapshot.joinRequests.filter((row) => row.userId !== userId) };
+    await collection.updateOne({ _id: snapshot._id, ownerId, groupId }, { $set: { ...update, observedAt: updatedAt, updatedAt } });
+    return true;
+}
+
 export async function removeCachedGroupBan(ownerId: string, groupId: string, userId: string, updatedAt = new Date()) {
     await ensureMongoSchema();
     const result = await collections(await getMongoDatabase()).groupBanSnapshots.updateOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId }, { $pull: { bans: { userId } }, $set: { observedAt: updatedAt, updatedAt } });

@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -56,6 +56,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("personal_file_snapshots").indexExists(["owner_tag_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
         expect(await database.collection("group_ban_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("group_invite_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -306,9 +307,22 @@ describe("MongoDB application repositories", () => {
     });
 
     test("caches group posts and member pages per active owner", async () => {
-        const { deactivateCachedGroupMember, deactivateCachedGroupPost, getCachedGroupBans, getCachedGroupPosts, listCachedGroupMembers, removeCachedGroupBan, replaceCachedGroupBans, replaceCachedGroupPosts, upsertCachedGroupBan, upsertCachedGroupMembers, upsertCachedGroupPost } = await import(
-            "./group-dialog-repository"
-        );
+        const {
+            deactivateCachedGroupMember,
+            deactivateCachedGroupPost,
+            getCachedGroupBans,
+            getCachedGroupInvites,
+            getCachedGroupPosts,
+            listCachedGroupMembers,
+            projectGroupInviteAction,
+            removeCachedGroupBan,
+            replaceCachedGroupBans,
+            replaceCachedGroupInvites,
+            replaceCachedGroupPosts,
+            upsertCachedGroupBan,
+            upsertCachedGroupMembers,
+            upsertCachedGroupPost,
+        } = await import("./group-dialog-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000051";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000052";
         const groupId = "grp_00000000-0000-0000-0000-000000000053";
@@ -344,6 +358,13 @@ describe("MongoDB application repositories", () => {
         expect(await removeCachedGroupBan(ownerId, groupId, userId)).toBe(true);
         expect(await getCachedGroupBans(ownerId, groupId)).toEqual([]);
         expect(await getCachedGroupBans(otherOwnerId, groupId)).toHaveLength(1);
+        await replaceCachedGroupInvites(ownerId, groupId, { invites: [ban], joinRequests: [{ ...ban, id: "request" }], blockedRequests: [] });
+        await replaceCachedGroupInvites(otherOwnerId, groupId, { invites: [], joinRequests: [], blockedRequests: [{ ...ban, id: "blocked" }] });
+        expect(await projectGroupInviteAction(ownerId, groupId, userId, "delete-invite")).toBe(true);
+        expect((await getCachedGroupInvites(ownerId, groupId))?.invites).toEqual([]);
+        expect(await projectGroupInviteAction(ownerId, groupId, userId, "block")).toBe(true);
+        expect(await getCachedGroupInvites(ownerId, groupId)).toMatchObject({ joinRequests: [], blockedRequests: [expect.objectContaining({ userId })] });
+        expect((await getCachedGroupInvites(otherOwnerId, groupId))?.blockedRequests).toHaveLength(1);
     });
 
     test("stores complete personal Gallery snapshots and uploaded files per owner", async () => {
