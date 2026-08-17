@@ -6,19 +6,12 @@ import { getCachedAvatar, removeCachedAvatar, upsertCachedAvatars } from "@/lib/
 import { isAvatarBlocked } from "@/lib/mongodb/projection-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
+import { avatarOwnershipError, avatarUpdateSchema } from "@/lib/vrchat/avatar-metadata";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
 import { vrchatAvatarSchema } from "@/lib/vrchat/types";
 
 const avatarIdSchema = z.string().regex(/^avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-const updateSchema = z
-    .object({
-        name: z.string().trim().min(1).max(64).optional(),
-        description: z.string().trim().max(256).optional(),
-        releaseStatus: z.enum(["private", "public"]).optional(),
-    })
-    .refine((body) => Object.values(body).some((value) => value !== undefined));
-
 export async function GET(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]">) {
     const avatarId = avatarIdSchema.safeParse((await context.params).avatarId);
     const refresh = request.nextUrl.searchParams.get("refresh") === "true";
@@ -46,20 +39,26 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/avat
 export async function PATCH(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]">) {
     if (!isMutationOriginAllowed(request)) return NextResponse.json({ error: "Cross-site requests are not allowed." }, { status: 403 });
     const avatarId = avatarIdSchema.safeParse((await context.params).avatarId);
-    const body = updateSchema.safeParse(await request.json().catch(() => null));
+    const body = avatarUpdateSchema.safeParse(await request.json().catch(() => null));
     if (!avatarId.success || !body.success) return NextResponse.json({ error: "The avatar update is invalid." }, { status: 400 });
 
     let expectedAuthCookie: string | undefined;
     try {
-        const cookies = await requireVrchatCookies();
+        const [ownerId, cookies] = await Promise.all([requireActiveUserId(), requireVrchatCookies()]);
         expectedAuthCookie = cookies.auth;
-        const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "PUT", cookies, body: { id: avatarId.data, ...body.data } });
-        const avatar = vrchatAvatarSchema.parse(upstream.data);
-        await upsertCachedAvatars(await requireActiveUserId(), [avatar], "owned");
-        const response = NextResponse.json({ avatar });
-        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
-        response.headers.set("Cache-Control", "private, no-store");
-        return response;
+        const currentResponse = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { cookies });
+        const current = vrchatAvatarSchema.parse(currentResponse.data);
+        const ownershipError = avatarOwnershipError(current, avatarId.data, ownerId, "update");
+        if (ownershipError) {
+            await persistRotatedVrchatCookies(currentResponse.cookies, cookies.auth);
+            return avatarResponse({ error: ownershipError }, 403);
+        }
+        const currentCookies = { ...cookies, ...currentResponse.cookies };
+        const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "PUT", cookies: currentCookies, body: { id: avatarId.data, ...body.data } });
+        const parsed = vrchatAvatarSchema.safeParse(upstream.data);
+        const avatar = parsed.success && parsed.data.id === avatarId.data && parsed.data.authorId === ownerId ? parsed.data : { ...current, ...body.data };
+        const persistence = await Promise.allSettled([upsertCachedAvatars(ownerId, [avatar], "owned"), persistRotatedVrchatCookies({ ...currentCookies, ...upstream.cookies }, cookies.auth)]);
+        return avatarResponse({ avatar, refreshRequired: !parsed.success || persistence.some((result) => result.status === "rejected") });
     } catch (error) {
         return await avatarMutationError(error, "The avatar could not be updated.", expectedAuthCookie);
     }
@@ -72,14 +71,19 @@ export async function DELETE(request: NextRequest, context: RouteContext<"/api/a
 
     let expectedAuthCookie: string | undefined;
     try {
-        const cookies = await requireVrchatCookies();
+        const [ownerId, cookies] = await Promise.all([requireActiveUserId(), requireVrchatCookies()]);
         expectedAuthCookie = cookies.auth;
-        const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "DELETE", cookies });
-        await removeCachedAvatar(await requireActiveUserId(), avatarId.data);
-        const response = NextResponse.json({ success: true });
-        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
-        response.headers.set("Cache-Control", "private, no-store");
-        return response;
+        const currentResponse = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { cookies });
+        const current = vrchatAvatarSchema.parse(currentResponse.data);
+        const ownershipError = avatarOwnershipError(current, avatarId.data, ownerId, "delete");
+        if (ownershipError) {
+            await persistRotatedVrchatCookies(currentResponse.cookies, cookies.auth);
+            return avatarResponse({ error: ownershipError }, 403);
+        }
+        const currentCookies = { ...cookies, ...currentResponse.cookies };
+        const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "DELETE", cookies: currentCookies });
+        const persistence = await Promise.allSettled([removeCachedAvatar(ownerId, avatarId.data), persistRotatedVrchatCookies({ ...currentCookies, ...upstream.cookies }, cookies.auth)]);
+        return avatarResponse({ success: true, refreshRequired: persistence.some((result) => result.status === "rejected") });
     } catch (error) {
         return await avatarMutationError(error, "The avatar could not be deleted.", expectedAuthCookie);
     }
@@ -93,8 +97,8 @@ async function avatarMutationError(error: unknown, fallback: string, expectedAut
     return response;
 }
 
-function avatarResponse(payload: object) {
-    const response = NextResponse.json(payload);
+function avatarResponse(payload: object, status = 200) {
+    const response = NextResponse.json(payload, { status });
     response.headers.set("Cache-Control", "private, no-store");
     return response;
 }

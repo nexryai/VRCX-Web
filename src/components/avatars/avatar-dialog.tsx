@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, Check, CheckCircle, ChevronLeft, ChevronRight, Ellipsis, ImageIcon, Loader2, Monitor, RefreshCw, Share2, Smartphone, Trash2, Upload, User, X, XCircle } from "lucide-react";
+import { Apple, Check, CheckCircle, ChevronLeft, ChevronRight, Ellipsis, ImageIcon, Loader2, Monitor, Pencil, RefreshCw, Share2, Smartphone, Trash2, Upload, User, X, XCircle } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
@@ -12,7 +12,8 @@ import { latestAvatarGalleryImageUrl } from "@/lib/vrchat/avatar-gallery";
 import type { VrchatAvatar, VrchatFile } from "@/lib/vrchat/types";
 
 type AvatarTab = "Info" | "JSON";
-type AvatarConfirmAction = "block" | "delete-impostor" | "enqueue-impostor" | "regenerate-impostor" | "select-fallback" | "unblock";
+type AvatarConfirmAction = "block" | "delete-avatar" | "delete-impostor" | "enqueue-impostor" | "make-private" | "make-public" | "regenerate-impostor" | "select-fallback" | "unblock";
+type AvatarEditField = "description" | "name";
 
 export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string; openUser: (userId: string) => void; onClose: () => void }) {
     const currentUser = useCurrentUser();
@@ -31,6 +32,9 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const [galleryUploading, setGalleryUploading] = useState(false);
     const [galleryError, setGalleryError] = useState("");
     const [previewUrl, setPreviewUrl] = useState("");
+    const [editField, setEditField] = useState<AvatarEditField | null>(null);
+    const [editValue, setEditValue] = useState("");
+    const [editSaving, setEditSaving] = useState(false);
     const [error, setError] = useState("");
     const [status, setStatus] = useState("");
     const [copied, setCopied] = useState("");
@@ -43,6 +47,9 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const galleryInput = useRef<HTMLInputElement>(null);
     const previewClose = useRef<HTMLButtonElement>(null);
     const previewTrigger = useRef<HTMLButtonElement | null>(null);
+    const editorDialog = useRef<HTMLDivElement>(null);
+    const editorInput = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+    const previousEditField = useRef<AvatarEditField | null>(null);
 
     const loadGallery = useCallback(
         async (refresh = false) => {
@@ -97,6 +104,8 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         setGalleryIndex(0);
         setGalleryError("");
         setPreviewUrl("");
+        setEditField(null);
+        setEditValue("");
         void load();
         closeButton.current?.focus();
     }, [avatarId, currentUser.currentAvatar, load]);
@@ -107,6 +116,10 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             if (previewUrl) {
                 setPreviewUrl("");
                 window.requestAnimationFrame(() => previewTrigger.current?.focus());
+                return;
+            }
+            if (editField) {
+                setEditField(null);
                 return;
             }
             if (confirmAction) {
@@ -121,7 +134,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [confirmAction, menuOpen, onClose, previewUrl]);
+    }, [confirmAction, editField, menuOpen, onClose, previewUrl]);
 
     useEffect(() => {
         if (confirmAction) confirmationCancel.current?.focus();
@@ -141,6 +154,12 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     useEffect(() => {
         if (previewUrl) previewClose.current?.focus();
     }, [previewUrl]);
+
+    useEffect(() => {
+        if (editField) editorInput.current?.focus();
+        else if (previousEditField.current) manageButton.current?.focus();
+        previousEditField.current = editField;
+    }, [editField]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
@@ -188,6 +207,26 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         setError("");
         setStatus("");
         try {
+            if (confirmAction === "make-private" || confirmAction === "make-public") {
+                const releaseStatus = confirmAction === "make-public" ? "public" : "private";
+                const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ releaseStatus }) });
+                const payload = (await response.json()) as { avatar?: VrchatAvatar; error?: string };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok || !payload.avatar) throw new Error(payload.error || "The avatar could not be updated.");
+                setAvatar(payload.avatar);
+                setStatus(releaseStatus === "public" ? "Avatar updated to public" : "Avatar updated to private");
+                setConfirmAction(null);
+                return;
+            }
+            if (confirmAction === "delete-avatar") {
+                const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}`, { method: "DELETE" });
+                const payload = (await response.json()) as { error?: string };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok) throw new Error(payload.error || "The avatar could not be deleted.");
+                setConfirmAction(null);
+                onClose();
+                return;
+            }
             const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}/actions`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -204,6 +243,50 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             setError(moderationError instanceof Error ? moderationError.message : "The avatar moderation could not be changed.");
         } finally {
             setModerating(false);
+        }
+    }
+
+    function requestEdit(field: AvatarEditField) {
+        if (!avatar) return;
+        setMenuOpen(false);
+        setError("");
+        setEditField(field);
+        setEditValue(field === "name" ? avatar.name : avatar.description || "");
+    }
+
+    function closeEditor() {
+        setEditField(null);
+    }
+
+    function trapEditorFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+        if (event.key !== "Tab") return;
+        const focusable = Array.from(editorDialog.current?.querySelectorAll<HTMLElement>("input:not([disabled]), textarea:not([disabled]), button:not([disabled])") ?? []);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first)?.focus();
+        }
+    }
+
+    async function saveEditor() {
+        if (!editField || !editValue.trim()) return;
+        setEditSaving(true);
+        setError("");
+        try {
+            const body = editField === "name" ? { name: editValue.trim() } : { description: editValue.trim() };
+            const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            const payload = (await response.json()) as { avatar?: VrchatAvatar; error?: string };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.avatar) throw new Error(payload.error || "The avatar could not be updated.");
+            setAvatar(payload.avatar);
+            setStatus(editField === "name" ? "Avatar renamed" : "Avatar description changed");
+            closeEditor();
+        } catch (editError) {
+            setError(editError instanceof Error ? editError.message : "The avatar could not be updated.");
+        } finally {
+            setEditSaving(false);
         }
     }
 
@@ -350,6 +433,16 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                             {avatar.authorId === currentUser.id ? (
                                                 <>
                                                     <div className="my-1 border-t border-border" />
+                                                    <button type="button" role="menuitem" onClick={() => requestConfirmation(avatar.releaseStatus === "public" ? "make-private" : "make-public")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                        <User className="size-4" /> {avatar.releaseStatus === "public" ? "Make Private" : "Make Public"}
+                                                    </button>
+                                                    <button type="button" role="menuitem" onClick={() => requestEdit("name")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                        <Pencil className="size-4" /> Rename
+                                                    </button>
+                                                    <button type="button" role="menuitem" onClick={() => requestEdit("description")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                        <Pencil className="size-4" /> Change Description
+                                                    </button>
+                                                    <div className="my-1 border-t border-border" />
                                                     {hasImpostor ? (
                                                         <>
                                                             <button type="button" role="menuitem" onClick={() => requestConfirmation("regenerate-impostor")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10">
@@ -364,6 +457,9 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                                             <User className="size-4" /> Create Impostor
                                                         </button>
                                                     )}
+                                                    <button type="button" role="menuitem" onClick={() => requestConfirmation("delete-avatar")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10">
+                                                        <Trash2 className="size-4" /> Delete
+                                                    </button>
                                                 </>
                                             ) : null}
                                         </div>
@@ -371,7 +467,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                 </div>
                             </div>
                         </header>
-                        {error && !confirmAction ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                        {error && !confirmAction && !editField ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                         {status ? (
                             <p className="sr-only" role="status">
                                 {status}
@@ -406,13 +502,64 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                             ) : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(avatar, null, 2)}</pre> : null}
                         </div>
+                        {editField ? (
+                            <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+                                <form
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        void saveEditor();
+                                    }}
+                                    className="contents"
+                                >
+                                    <div ref={editorDialog} role="dialog" aria-modal="true" aria-labelledby="avatar-editor-title" aria-describedby="avatar-editor-description" onKeyDown={trapEditorFocus} className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                                        <h3 id="avatar-editor-title" className="text-sm font-semibold">
+                                            {editField === "name" ? "Rename Avatar" : "Change Description"}
+                                        </h3>
+                                        <p id="avatar-editor-description" className="mt-2 text-xs text-muted-foreground">
+                                            {editField === "name" ? "Enter avatar name" : "Enter avatar description"}
+                                        </p>
+                                        {editField === "name" ? (
+                                            <input
+                                                ref={(node) => {
+                                                    editorInput.current = node;
+                                                }}
+                                                value={editValue}
+                                                onChange={(event) => setEditValue(event.target.value)}
+                                                maxLength={64}
+                                                className="mt-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            />
+                                        ) : (
+                                            <textarea
+                                                ref={(node) => {
+                                                    editorInput.current = node;
+                                                }}
+                                                value={editValue}
+                                                onChange={(event) => setEditValue(event.target.value)}
+                                                maxLength={256}
+                                                rows={4}
+                                                className="mt-3 w-full resize-none rounded-md border border-input bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            />
+                                        )}
+                                        {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+                                        <div className="mt-5 flex justify-end gap-2">
+                                            <button type="button" onClick={closeEditor} disabled={editSaving} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                                                Cancel
+                                            </button>
+                                            <button type="submit" disabled={editSaving || !editValue.trim()} className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-4 text-xs text-primary-foreground disabled:opacity-40">
+                                                {editSaving ? <Loader2 className="size-4 animate-spin" /> : null} OK
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        ) : null}
                         {confirmAction ? (
                             <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
-                                <div ref={confirmationDialog} role="alertdialog" aria-modal="true" aria-labelledby="avatar-moderation-title" aria-describedby="avatar-moderation-description" onKeyDown={trapConfirmationFocus} className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
-                                    <h3 id="avatar-moderation-title" className="text-sm font-semibold">
+                                <div ref={confirmationDialog} role="alertdialog" aria-modal="true" aria-labelledby="avatar-action-title" aria-describedby="avatar-action-description" onKeyDown={trapConfirmationFocus} className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                                    <h3 id="avatar-action-title" className="text-sm font-semibold">
                                         Confirm
                                     </h3>
-                                    <p id="avatar-moderation-description" className="mt-2 text-xs text-muted-foreground">
+                                    <p id="avatar-action-description" className="mt-2 text-xs text-muted-foreground">
                                         Are you sure you want to {avatarActionLabel(confirmAction)}?
                                     </p>
                                     {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}
@@ -462,8 +609,11 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
 function avatarActionLabel(action: AvatarConfirmAction) {
     const labels: Record<AvatarConfirmAction, string> = {
         block: "Block Avatar",
+        "delete-avatar": "Delete",
         "delete-impostor": "Delete Impostor",
         "enqueue-impostor": "Create Impostor",
+        "make-private": "Make Private",
+        "make-public": "Make Public",
         "regenerate-impostor": "Regenerate Impostor",
         "select-fallback": "Select Fallback Avatar",
         unblock: "Unblock Avatar",
@@ -474,8 +624,11 @@ function avatarActionLabel(action: AvatarConfirmAction) {
 function avatarActionStatus(action: AvatarConfirmAction) {
     const messages: Record<AvatarConfirmAction, string> = {
         block: "Avatar blocked",
+        "delete-avatar": "Avatar deleted",
         "delete-impostor": "Impostor deleted",
         "enqueue-impostor": "Impostor queued",
+        "make-private": "Avatar updated to private",
+        "make-public": "Avatar updated to public",
         "regenerate-impostor": "Impostor regenerated",
         "select-fallback": "Fallback avatar changed",
         unblock: "Avatar unblocked",
@@ -484,7 +637,7 @@ function avatarActionStatus(action: AvatarConfirmAction) {
 }
 
 function avatarActionDestructive(action: AvatarConfirmAction) {
-    return action === "block" || action === "delete-impostor" || action === "regenerate-impostor";
+    return action === "block" || action === "delete-avatar" || action === "delete-impostor" || action === "regenerate-impostor";
 }
 
 function AvatarGallery({

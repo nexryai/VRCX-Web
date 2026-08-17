@@ -56,6 +56,10 @@ const captures = [
     { name: "avatar-dialog-gallery", path: "/favorites/avatars", readyText: "Creator Avatar Access", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true },
     { name: "avatar-dialog-gallery-preview", path: "/favorites/avatars", readyText: "Creator Avatar Access", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarGalleryPreview: true },
     { name: "avatar-dialog-maintenance-menu", path: "/favorites/avatars", readyText: "Regenerate Impostor", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarMenu: true },
+    { name: "avatar-dialog-make-private-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Make Private?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "make-private" },
+    { name: "avatar-dialog-rename", path: "/favorites/avatars", readyText: "Rename Avatar", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarEdit: "name" },
+    { name: "avatar-dialog-description", path: "/favorites/avatars", readyText: "Change Description", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarEdit: "description" },
+    { name: "avatar-dialog-delete-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Delete?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "delete-avatar" },
     { name: "avatar-dialog-regenerate-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Regenerate Impostor?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "regenerate-impostor" },
     { name: "avatar-dialog-create-impostor-menu", path: "/favorites/avatars", readyText: "Create Impostor", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarWithoutImpostor: true, avatarMenu: true },
     { name: "avatar-dialog-fallback-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Select Fallback Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "select-fallback" },
@@ -504,9 +508,19 @@ for (const width of widths) {
         if (capture.avatarDialog) {
             await page.getByText("Favorite Browser Avatar", { exact: true }).first().click();
             if (capture.avatarOwner) await page.getByRole("button", { name: "Open gallery image 1 of 2", exact: true }).waitFor();
-            if (capture.avatarMenu || capture.avatarConfirm) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
+            if (capture.avatarMenu || capture.avatarConfirm || capture.avatarEdit) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
             if (capture.avatarConfirm) {
-                const actionLabels = { block: "Block Avatar", unblock: "Unblock Avatar", "select-fallback": "Select Fallback Avatar", "delete-impostor": "Delete Impostor", "enqueue-impostor": "Create Impostor", "regenerate-impostor": "Regenerate Impostor" };
+                const actionLabels = {
+                    block: "Block Avatar",
+                    "delete-avatar": "Delete",
+                    "delete-impostor": "Delete Impostor",
+                    "enqueue-impostor": "Create Impostor",
+                    "make-private": "Make Private",
+                    "make-public": "Make Public",
+                    "regenerate-impostor": "Regenerate Impostor",
+                    "select-fallback": "Select Fallback Avatar",
+                    unblock: "Unblock Avatar",
+                };
                 const actionLabel = actionLabels[capture.avatarConfirm];
                 if (!actionLabel) throw new Error(`Unknown avatar confirmation fixture: ${capture.avatarConfirm}`);
                 await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
@@ -520,6 +534,23 @@ for (const width of widths) {
                 await confirmation.waitFor({ state: "detached" });
                 const manage = page.getByRole("button", { name: "Manage avatar", exact: true });
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar moderation confirmation did not restore focus.");
+                await manage.click();
+                await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+            }
+            if (capture.avatarEdit) {
+                const actionLabel = capture.avatarEdit === "name" ? "Rename" : "Change Description";
+                const dialogName = capture.avatarEdit === "name" ? "Rename Avatar" : "Change Description";
+                await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+                const editor = page.getByRole("dialog", { name: dialogName, exact: true });
+                await editor.waitFor();
+                const textbox = editor.getByRole("textbox");
+                if (!(await textbox.evaluate((element) => document.activeElement === element))) throw new Error("Avatar metadata editor did not focus its field.");
+                await page.keyboard.press("Shift+Tab");
+                if (!(await editor.getByRole("button", { name: "OK", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("Avatar metadata editor did not trap focus.");
+                await page.keyboard.press("Escape");
+                await editor.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage avatar", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar metadata editor did not restore focus.");
                 await manage.click();
                 await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
             }
