@@ -556,6 +556,37 @@ await database.collection("group_members").insertMany([
         updatedAt: now,
     },
 ]);
+await database.collection("group_ban_snapshots").insertOne({
+    _id: `${ownerId}:${groupId}`,
+    ownerId,
+    groupId,
+    bans: [
+        {
+            id: "gban_visual_cobalt",
+            groupId,
+            userId: "usr_00000000-0000-0000-0000-000000000072",
+            roleIds: ["grol_00000000-0000-0000-0000-000000000022"],
+            joinedAt: new Date(now.getTime() - 120 * 86_400_000).toISOString(),
+            bannedAt: new Date(now.getTime() - 2 * 86_400_000).toISOString(),
+            membershipStatus: "banned",
+            managerNotes: "Repeatedly disrupted scheduled group events.",
+            user: { id: "usr_00000000-0000-0000-0000-000000000072", displayName: "Cobalt Banned User", tags: ["system_trust_known"] },
+        },
+        {
+            id: "gban_visual_ember",
+            groupId,
+            userId: "usr_00000000-0000-0000-0000-000000000073",
+            roleIds: [],
+            joinedAt: new Date(now.getTime() - 45 * 86_400_000).toISOString(),
+            bannedAt: new Date(now.getTime() - 8 * 86_400_000).toISOString(),
+            membershipStatus: "banned",
+            managerNotes: "Moderator review completed.",
+            user: { id: "usr_00000000-0000-0000-0000-000000000073", displayName: "Ember Banned User", tags: [] },
+        },
+    ],
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("mutual_graph").insertOne({
     _id: ownerId,
     ownerId,

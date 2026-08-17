@@ -414,8 +414,8 @@ export const vrchatGroupCalendarResponseSchema = z
 export const vrchatGroupMemberSchema = z
     .object({
         id: z.string(),
-        groupId: z.string().optional(),
-        userId: z.string(),
+        groupId: groupIdSchema.optional(),
+        userId: userIdSchema,
         roleIds: z.array(z.string()).default([]),
         joinedAt: z.string().optional(),
         membershipStatus: z.string().optional(),
@@ -423,6 +423,7 @@ export const vrchatGroupMemberSchema = z
         isRepresenting: z.boolean().optional(),
         isSubscribedToAnnouncements: z.boolean().optional(),
         managerNotes: z.string().optional(),
+        bannedAt: z.string().optional(),
         user: vrchatUserSchema.optional(),
     })
     .passthrough();

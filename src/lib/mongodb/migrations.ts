@@ -385,6 +385,13 @@ const migrations: Migration[] = [
             await Promise.all([c.personalFileSnapshots.createIndex({ ownerId: 1, tag: 1 }, { unique: true, name: "owner_tag_unique" }), c.personalFileSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 33,
+        name: "add-group-ban-snapshot-indexes",
+        async apply(c) {
+            await Promise.all([c.groupBanSnapshots.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }), c.groupBanSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

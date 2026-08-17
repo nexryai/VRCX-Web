@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { deactivateCachedGroupMember, upsertCachedGroupMembers } from "@/lib/mongodb/group-dialog-repository";
+import { deactivateCachedGroupMember, removeCachedGroupBan, upsertCachedGroupBan, upsertCachedGroupMembers } from "@/lib/mongodb/group-dialog-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
@@ -33,7 +33,19 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/gro
         if (groupMemberMutationRemovesMembership(action.data)) {
             const projection = await Promise.allSettled([deactivateCachedGroupMember(ownerId, groupId.data, userId.data)]);
             refreshRequired = projection[0].status === "rejected";
-        } else if (action.data.action !== "unban") {
+        }
+        if (action.data.action === "ban") {
+            const ban = vrchatGroupMemberSchema.safeParse(upstream.data);
+            if (!ban.success || ban.data.userId !== userId.data || (ban.data.groupId && ban.data.groupId !== groupId.data)) {
+                refreshRequired = true;
+            } else {
+                const projection = await Promise.allSettled([upsertCachedGroupBan(ownerId, groupId.data, ban.data)]);
+                refreshRequired = refreshRequired || projection[0].status === "rejected" || !projection[0].value;
+            }
+        } else if (action.data.action === "unban") {
+            const projection = await Promise.allSettled([removeCachedGroupBan(ownerId, groupId.data, userId.data)]);
+            refreshRequired = refreshRequired || projection[0].status === "rejected" || !projection[0].value;
+        } else if (!groupMemberMutationRemovesMembership(action.data)) {
             try {
                 const refreshed = await requestVrchat<unknown>(`groups/${groupId.data}/members/${userId.data}`, { cookies });
                 Object.assign(cookies, refreshed.cookies);

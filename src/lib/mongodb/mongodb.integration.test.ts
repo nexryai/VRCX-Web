@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -55,6 +55,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_post_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("personal_file_snapshots").indexExists(["owner_tag_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_members").indexExists("owner_group_user_unique")).toBe(true);
+        expect(await database.collection("group_ban_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -305,7 +306,9 @@ describe("MongoDB application repositories", () => {
     });
 
     test("caches group posts and member pages per active owner", async () => {
-        const { deactivateCachedGroupMember, deactivateCachedGroupPost, getCachedGroupPosts, listCachedGroupMembers, replaceCachedGroupPosts, upsertCachedGroupMembers, upsertCachedGroupPost } = await import("./group-dialog-repository");
+        const { deactivateCachedGroupMember, deactivateCachedGroupPost, getCachedGroupBans, getCachedGroupPosts, listCachedGroupMembers, removeCachedGroupBan, replaceCachedGroupBans, replaceCachedGroupPosts, upsertCachedGroupBan, upsertCachedGroupMembers, upsertCachedGroupPost } = await import(
+            "./group-dialog-repository"
+        );
         const ownerId = "usr_00000000-0000-0000-0000-000000000051";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000052";
         const groupId = "grp_00000000-0000-0000-0000-000000000053";
@@ -329,6 +332,18 @@ describe("MongoDB application repositories", () => {
         await deactivateCachedGroupMember(ownerId, groupId, userId);
         expect(await listCachedGroupMembers(ownerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
         expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toMatchObject({ total: 1, members: [expect.objectContaining({ userId })] });
+        const ban = { id: "gban_one", groupId, userId, roleIds: [], bannedAt: "2026-08-17T03:00:00.000Z" };
+        expect(await getCachedGroupBans(ownerId, groupId)).toBeNull();
+        expect(await upsertCachedGroupBan(ownerId, groupId, ban)).toBe(false);
+        await expect(replaceCachedGroupBans(ownerId, groupId, [{ ...ban, groupId: "grp_00000000-0000-0000-0000-000000000099" }])).rejects.toThrow("another group");
+        await replaceCachedGroupBans(ownerId, groupId, [ban]);
+        await replaceCachedGroupBans(otherOwnerId, groupId, [{ ...ban, id: "gban_other" }]);
+        expect(await getCachedGroupBans(ownerId, groupId)).toEqual([ban]);
+        expect(await upsertCachedGroupBan(ownerId, groupId, { ...ban, managerNotes: "Reviewed" })).toBe(true);
+        expect((await getCachedGroupBans(ownerId, groupId))?.[0]).toMatchObject({ managerNotes: "Reviewed" });
+        expect(await removeCachedGroupBan(ownerId, groupId, userId)).toBe(true);
+        expect(await getCachedGroupBans(ownerId, groupId)).toEqual([]);
+        expect(await getCachedGroupBans(otherOwnerId, groupId)).toHaveLength(1);
     });
 
     test("stores complete personal Gallery snapshots and uploaded files per owner", async () => {

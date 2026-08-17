@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
     Bell,
@@ -42,6 +42,7 @@ import { PreviousInstancesDialog } from "@/components/previous-instances/previou
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
+import { extractGroupBanUserIds, formatGroupBanCsv, GROUP_BAN_EXPORT_FIELDS, GROUP_BAN_EXPORT_LABELS, type GroupBanExportField } from "@/lib/group-ban-transfer";
 import { partitionGroupCalendarEvents } from "@/lib/group-calendar";
 import { latestVrchatFileUrl } from "@/lib/vrchat/gallery-files";
 import type { VrchatFile, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
@@ -1130,8 +1131,10 @@ function GroupInviteDialog({ group, friends, close }: { group: VrchatGroup; frie
 type GroupMemberModerationAction = "add-role" | "ban" | "kick" | "remove-role" | "set-note" | "unban";
 
 // Faithful React translation of VRCX's MIT-licensed GroupMemberModerationDialog,
-// Members tab, selection composable, and sequential batch-operation behavior.
+// Members/Bans tabs, transfer dialogs, selection composable, and sequential
+// batch-operation behavior.
 function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: { group: VrchatGroup; currentUserId: string; openUser: (userId: string) => void; close: () => void }) {
+    const [activeTab, setActiveTab] = useState<"Members" | "Bans">("Members");
     const [members, setMembers] = useState<VrchatGroupMember[]>([]);
     const [searchResults, setSearchResults] = useState<VrchatGroupMember[]>([]);
     const [selected, setSelected] = useState<Record<string, VrchatGroupMember>>({});
@@ -1147,6 +1150,7 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
     const [progress, setProgress] = useState({ current: 0, total: 0 });
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const [moderationRefresh, setModerationRefresh] = useState(0);
     const dialog = useRef<HTMLDivElement>(null);
     const closeButton = useRef<HTMLButtonElement>(null);
     const continueBatch = useRef(true);
@@ -1183,6 +1187,7 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
         closeButton.current?.focus();
         function handleKey(event: KeyboardEvent) {
             if (event.key === "Escape") {
+                if (document.querySelector("[data-group-ban-transfer-overlay]")) return;
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 close();
@@ -1325,9 +1330,10 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
         }
         setProgress({ current: 0, total: 0 });
         setSelected({});
-        setSearch("");
+        if (activeTab === "Members") setSearch("");
         setNotice(`${completed} selected user${completed === 1 ? "" : "s"} processed${failures ? ` with ${failures} failure${failures === 1 ? "" : "s"}` : ""}.`);
-        await loadMembers(true);
+        if (activeTab === "Members") await loadMembers(true);
+        else setModerationRefresh((value) => value + 1);
         if (lastFailure) setError(lastFailure);
     }
 
@@ -1339,7 +1345,24 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                         <h3 id="group-moderation-title" className="font-semibold">
                             {group.name}
                         </h3>
-                        <div className="mt-2 border-b-2 border-primary px-4 pb-2 text-xs">Members</div>
+                        <div className="mt-2 flex text-xs">
+                            {(["Members", "Bans"] as const).map((tabName) => (
+                                <button
+                                    key={tabName}
+                                    type="button"
+                                    onClick={() => {
+                                        setActiveTab(tabName);
+                                        setSelected({});
+                                        setError("");
+                                        setNotice("");
+                                    }}
+                                    disabled={tabName === "Bans" && !hasGroupPermission(group, "group-bans-manage")}
+                                    className={`border-b-2 px-4 pb-2 disabled:opacity-40 ${activeTab === tabName ? "border-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                                >
+                                    {tabName}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <button ref={closeButton} type="button" onClick={close} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-muted" aria-label="Close moderation tools">
                         <X className="size-4" />
@@ -1347,143 +1370,149 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto pt-2">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setSearch("");
-                                void loadMembers(true);
-                            }}
-                            disabled={loading || busy}
-                            className="inline-flex size-8 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40"
-                            aria-label="Refresh group members"
-                        >
-                            {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-                        </button>
-                        <span>
-                            {members.length}/{group.memberCount ?? members.length}
-                        </span>
-                        <span className="ml-auto">Sort by</span>
-                        <select
-                            value={sort}
-                            onChange={(event) => {
-                                setSort(event.target.value);
-                                setPage(0);
-                            }}
-                            disabled={loading || Boolean(search)}
-                            className="h-8 rounded-md border border-input bg-background px-2"
-                        >
-                            <option value="joinedAt:desc">Joined At (Newest)</option>
-                            <option value="joinedAt:asc">Joined At (Oldest)</option>
-                            <option value="displayName:asc">Display Name (A-Z)</option>
-                            <option value="displayName:desc">Display Name (Z-A)</option>
-                        </select>
-                        <span>Filter</span>
-                        <select
-                            value={roleFilter}
-                            onChange={(event) => {
-                                setRoleFilter(event.target.value);
-                                setPage(0);
-                            }}
-                            disabled={loading || Boolean(search)}
-                            className="h-8 rounded-md border border-input bg-background px-2"
-                        >
-                            <option value="">Everyone</option>
-                            {(group.roles || []).map((role) => (
-                                <option key={role.id} value={role.id}>
-                                    {role.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="relative mt-2">
-                        <Search className="pointer-events-none absolute top-2.5 left-2.5 size-3.5 text-muted-foreground" />
-                        <input
-                            value={search}
-                            onChange={(event) => {
-                                setSearch(event.target.value);
-                                setPage(0);
-                            }}
-                            disabled={!hasGroupPermission(group, "group-bans-manage")}
-                            placeholder="Search group members"
-                            className="h-9 w-full rounded-md border border-input bg-background pr-3 pl-8 text-xs outline-none focus:ring-2 focus:ring-ring disabled:opacity-40"
-                        />
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => setSelected((current) => ({ ...current, ...Object.fromEntries(filteredMembers.map((member) => [member.userId, member])) }))}
-                        disabled={!filteredMembers.length || busy}
-                        className="mt-2 h-8 rounded-md border border-input px-3 text-xs hover:bg-muted disabled:opacity-40"
-                    >
-                        Select All
-                    </button>
-
-                    <div className="mt-2 overflow-x-auto rounded-md border border-border">
-                        <table className="w-full min-w-[850px] table-fixed text-left text-xs">
-                            <thead className="bg-muted/70 text-muted-foreground">
-                                <tr>
-                                    <th className="w-12 p-2" />
-                                    <th className="w-16 p-2">Avatar</th>
-                                    <th className="w-40 p-2">Display Name</th>
-                                    <th className="p-2">Roles</th>
-                                    <th className="p-2">Notes</th>
-                                    <th className="w-40 p-2">Joined At</th>
-                                    <th className="w-28 p-2">Visibility</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {pageMembers.map((member) => (
-                                    <tr key={member.userId} className="border-t border-border hover:bg-muted/50">
-                                        <td className="p-2 text-center">
-                                            <input type="checkbox" checked={Boolean(selected[member.userId])} onChange={(event) => toggleMember(member, event.target.checked)} className="size-4 accent-primary" aria-label={`Select ${member.user?.displayName || member.userId}`} />
-                                        </td>
-                                        <td className="p-2">{member.user ? <FriendAvatar friend={member.user} size="sm" /> : null}</td>
-                                        <td className="truncate p-2">
-                                            <button type="button" onClick={() => openUser(member.userId)} className="font-medium hover:underline">
-                                                {member.user?.displayName || member.userId}
-                                            </button>
-                                        </td>
-                                        <td className="truncate p-2" title={member.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ")}>
-                                            {member.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ") || "—"}
-                                        </td>
-                                        <td className="truncate p-2" title={member.managerNotes}>
-                                            {member.managerNotes || "—"}
-                                        </td>
-                                        <td className="p-2">{dateTime(member.joinedAt)}</td>
-                                        <td className="truncate p-2">{member.visibility || "—"}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        {!loading && !pageMembers.length ? <EmptyState>{search.trim() && search.trim().length < 3 ? "Enter at least three characters to search." : "No group members available."}</EmptyState> : null}
-                    </div>
-                    <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-xs">
-                        <label>
-                            Rows{" "}
-                            <select
-                                value={pageSize}
-                                onChange={(event) => {
-                                    setPageSize(Number(event.target.value));
-                                    setPage(0);
-                                }}
-                                className="ml-1 h-8 rounded-md border border-input bg-background px-2"
+                    {activeTab === "Members" ? (
+                        <>
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSearch("");
+                                        void loadMembers(true);
+                                    }}
+                                    disabled={loading || busy}
+                                    className="inline-flex size-8 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40"
+                                    aria-label="Refresh group members"
+                                >
+                                    {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                                </button>
+                                <span>
+                                    {members.length}/{group.memberCount ?? members.length}
+                                </span>
+                                <span className="ml-auto">Sort by</span>
+                                <select
+                                    value={sort}
+                                    onChange={(event) => {
+                                        setSort(event.target.value);
+                                        setPage(0);
+                                    }}
+                                    disabled={loading || Boolean(search)}
+                                    className="h-8 rounded-md border border-input bg-background px-2"
+                                >
+                                    <option value="joinedAt:desc">Joined At (Newest)</option>
+                                    <option value="joinedAt:asc">Joined At (Oldest)</option>
+                                    <option value="displayName:asc">Display Name (A-Z)</option>
+                                    <option value="displayName:desc">Display Name (Z-A)</option>
+                                </select>
+                                <span>Filter</span>
+                                <select
+                                    value={roleFilter}
+                                    onChange={(event) => {
+                                        setRoleFilter(event.target.value);
+                                        setPage(0);
+                                    }}
+                                    disabled={loading || Boolean(search)}
+                                    className="h-8 rounded-md border border-input bg-background px-2"
+                                >
+                                    <option value="">Everyone</option>
+                                    {(group.roles || []).map((role) => (
+                                        <option key={role.id} value={role.id}>
+                                            {role.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="relative mt-2">
+                                <Search className="pointer-events-none absolute top-2.5 left-2.5 size-3.5 text-muted-foreground" />
+                                <input
+                                    value={search}
+                                    onChange={(event) => {
+                                        setSearch(event.target.value);
+                                        setPage(0);
+                                    }}
+                                    disabled={!hasGroupPermission(group, "group-bans-manage")}
+                                    placeholder="Search group members"
+                                    className="h-9 w-full rounded-md border border-input bg-background pr-3 pl-8 text-xs outline-none focus:ring-2 focus:ring-ring disabled:opacity-40"
+                                />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelected((current) => ({ ...current, ...Object.fromEntries(filteredMembers.map((member) => [member.userId, member])) }))}
+                                disabled={!filteredMembers.length || busy}
+                                className="mt-2 h-8 rounded-md border border-input px-3 text-xs hover:bg-muted disabled:opacity-40"
                             >
-                                <option value="15">15</option>
-                                <option value="25">25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                            </select>
-                        </label>
-                        <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page <= 0} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
-                            Previous
-                        </button>
-                        <span>
-                            {Math.min(page, pageCount - 1) + 1}/{pageCount}
-                        </span>
-                        <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={page >= pageCount - 1} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
-                            Next
-                        </button>
-                    </div>
+                                Select All
+                            </button>
+
+                            <div className="mt-2 overflow-x-auto rounded-md border border-border">
+                                <table className="w-full min-w-[850px] table-fixed text-left text-xs">
+                                    <thead className="bg-muted/70 text-muted-foreground">
+                                        <tr>
+                                            <th className="w-12 p-2" />
+                                            <th className="w-16 p-2">Avatar</th>
+                                            <th className="w-40 p-2">Display Name</th>
+                                            <th className="p-2">Roles</th>
+                                            <th className="p-2">Notes</th>
+                                            <th className="w-40 p-2">Joined At</th>
+                                            <th className="w-28 p-2">Visibility</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pageMembers.map((member) => (
+                                            <tr key={member.userId} className="border-t border-border hover:bg-muted/50">
+                                                <td className="p-2 text-center">
+                                                    <input type="checkbox" checked={Boolean(selected[member.userId])} onChange={(event) => toggleMember(member, event.target.checked)} className="size-4 accent-primary" aria-label={`Select ${member.user?.displayName || member.userId}`} />
+                                                </td>
+                                                <td className="p-2">{member.user ? <FriendAvatar friend={member.user} size="sm" /> : null}</td>
+                                                <td className="truncate p-2">
+                                                    <button type="button" onClick={() => openUser(member.userId)} className="font-medium hover:underline">
+                                                        {member.user?.displayName || member.userId}
+                                                    </button>
+                                                </td>
+                                                <td className="truncate p-2" title={member.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ")}>
+                                                    {member.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ") || "—"}
+                                                </td>
+                                                <td className="truncate p-2" title={member.managerNotes}>
+                                                    {member.managerNotes || "—"}
+                                                </td>
+                                                <td className="p-2">{dateTime(member.joinedAt)}</td>
+                                                <td className="truncate p-2">{member.visibility || "—"}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {!loading && !pageMembers.length ? <EmptyState>{search.trim() && search.trim().length < 3 ? "Enter at least three characters to search." : "No group members available."}</EmptyState> : null}
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-xs">
+                                <label>
+                                    Rows{" "}
+                                    <select
+                                        value={pageSize}
+                                        onChange={(event) => {
+                                            setPageSize(Number(event.target.value));
+                                            setPage(0);
+                                        }}
+                                        className="ml-1 h-8 rounded-md border border-input bg-background px-2"
+                                    >
+                                        <option value="15">15</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                </label>
+                                <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page <= 0} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                                    Previous
+                                </button>
+                                <span>
+                                    {Math.min(page, pageCount - 1) + 1}/{pageCount}
+                                </span>
+                                <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={page >= pageCount - 1} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                                    Next
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <GroupModerationBansTab group={group} selected={selected} setSelected={setSelected} openUser={openUser} refreshGeneration={moderationRefresh} busy={busy} reportError={setError} reportNotice={setNotice} />
+                    )}
 
                     <section className="mt-5 space-y-3 text-xs">
                         <label className="block font-medium">User ID</label>
@@ -1548,6 +1577,366 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                     {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                     {notice ? <p className="mt-3 rounded-md border border-border bg-muted/50 p-2 text-xs">{notice}</p> : null}
                 </div>
+            </div>
+        </div>
+    );
+}
+
+function GroupModerationBansTab({
+    group,
+    selected,
+    setSelected,
+    openUser,
+    refreshGeneration,
+    busy,
+    reportError,
+    reportNotice,
+}: {
+    group: VrchatGroup;
+    selected: Record<string, VrchatGroupMember>;
+    setSelected: Dispatch<SetStateAction<Record<string, VrchatGroupMember>>>;
+    openUser: (userId: string) => void;
+    refreshGeneration: number;
+    busy: boolean;
+    reportError: (error: string) => void;
+    reportNotice: (notice: string) => void;
+}) {
+    const [bans, setBans] = useState<VrchatGroupMember[]>([]);
+    const [search, setSearch] = useState("");
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(15);
+    const [loading, setLoading] = useState(true);
+    const [transfer, setTransfer] = useState<"Export" | "Import" | null>(null);
+    const transferTrigger = useRef<HTMLButtonElement>(null);
+    const roleNames = useMemo(() => new Map((group.roles || []).map((role) => [role.id, role.name])), [group.roles]);
+
+    const loadBans = useCallback(
+        async (refresh = false) => {
+            setLoading(true);
+            reportError("");
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/moderation/bans${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; bans?: VrchatGroupMember[] };
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!response.ok) throw new Error(payload.error || "Group bans could not be loaded.");
+                setBans(payload.bans || []);
+            } catch (loadError) {
+                reportError(loadError instanceof Error ? loadError.message : "Group bans could not be loaded.");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [group.id, reportError],
+    );
+
+    useEffect(() => {
+        void loadBans(refreshGeneration > 0);
+    }, [loadBans, refreshGeneration]);
+
+    const filtered = useMemo(() => {
+        const query = search.trim().toLocaleLowerCase();
+        return bans
+            .filter((ban) => {
+                if (!query) return true;
+                const roles = ban.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(" ");
+                return [ban.userId, ban.user?.displayName, ban.managerNotes, roles].some((value) => value?.toLocaleLowerCase().includes(query));
+            })
+            .toSorted((left, right) => Date.parse(right.bannedAt || "") - Date.parse(left.bannedAt || ""));
+    }, [bans, roleNames, search]);
+    const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const effectivePage = Math.min(page, pageCount - 1);
+    const pageBans = filtered.slice(effectivePage * pageSize, effectivePage * pageSize + pageSize);
+
+    function toggleBan(ban: VrchatGroupMember, checked: boolean) {
+        setSelected((current) => {
+            const next = { ...current };
+            if (checked) next[ban.userId] = ban;
+            else delete next[ban.userId];
+            return next;
+        });
+    }
+
+    function closeTransfer() {
+        setTransfer(null);
+        window.setTimeout(() => transferTrigger.current?.focus());
+    }
+
+    return (
+        <div className="text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void loadBans(true)} disabled={loading || busy} className="inline-flex size-8 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh group bans">
+                    {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                </button>
+                <button type="button" onClick={() => setSelected((current) => ({ ...current, ...Object.fromEntries(filtered.map((ban) => [ban.userId, ban])) }))} disabled={!filtered.length || busy} className="h-8 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
+                    Select All
+                </button>
+                <span>{bans.length}</span>
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        transferTrigger.current = event.currentTarget;
+                        setTransfer("Export");
+                    }}
+                    disabled={!filtered.length || busy}
+                    className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40"
+                >
+                    <Download className="size-3.5" /> Export Bans
+                </button>
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        transferTrigger.current = event.currentTarget;
+                        setTransfer("Import");
+                    }}
+                    disabled={busy}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40"
+                >
+                    <Upload className="size-3.5" /> Import Bans
+                </button>
+                <div className="relative min-w-48 flex-1 sm:max-w-80">
+                    <Search className="pointer-events-none absolute top-2.5 left-2.5 size-3.5 text-muted-foreground" />
+                    <input
+                        value={search}
+                        onChange={(event) => {
+                            setSearch(event.target.value);
+                            setPage(0);
+                        }}
+                        placeholder="Search bans"
+                        className="h-8 w-full rounded-md border border-input bg-background pr-3 pl-8 outline-none focus:ring-2 focus:ring-ring"
+                    />
+                </div>
+            </div>
+
+            <div className="mt-2 overflow-x-auto rounded-md border border-border">
+                <table className="w-full min-w-[820px] table-fixed text-left">
+                    <thead className="bg-muted/70 text-muted-foreground">
+                        <tr>
+                            <th className="w-12 p-2" />
+                            <th className="w-16 p-2">Avatar</th>
+                            <th className="w-40 p-2">Display Name</th>
+                            <th className="p-2">Roles</th>
+                            <th className="p-2">Notes</th>
+                            <th className="w-36 p-2">Joined At</th>
+                            <th className="w-36 p-2">Banned At</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pageBans.map((ban) => (
+                            <tr key={ban.userId} className="border-t border-border hover:bg-muted/50">
+                                <td className="p-2 text-center">
+                                    <input type="checkbox" checked={Boolean(selected[ban.userId])} onChange={(event) => toggleBan(ban, event.target.checked)} className="size-4 accent-primary" aria-label={`Select banned ${ban.user?.displayName || ban.userId}`} />
+                                </td>
+                                <td className="p-2">{ban.user ? <FriendAvatar friend={ban.user} size="sm" /> : null}</td>
+                                <td className="truncate p-2">
+                                    <button type="button" onClick={() => openUser(ban.userId)} className="font-medium hover:underline">
+                                        {ban.user?.displayName || ban.userId}
+                                    </button>
+                                </td>
+                                <td className="truncate p-2" title={ban.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ")}>
+                                    {ban.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ") || "—"}
+                                </td>
+                                <td className="truncate p-2" title={ban.managerNotes}>
+                                    {ban.managerNotes || "—"}
+                                </td>
+                                <td className="p-2">{dateTime(ban.joinedAt)}</td>
+                                <td className="p-2">{dateTime(ban.bannedAt)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {!loading && !pageBans.length ? <EmptyState>No banned users available.</EmptyState> : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                <label>
+                    Rows{" "}
+                    <select
+                        value={pageSize}
+                        onChange={(event) => {
+                            setPageSize(Number(event.target.value));
+                            setPage(0);
+                        }}
+                        className="ml-1 h-8 rounded-md border border-input bg-background px-2"
+                    >
+                        <option value="15">15</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </label>
+                <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={effectivePage <= 0} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                    Previous
+                </button>
+                <span>
+                    {effectivePage + 1}/{pageCount}
+                </span>
+                <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={effectivePage >= pageCount - 1} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                    Next
+                </button>
+            </div>
+            {transfer ? (
+                <GroupBanTransferDialog
+                    mode={transfer}
+                    group={group}
+                    bans={filtered}
+                    roleNames={roleNames}
+                    close={closeTransfer}
+                    completed={async (count) => {
+                        reportNotice(`${count} user${count === 1 ? "" : "s"} banned.`);
+                        await loadBans(true);
+                    }}
+                />
+            ) : null}
+        </div>
+    );
+}
+
+function GroupBanTransferDialog({ mode, group, bans, roleNames, close, completed }: { mode: "Export" | "Import"; group: VrchatGroup; bans: VrchatGroupMember[]; roleNames: Map<string, string>; close: () => void; completed: (count: number) => Promise<void> }) {
+    const [fields, setFields] = useState<GroupBanExportField[]>([...GROUP_BAN_EXPORT_FIELDS]);
+    const [input, setInput] = useState("");
+    const [progress, setProgress] = useState({ current: 0, total: 0 });
+    const [error, setError] = useState("");
+    const [result, setResult] = useState("");
+    const dialog = useRef<HTMLDivElement>(null);
+    const closeButton = useRef<HTMLButtonElement>(null);
+    const continueImport = useRef(true);
+    const ids = useMemo(() => extractGroupBanUserIds(input), [input]);
+    const csv = useMemo(() => formatGroupBanCsv(fields, bans, roleNames), [bans, fields, roleNames]);
+    const busy = progress.total > 0;
+
+    useEffect(() => {
+        closeButton.current?.focus();
+        function handleKey(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                if (!busy) close();
+                return;
+            }
+            if (event.key !== "Tab" || !dialog.current) return;
+            const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), textarea:not([disabled])"));
+            const first = focusable[0];
+            const last = focusable.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        }
+        window.addEventListener("keydown", handleKey, true);
+        return () => window.removeEventListener("keydown", handleKey, true);
+    }, [busy, close]);
+
+    async function importBans() {
+        if (!ids.length) return;
+        setError("");
+        setResult("");
+        continueImport.current = true;
+        setProgress({ current: 0, total: ids.length });
+        let success = 0;
+        let failures = 0;
+        let lastFailure = "";
+        for (const [index, userId] of ids.entries()) {
+            if (!continueImport.current) break;
+            setProgress({ current: index + 1, total: ids.length });
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/moderation/members/${encodeURIComponent(userId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "ban" }) });
+                const payload = (await response.json()) as { error?: string };
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!response.ok) throw new Error(payload.error || `Could not ban ${userId}.`);
+                success += 1;
+            } catch (importError) {
+                failures += 1;
+                lastFailure = importError instanceof Error ? importError.message : `Could not ban ${userId}.`;
+            }
+            if (index < ids.length - 1 && continueImport.current) await new Promise((resolve) => window.setTimeout(resolve, 1_000));
+        }
+        setProgress({ current: 0, total: 0 });
+        setResult(`${success} succeeded${failures ? `, ${failures} failed` : ""}.`);
+        if (lastFailure) setError(lastFailure);
+        if (success) await completed(success);
+    }
+
+    return (
+        <div data-group-ban-transfer-overlay className="absolute inset-0 z-[110] flex items-center justify-center bg-black/70 p-3">
+            <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="group-ban-transfer-title" className="w-full max-w-[650px] rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                <div className="flex items-center justify-between gap-3">
+                    <h4 id="group-ban-transfer-title" className="font-semibold">
+                        {mode} Bans
+                    </h4>
+                    <button ref={closeButton} type="button" onClick={close} disabled={busy} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-muted disabled:opacity-40" aria-label={`Close ${mode.toLocaleLowerCase()} bans`}>
+                        <X className="size-4" />
+                    </button>
+                </div>
+                {mode === "Export" ? (
+                    <div className="mt-4 space-y-3 text-xs">
+                        <div className="flex flex-wrap gap-x-4 gap-y-2">
+                            {GROUP_BAN_EXPORT_FIELDS.map((field) => (
+                                <label key={field} className="flex items-center gap-2">
+                                    <input type="checkbox" checked={fields.includes(field)} onChange={(event) => setFields((current) => (event.target.checked ? [...current, field] : current.filter((value) => value !== field)))} className="size-4 accent-primary" />
+                                    {GROUP_BAN_EXPORT_LABELS[field]}
+                                </label>
+                            ))}
+                        </div>
+                        <textarea
+                            value={csv}
+                            readOnly
+                            rows={13}
+                            onClick={(event) => {
+                                event.currentTarget.select();
+                                void navigator.clipboard.writeText(csv);
+                            }}
+                            aria-label="Export bans CSV"
+                            className="w-full resize-none rounded-md border border-input bg-background p-2 font-mono text-[11px] outline-none focus:ring-2 focus:ring-ring"
+                        />
+                    </div>
+                ) : (
+                    <div className="mt-4 space-y-3 text-xs">
+                        <p>Paste VRChat user IDs or a VRCX ban CSV export. Duplicate IDs are ignored.</p>
+                        <textarea
+                            value={input}
+                            onChange={(event) => setInput(event.target.value)}
+                            rows={13}
+                            disabled={busy}
+                            aria-label="Import bans input"
+                            placeholder="usr_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                            className="w-full resize-none rounded-md border border-input bg-background p-2 font-mono text-[11px] outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                        />
+                        <div>
+                            {ids.length} valid user ID{ids.length === 1 ? "" : "s"}
+                        </div>
+                        {busy ? (
+                            <div className="inline-flex items-center gap-2">
+                                <Loader2 className="size-3.5 animate-spin" /> Progress {progress.current}/{progress.total}
+                            </div>
+                        ) : null}
+                        {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive">{error}</p> : null}
+                        {result ? <p className="rounded-md border border-border bg-muted/50 p-2">{result}</p> : null}
+                        <div className="flex justify-end gap-2">
+                            {busy ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        continueImport.current = false;
+                                    }}
+                                    className="h-9 rounded-md bg-secondary px-3"
+                                >
+                                    Cancel
+                                </button>
+                            ) : null}
+                            <button type="button" onClick={() => void importBans()} disabled={busy || !ids.length} className="h-9 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
+                                Import
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

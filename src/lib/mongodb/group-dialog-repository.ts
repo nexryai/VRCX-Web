@@ -1,7 +1,7 @@
 import "server-only";
 
 import { groupGalleryIdSchema } from "@/lib/vrchat/ids";
-import { type VrchatGroupCalendarEvent, type VrchatGroupCalendarInterestUpdate, type VrchatGroupGallery, type VrchatGroupGalleryImage, type VrchatGroupInstance, type VrchatGroupMember, type VrchatGroupPost, vrchatGroupGalleryImageSchema, vrchatGroupGallerySchema } from "@/lib/vrchat/types";
+import { type VrchatGroupCalendarEvent, type VrchatGroupCalendarInterestUpdate, type VrchatGroupGallery, type VrchatGroupGalleryImage, type VrchatGroupInstance, type VrchatGroupMember, type VrchatGroupPost, vrchatGroupGalleryImageSchema, vrchatGroupGallerySchema, vrchatGroupMemberSchema } from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
@@ -78,6 +78,41 @@ export async function upsertCachedGroupMembers(ownerId: string, groupId: string,
 export async function deactivateCachedGroupMember(ownerId: string, groupId: string, userId: string, observedAt = new Date()) {
     await ensureMongoSchema();
     await collections(await getMongoDatabase()).groupMembers.updateOne({ _id: `${ownerId}:${groupId}:${userId}`, ownerId, groupId, userId }, { $set: { active: false, observedAt, updatedAt: observedAt } });
+}
+
+export async function getCachedGroupBans(ownerId: string, groupId: string) {
+    await ensureMongoSchema();
+    const bans = (await collections(await getMongoDatabase()).groupBanSnapshots.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId }))?.bans;
+    return bans ? bans.map((ban) => validateGroupBan(groupId, ban)) : null;
+}
+
+export async function replaceCachedGroupBans(ownerId: string, groupId: string, bans: VrchatGroupMember[], observedAt = new Date()) {
+    await ensureMongoSchema();
+    const validated = bans.map((ban) => validateGroupBan(groupId, ban));
+    await collections(await getMongoDatabase()).groupBanSnapshots.updateOne({ _id: `${ownerId}:${groupId}` }, { $set: { ownerId, groupId, bans: validated, observedAt, updatedAt: observedAt } }, { upsert: true });
+}
+
+export async function upsertCachedGroupBan(ownerId: string, groupId: string, ban: VrchatGroupMember, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const validated = validateGroupBan(groupId, ban);
+    const collection = collections(await getMongoDatabase()).groupBanSnapshots;
+    const existing = await collection.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+    if (!existing) return false;
+    const bans = [validated, ...existing.bans.map((item) => validateGroupBan(groupId, item)).filter((item) => item.userId !== validated.userId)];
+    await collection.updateOne({ _id: existing._id, ownerId, groupId }, { $set: { bans, observedAt: updatedAt, updatedAt } });
+    return true;
+}
+
+function validateGroupBan(groupId: string, value: unknown) {
+    const ban = vrchatGroupMemberSchema.parse(value);
+    if (ban.groupId && ban.groupId !== groupId) throw new Error("The cached group ban belongs to another group.");
+    return ban;
+}
+
+export async function removeCachedGroupBan(ownerId: string, groupId: string, userId: string, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const result = await collections(await getMongoDatabase()).groupBanSnapshots.updateOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId }, { $pull: { bans: { userId } }, $set: { observedAt: updatedAt, updatedAt } });
+    return result.matchedCount > 0;
 }
 
 export async function getCachedGroupInstances(ownerId: string, groupId: string) {

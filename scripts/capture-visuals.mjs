@@ -40,6 +40,9 @@ const captures = [
     { name: "group-dialog-post-image", path: "/friends-locations", readyText: "Select Gallery Image", groupDialog: true, groupTab: "Posts", groupPostDialog: "image" },
     { name: "group-dialog-invite", path: "/friends-locations", readyText: "Invite To Group", groupDialog: true, groupInvite: true },
     { name: "group-dialog-moderation-members", path: "/friends-locations", readyText: "Selected Users", groupDialog: true, groupModeration: true },
+    { name: "group-dialog-moderation-bans", path: "/friends-locations", readyText: "Cobalt Banned User", groupDialog: true, groupModeration: "bans" },
+    { name: "group-dialog-moderation-bans-export", path: "/friends-locations", readyText: "Export Bans", groupDialog: true, groupModeration: "bans-export" },
+    { name: "group-dialog-moderation-bans-import", path: "/friends-locations", readyText: "Import Bans", groupDialog: true, groupModeration: "bans-import" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
@@ -394,8 +397,38 @@ for (const width of widths) {
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Group moderation dialog did not restore focus to Manage group.");
                 await manage.click();
                 await page.getByRole("button", { name: "Moderation Tools", exact: true }).click();
-                await page.getByLabel("Select Aoi Sample", { exact: true }).check();
-                await overlay.getByText("Selected Users", { exact: true }).scrollIntoViewIfNeeded();
+                if (capture.groupModeration === true) {
+                    await page.getByLabel("Select Aoi Sample", { exact: true }).check();
+                    await overlay.getByText("Selected Users", { exact: true }).scrollIntoViewIfNeeded();
+                } else {
+                    await overlay.getByRole("button", { name: "Bans", exact: true }).click();
+                    await overlay.getByText("Cobalt Banned User", { exact: true }).waitFor();
+                    if (capture.groupModeration === "bans-export") {
+                        await overlay.getByRole("button", { name: "Export Bans", exact: true }).click();
+                        const transfer = page.getByRole("dialog", { name: "Export Bans", exact: true });
+                        await transfer.waitFor();
+                        await page.keyboard.press("Shift+Tab");
+                        await page.keyboard.press("Tab");
+                        if (!(await transfer.getByRole("button", { name: "Close export bans", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("Export bans dialog did not trap focus.");
+                        await page.keyboard.press("Escape");
+                        await transfer.waitFor({ state: "detached" });
+                        const exportButton = overlay.getByRole("button", { name: "Export Bans", exact: true });
+                        if (!(await exportButton.evaluate((element) => document.activeElement === element))) throw new Error("Export bans dialog did not restore focus.");
+                        await exportButton.click();
+                    } else if (capture.groupModeration === "bans-import") {
+                        const importButton = overlay.getByRole("button", { name: "Import Bans", exact: true });
+                        await importButton.click();
+                        const transfer = page.getByRole("dialog", { name: "Import Bans", exact: true });
+                        await transfer.waitFor();
+                        await page.keyboard.press("Escape");
+                        await transfer.waitFor({ state: "detached" });
+                        if (!(await importButton.evaluate((element) => document.activeElement === element))) throw new Error("Import bans dialog did not restore focus.");
+                        await importButton.click();
+                        await transfer.getByRole("textbox", { name: "Import bans input", exact: true }).fill("usr_00000000-0000-0000-0000-000000000099");
+                    } else {
+                        await page.getByLabel("Select banned Cobalt Banned User", { exact: true }).check();
+                    }
+                }
             }
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
             if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();
