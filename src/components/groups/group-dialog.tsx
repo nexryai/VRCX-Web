@@ -3,6 +3,7 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+    ArrowUpDown,
     Bell,
     BellOff,
     Bookmark,
@@ -42,10 +43,11 @@ import { PreviousInstancesDialog } from "@/components/previous-instances/previou
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { locationLabel } from "@/lib/friends";
+import { formatGroupAuditLogCsv, GROUP_AUDIT_LOG_EXPORT_FIELDS, GROUP_AUDIT_LOG_EXPORT_LABELS, type GroupAuditLogExportField, groupAuditLogTypeName } from "@/lib/group-audit-log-transfer";
 import { extractGroupBanUserIds, formatGroupBanCsv, GROUP_BAN_EXPORT_FIELDS, GROUP_BAN_EXPORT_LABELS, type GroupBanExportField } from "@/lib/group-ban-transfer";
 import { partitionGroupCalendarEvents } from "@/lib/group-calendar";
 import { latestVrchatFileUrl } from "@/lib/vrchat/gallery-files";
-import type { VrchatFile, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatFile, VrchatGroup, VrchatGroupAuditLog, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
 type GroupTab = "Info" | "Posts" | "Members" | "Photos" | "JSON";
 type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
@@ -1134,7 +1136,7 @@ type GroupMemberModerationAction = "add-role" | "ban" | "kick" | "remove-role" |
 // Members/Bans tabs, transfer dialogs, selection composable, and sequential
 // batch-operation behavior.
 function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: { group: VrchatGroup; currentUserId: string; openUser: (userId: string) => void; close: () => void }) {
-    const [activeTab, setActiveTab] = useState<"Members" | "Bans" | "Invites">("Members");
+    const [activeTab, setActiveTab] = useState<"Members" | "Bans" | "Invites" | "Logs">("Members");
     const [members, setMembers] = useState<VrchatGroupMember[]>([]);
     const [searchResults, setSearchResults] = useState<VrchatGroupMember[]>([]);
     const [selected, setSelected] = useState<Record<string, VrchatGroupMember>>({});
@@ -1187,7 +1189,7 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
         closeButton.current?.focus();
         function handleKey(event: KeyboardEvent) {
             if (event.key === "Escape") {
-                if (document.querySelector("[data-group-ban-transfer-overlay]")) return;
+                if (document.querySelector("[data-group-moderation-transfer-overlay]")) return;
                 event.preventDefault();
                 event.stopImmediatePropagation();
                 close();
@@ -1346,7 +1348,7 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                             {group.name}
                         </h3>
                         <div className="mt-2 flex text-xs">
-                            {(["Members", "Bans", "Invites"] as const).map((tabName) => (
+                            {(["Members", "Bans", "Invites", "Logs"] as const).map((tabName) => (
                                 <button
                                     key={tabName}
                                     type="button"
@@ -1356,7 +1358,7 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                                         setError("");
                                         setNotice("");
                                     }}
-                                    disabled={(tabName === "Bans" && !hasGroupPermission(group, "group-bans-manage")) || (tabName === "Invites" && !hasGroupPermission(group, "group-invites-manage"))}
+                                    disabled={(tabName === "Bans" && !hasGroupPermission(group, "group-bans-manage")) || (tabName === "Invites" && !hasGroupPermission(group, "group-invites-manage")) || (tabName === "Logs" && !hasGroupPermission(group, "group-audit-view"))}
                                     className={`border-b-2 px-4 pb-2 disabled:opacity-40 ${activeTab === tabName ? "border-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                                 >
                                     {tabName}
@@ -1512,8 +1514,10 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                         </>
                     ) : activeTab === "Bans" ? (
                         <GroupModerationBansTab group={group} selected={selected} setSelected={setSelected} openUser={openUser} refreshGeneration={moderationRefresh} busy={busy} reportError={setError} reportNotice={setNotice} />
-                    ) : (
+                    ) : activeTab === "Invites" ? (
                         <GroupModerationInvitesTab group={group} selected={selected} setSelected={setSelected} openUser={openUser} busy={busy} reportError={setError} reportNotice={setNotice} />
+                    ) : (
+                        <GroupModerationLogsTab group={group} openUser={openUser} busy={busy} reportError={setError} />
                     )}
 
                     <section className="mt-5 space-y-3 text-xs">
@@ -2015,6 +2019,269 @@ function GroupModerationInvitesTab({
     );
 }
 
+function GroupModerationLogsTab({ group, openUser, busy, reportError }: { group: VrchatGroup; openUser: (userId: string) => void; busy: boolean; reportError: (error: string) => void }) {
+    const [logs, setLogs] = useState<VrchatGroupAuditLog[]>([]);
+    const [availableTypes, setAvailableTypes] = useState<string[]>([]);
+    const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+    const [search, setSearch] = useState("");
+    const [sort, setSort] = useState<{ key: "actorDisplayName" | "created_at" | "eventType"; desc: boolean }>({ key: "created_at", desc: true });
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(15);
+    const [loading, setLoading] = useState(true);
+    const [truncated, setTruncated] = useState(false);
+    const [exportOpen, setExportOpen] = useState(false);
+    const exportButton = useRef<HTMLButtonElement>(null);
+
+    const loadLogs = useCallback(
+        async (refresh = false, eventTypes: string[] = []) => {
+            setLoading(true);
+            reportError("");
+            try {
+                const parameters = new URLSearchParams();
+                if (refresh) parameters.set("refresh", "true");
+                for (const type of eventTypes) parameters.append("eventType", type);
+                const query = parameters.size ? `?${parameters}` : "";
+                const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/moderation/logs${query}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; logs?: VrchatGroupAuditLog[]; availableEventTypes?: string[]; truncated?: boolean };
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!response.ok) throw new Error(payload.error || "Group audit logs could not be loaded.");
+                setLogs(payload.logs || []);
+                setAvailableTypes(payload.availableEventTypes || []);
+                setTruncated(Boolean(payload.truncated));
+            } catch (loadError) {
+                reportError(loadError instanceof Error ? loadError.message : "Group audit logs could not be loaded.");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [group.id, reportError],
+    );
+
+    useEffect(() => {
+        void loadLogs();
+    }, [loadLogs]);
+    const filtered = useMemo(() => {
+        const query = search.trim().toLocaleLowerCase();
+        return logs
+            .filter((log) => !query || log.description.toLocaleLowerCase().includes(query))
+            .toSorted((left, right) => {
+                const leftValue = sort.key === "created_at" ? Date.parse(left.created_at) : (left[sort.key] || "").toLocaleLowerCase();
+                const rightValue = sort.key === "created_at" ? Date.parse(right.created_at) : (right[sort.key] || "").toLocaleLowerCase();
+                const value = typeof leftValue === "number" && typeof rightValue === "number" ? leftValue - rightValue : String(leftValue).localeCompare(String(rightValue));
+                return sort.desc ? -value : value;
+            });
+    }, [logs, search, sort]);
+    const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const effectivePage = Math.min(page, pageCount - 1);
+    const pageLogs = filtered.slice(effectivePage * pageSize, effectivePage * pageSize + pageSize);
+
+    function toggleSort(key: typeof sort.key) {
+        setSort((current) => ({ key, desc: current.key === key ? !current.desc : key === "created_at" }));
+    }
+
+    return (
+        <div className="text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void loadLogs(true, selectedTypes)} disabled={loading || busy} className="inline-flex size-8 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40" aria-label="Refresh group audit logs">
+                    {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                </button>
+                <span>{logs.length}</span>
+                {truncated ? <span className="text-amber-400">First 5,000 results</span> : null}
+                <button ref={exportButton} type="button" onClick={() => setExportOpen(true)} disabled={!logs.length || busy} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
+                    <Download className="size-3.5" /> Export Logs
+                </button>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <details className="relative">
+                    <summary className="flex h-9 w-[250px] cursor-pointer list-none items-center rounded-md border border-input bg-background px-3 outline-none focus:ring-2 focus:ring-ring">
+                        <span className="truncate">{selectedTypes.length ? selectedTypes.map(groupAuditLogTypeName).join(", ") : "Filter Type"}</span>
+                    </summary>
+                    <div className="absolute top-10 left-0 z-20 max-h-64 w-[250px] overflow-y-auto rounded-md border border-border bg-popover p-2 shadow-xl">
+                        {availableTypes.map((type) => (
+                            <label key={type} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-muted">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedTypes.includes(type)}
+                                    onChange={(event) => {
+                                        setSelectedTypes((current) => (event.target.checked ? [...current, type] : current.filter((value) => value !== type)));
+                                        setPage(0);
+                                    }}
+                                    className="size-4 accent-primary"
+                                />
+                                {groupAuditLogTypeName(type)}
+                            </label>
+                        ))}
+                    </div>
+                </details>
+            </div>
+            <div className="relative mt-2">
+                <Search className="pointer-events-none absolute top-2.5 left-2.5 size-3.5 text-muted-foreground" />
+                <input
+                    value={search}
+                    onChange={(event) => {
+                        setSearch(event.target.value);
+                        setPage(0);
+                    }}
+                    placeholder="Search group members"
+                    className="h-9 w-full rounded-md border border-input bg-background pr-3 pl-8 outline-none focus:ring-2 focus:ring-ring"
+                />
+            </div>
+            <div className="mt-2 overflow-x-auto rounded-md border border-border">
+                <table className="w-full min-w-[980px] table-fixed text-left">
+                    <thead className="bg-muted/70 text-muted-foreground">
+                        <tr>
+                            <SortableLogHeader label="Created At" width="w-44" active={sort.key === "created_at"} action={() => toggleSort("created_at")} />
+                            <SortableLogHeader label="Type" width="w-48" active={sort.key === "eventType"} action={() => toggleSort("eventType")} />
+                            <SortableLogHeader label="Display Name" width="w-44" active={sort.key === "actorDisplayName"} action={() => toggleSort("actorDisplayName")} />
+                            <th className="p-2">Description</th>
+                            <th className="w-64 p-2">Data</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pageLogs.map((log) => (
+                            <tr key={log.id} className="border-t border-border hover:bg-muted/50">
+                                <td className="p-2">{dateTime(log.created_at)}</td>
+                                <td className="truncate p-2">{log.eventType}</td>
+                                <td className="truncate p-2">
+                                    {log.actorId?.startsWith("usr_") ? (
+                                        <button type="button" onClick={() => openUser(log.actorId as string)} className="font-medium hover:underline">
+                                            {log.actorDisplayName || log.actorId}
+                                        </button>
+                                    ) : (
+                                        log.actorDisplayName || "—"
+                                    )}
+                                </td>
+                                <td className="p-2">
+                                    {log.targetId?.startsWith("wrld_") ? <span className="mr-1 text-primary">{log.targetId}</span> : null}
+                                    {log.description}
+                                </td>
+                                <td className="truncate p-2 font-mono text-[11px]" title={log.data ? JSON.stringify(log.data) : ""}>
+                                    {log.data ? JSON.stringify(log.data) : ""}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {!loading && !pageLogs.length ? <EmptyState>No audit logs available.</EmptyState> : null}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                <label>
+                    Rows{" "}
+                    <select
+                        value={pageSize}
+                        onChange={(event) => {
+                            setPageSize(Number(event.target.value));
+                            setPage(0);
+                        }}
+                        className="ml-1 h-8 rounded-md border border-input bg-background px-2"
+                    >
+                        <option value="15">15</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </label>
+                <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={effectivePage <= 0} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                    Previous
+                </button>
+                <span>
+                    {effectivePage + 1}/{pageCount}
+                </span>
+                <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={effectivePage >= pageCount - 1} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                    Next
+                </button>
+            </div>
+            {exportOpen ? (
+                <GroupAuditLogExportDialog
+                    logs={filtered}
+                    close={() => {
+                        setExportOpen(false);
+                        exportButton.current?.focus();
+                    }}
+                />
+            ) : null}
+        </div>
+    );
+}
+
+function SortableLogHeader({ label, width, active, action }: { label: string; width: string; active: boolean; action: () => void }) {
+    return (
+        <th className={`${width} p-2`}>
+            <button type="button" onClick={action} className={`inline-flex items-center gap-1 font-medium ${active ? "text-foreground" : ""}`}>
+                {label}
+                <ArrowUpDown className="size-3.5" />
+            </button>
+        </th>
+    );
+}
+
+function GroupAuditLogExportDialog({ logs, close }: { logs: VrchatGroupAuditLog[]; close: () => void }) {
+    const [fields, setFields] = useState<GroupAuditLogExportField[]>([...GROUP_AUDIT_LOG_EXPORT_FIELDS]);
+    const dialog = useRef<HTMLDivElement>(null);
+    const closeButton = useRef<HTMLButtonElement>(null);
+    const csv = useMemo(() => formatGroupAuditLogCsv(fields, logs), [fields, logs]);
+    useEffect(() => {
+        closeButton.current?.focus();
+        function handleKey(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                close();
+                return;
+            }
+            if (event.key !== "Tab" || !dialog.current) return;
+            const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), textarea:not([disabled])"));
+            const first = focusable[0];
+            const last = focusable.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        }
+        window.addEventListener("keydown", handleKey, true);
+        return () => window.removeEventListener("keydown", handleKey, true);
+    }, [close]);
+    return (
+        <div data-group-moderation-transfer-overlay className="absolute inset-0 z-[110] flex items-center justify-center bg-black/70 p-3">
+            <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="group-log-export-title" className="w-full max-w-[650px] rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                <div className="flex items-center justify-between">
+                    <h4 id="group-log-export-title" className="font-semibold">
+                        Export Logs
+                    </h4>
+                    <button ref={closeButton} type="button" onClick={close} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-muted" aria-label="Close export logs">
+                        <X className="size-4" />
+                    </button>
+                </div>
+                <div className="mt-4 flex flex-col gap-2 text-xs">
+                    {GROUP_AUDIT_LOG_EXPORT_FIELDS.map((field) => (
+                        <label key={field} className="inline-flex items-center gap-2">
+                            <input type="checkbox" checked={fields.includes(field)} onChange={(event) => setFields((current) => (event.target.checked ? [...current, field] : current.filter((value) => value !== field)))} className="size-4 accent-primary" />
+                            {GROUP_AUDIT_LOG_EXPORT_LABELS[field]}
+                        </label>
+                    ))}
+                </div>
+                <textarea
+                    value={csv}
+                    readOnly
+                    rows={15}
+                    onClick={(event) => {
+                        event.currentTarget.select();
+                        void navigator.clipboard.writeText(csv);
+                    }}
+                    aria-label="Export logs CSV"
+                    className="mt-4 w-full resize-none rounded-md border border-input bg-background p-2 font-mono text-[11px] outline-none focus:ring-2 focus:ring-ring"
+                />
+            </div>
+        </div>
+    );
+}
+
 function GroupBanTransferDialog({ mode, group, bans, roleNames, close, completed }: { mode: "Export" | "Import"; group: VrchatGroup; bans: VrchatGroupMember[]; roleNames: Map<string, string>; close: () => void; completed: (count: number) => Promise<void> }) {
     const [fields, setFields] = useState<GroupBanExportField[]>([...GROUP_BAN_EXPORT_FIELDS]);
     const [input, setInput] = useState("");
@@ -2087,7 +2354,7 @@ function GroupBanTransferDialog({ mode, group, bans, roleNames, close, completed
     }
 
     return (
-        <div data-group-ban-transfer-overlay className="absolute inset-0 z-[110] flex items-center justify-center bg-black/70 p-3">
+        <div data-group-moderation-transfer-overlay className="absolute inset-0 z-[110] flex items-center justify-center bg-black/70 p-3">
             <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="group-ban-transfer-title" className="w-full max-w-[650px] rounded-xl border border-border bg-popover p-4 shadow-2xl">
                 <div className="flex items-center justify-between gap-3">
                     <h4 id="group-ban-transfer-title" className="font-semibold">

@@ -381,6 +381,19 @@ describe("MongoDB application repositories", () => {
         expect(await getPersonalGallerySnapshot(otherOwnerId)).toBeNull();
     });
 
+    test("stores filtered group audit-log snapshots per owner", async () => {
+        const { getCachedGroupAuditLogs, replaceCachedGroupAuditLogs } = await import("./group-dialog-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000091";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000092";
+        const groupId = "grp_00000000-0000-0000-0000-000000000093";
+        const log = { id: "gaud_one", created_at: "2026-08-17T04:00:00.000Z", eventType: "group.member.ban", actorDisplayName: "Moderator", description: "Banned a member", data: { reason: "Rules" } };
+        expect(await getCachedGroupAuditLogs(ownerId, groupId, "all")).toBeNull();
+        await replaceCachedGroupAuditLogs(ownerId, groupId, "all", [], ["group.member.ban"], [log], false);
+        await replaceCachedGroupAuditLogs(otherOwnerId, groupId, "all", [], ["group.member.remove"], [], false);
+        expect(await getCachedGroupAuditLogs(ownerId, groupId, "all")).toMatchObject({ availableEventTypes: ["group.member.ban"], logs: [log], truncated: false });
+        expect(await getCachedGroupAuditLogs(otherOwnerId, groupId, "all")).toMatchObject({ logs: [] });
+    });
+
     test("replaces complete group-instance snapshots without crossing owners", async () => {
         const { getCachedGroupInstances, replaceAllCachedGroupInstances, replaceCachedGroupInstances } = await import("./group-dialog-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000055";

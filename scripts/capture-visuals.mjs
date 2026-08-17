@@ -44,6 +44,8 @@ const captures = [
     { name: "group-dialog-moderation-bans-export", path: "/friends-locations", readyText: "Export Bans", groupDialog: true, groupModeration: "bans-export" },
     { name: "group-dialog-moderation-bans-import", path: "/friends-locations", readyText: "Import Bans", groupDialog: true, groupModeration: "bans-import" },
     { name: "group-dialog-moderation-invites", path: "/friends-locations", readyText: "Sent Invite Sample", groupDialog: true, groupModeration: "invites" },
+    { name: "group-dialog-moderation-logs", path: "/friends-locations", readyText: "group.member.ban", groupDialog: true, groupModeration: "logs" },
+    { name: "group-dialog-moderation-logs-export", path: "/friends-locations", readyText: "Export Logs", groupDialog: true, groupModeration: "logs-export" },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
@@ -405,6 +407,19 @@ for (const width of widths) {
                     await overlay.getByRole("button", { name: "Invites", exact: true }).click();
                     await overlay.getByText("Sent Invite Sample", { exact: true }).waitFor();
                     await page.getByLabel("Select invitation Sent Invite Sample", { exact: true }).check();
+                } else if (capture.groupModeration === "logs" || capture.groupModeration === "logs-export") {
+                    await overlay.getByRole("button", { name: "Logs", exact: true }).click();
+                    await overlay.getByText("group.member.ban", { exact: true }).waitFor();
+                    if (capture.groupModeration === "logs-export") {
+                        const exportButton = overlay.getByRole("button", { name: "Export Logs", exact: true });
+                        await exportButton.click();
+                        const transfer = page.getByRole("dialog", { name: "Export Logs", exact: true });
+                        await transfer.waitFor();
+                        await page.keyboard.press("Escape");
+                        await transfer.waitFor({ state: "detached" });
+                        if (!(await exportButton.evaluate((element) => document.activeElement === element))) throw new Error("Export logs dialog did not restore focus.");
+                        await exportButton.click();
+                    }
                 } else {
                     await overlay.getByRole("button", { name: "Bans", exact: true }).click();
                     await overlay.getByText("Cobalt Banned User", { exact: true }).waitFor();

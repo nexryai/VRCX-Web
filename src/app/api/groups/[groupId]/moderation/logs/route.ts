@@ -42,6 +42,8 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/grou
         const logs = [];
         let truncated = false;
         for (let offset = 0, page = 0; page < 50; page += 1, offset += 100) {
+            // The upstream contract defines eventTypes as one comma-separated
+            // query string even though VRCX stores the selection as an array.
             const upstream = await requestVrchat<unknown>(`groups/${groupId.data}/auditLogs`, { cookies, query: { n: 100, offset, ...(eventTypes.length ? { eventTypes: eventTypes.join(",") } : {}) } });
             Object.assign(cookies, upstream.cookies);
             const parsed = vrchatGroupAuditLogResponseSchema.parse(upstream.data);
