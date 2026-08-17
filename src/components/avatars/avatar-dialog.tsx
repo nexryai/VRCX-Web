@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, CheckCircle, ChevronLeft, ChevronRight, Ellipsis, ImageIcon, Loader2, Monitor, RefreshCw, Share2, Smartphone, Upload, X, XCircle } from "lucide-react";
+import { Apple, Check, CheckCircle, ChevronLeft, ChevronRight, Ellipsis, ImageIcon, Loader2, Monitor, RefreshCw, Share2, Smartphone, Trash2, Upload, User, X, XCircle } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
@@ -12,7 +12,7 @@ import { latestAvatarGalleryImageUrl } from "@/lib/vrchat/avatar-gallery";
 import type { VrchatAvatar, VrchatFile } from "@/lib/vrchat/types";
 
 type AvatarTab = "Info" | "JSON";
-type AvatarModerationAction = "block" | "unblock";
+type AvatarConfirmAction = "block" | "delete-impostor" | "enqueue-impostor" | "regenerate-impostor" | "select-fallback" | "unblock";
 
 export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string; openUser: (userId: string) => void; onClose: () => void }) {
     const currentUser = useCurrentUser();
@@ -23,7 +23,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const [selected, setSelected] = useState(currentUser.currentAvatar === avatarId);
     const [isBlocked, setIsBlocked] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
-    const [moderationAction, setModerationAction] = useState<AvatarModerationAction | null>(null);
+    const [confirmAction, setConfirmAction] = useState<AvatarConfirmAction | null>(null);
     const [moderating, setModerating] = useState(false);
     const [galleryFiles, setGalleryFiles] = useState<VrchatFile[]>([]);
     const [galleryIndex, setGalleryIndex] = useState(0);
@@ -39,7 +39,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const manageButton = useRef<HTMLButtonElement>(null);
     const confirmationDialog = useRef<HTMLDivElement>(null);
     const confirmationCancel = useRef<HTMLButtonElement>(null);
-    const previousModerationAction = useRef<AvatarModerationAction | null>(null);
+    const previousConfirmAction = useRef<AvatarConfirmAction | null>(null);
     const galleryInput = useRef<HTMLInputElement>(null);
     const previewClose = useRef<HTMLButtonElement>(null);
     const previewTrigger = useRef<HTMLButtonElement | null>(null);
@@ -91,7 +91,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         setSelected(currentUser.currentAvatar === avatarId);
         setIsBlocked(false);
         setMenuOpen(false);
-        setModerationAction(null);
+        setConfirmAction(null);
         setStatus("");
         setGalleryFiles([]);
         setGalleryIndex(0);
@@ -109,8 +109,8 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                 window.requestAnimationFrame(() => previewTrigger.current?.focus());
                 return;
             }
-            if (moderationAction) {
-                setModerationAction(null);
+            if (confirmAction) {
+                setConfirmAction(null);
                 return;
             }
             if (menuOpen) {
@@ -121,13 +121,13 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [menuOpen, moderationAction, onClose, previewUrl]);
+    }, [confirmAction, menuOpen, onClose, previewUrl]);
 
     useEffect(() => {
-        if (moderationAction) confirmationCancel.current?.focus();
-        else if (previousModerationAction.current) manageButton.current?.focus();
-        previousModerationAction.current = moderationAction;
-    }, [moderationAction]);
+        if (confirmAction) confirmationCancel.current?.focus();
+        else if (previousConfirmAction.current) manageButton.current?.focus();
+        previousConfirmAction.current = confirmAction;
+    }, [confirmAction]);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -164,10 +164,10 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         }
     }
 
-    function requestModeration(action: AvatarModerationAction) {
+    function requestConfirmation(action: AvatarConfirmAction) {
         setMenuOpen(false);
         setError("");
-        setModerationAction(action);
+        setConfirmAction(action);
     }
 
     function trapConfirmationFocus(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -182,8 +182,8 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         }
     }
 
-    async function moderateAvatar() {
-        if (!moderationAction) return;
+    async function runConfirmedAction() {
+        if (!confirmAction) return;
         setModerating(true);
         setError("");
         setStatus("");
@@ -191,14 +191,15 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}/actions`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: moderationAction }),
+                body: JSON.stringify({ action: confirmAction }),
             });
-            const payload = (await response.json()) as { error?: string; isBlocked?: boolean };
+            const payload = (await response.json()) as { error?: string; hasImpostor?: boolean; isBlocked?: boolean };
             if (response.status === 401) window.location.assign("/login");
             if (!response.ok) throw new Error(payload.error || "The avatar moderation could not be changed.");
-            setIsBlocked(payload.isBlocked === true);
-            setStatus(moderationAction === "block" ? "Avatar blocked" : "Avatar unblocked");
-            setModerationAction(null);
+            if (confirmAction === "block" || confirmAction === "unblock") setIsBlocked(payload.isBlocked === true);
+            if (payload.hasImpostor === false) setAvatar((current) => (current ? { ...current, unityPackages: current.unityPackages?.filter((item) => item.variant !== "impostor") } : current));
+            setStatus(avatarActionStatus(confirmAction));
+            setConfirmAction(null);
         } catch (moderationError) {
             setError(moderationError instanceof Error ? moderationError.message : "The avatar moderation could not be changed.");
         } finally {
@@ -238,6 +239,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     }
 
     const platforms = useMemo(() => avatarPlatforms(avatar), [avatar]);
+    const hasImpostor = avatar?.unityPackages?.some((item) => item.variant === "impostor") === true;
     return (
         <div className="fixed inset-0 z-[84] flex items-end justify-center sm:items-center sm:p-4" role="presentation">
             <button type="button" className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={onClose} aria-label="Close avatar details" />
@@ -332,20 +334,44 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                             </button>
                                             <div className="my-1 border-t border-border" />
                                             {isBlocked ? (
-                                                <button type="button" role="menuitem" onClick={() => requestModeration("unblock")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10">
+                                                <button type="button" role="menuitem" onClick={() => requestConfirmation("unblock")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10">
                                                     <CheckCircle className="size-4" /> Unblock Avatar
                                                 </button>
                                             ) : (
-                                                <button type="button" role="menuitem" onClick={() => requestModeration("block")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                <button type="button" role="menuitem" onClick={() => requestConfirmation("block")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
                                                     <XCircle className="size-4" /> Block Avatar
                                                 </button>
                                             )}
+                                            {avatar.tags?.some((tag) => tag.includes("quest")) ? (
+                                                <button type="button" role="menuitem" onClick={() => requestConfirmation("select-fallback")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                    <Check className="size-4" /> Select Fallback Avatar
+                                                </button>
+                                            ) : null}
+                                            {avatar.authorId === currentUser.id ? (
+                                                <>
+                                                    <div className="my-1 border-t border-border" />
+                                                    {hasImpostor ? (
+                                                        <>
+                                                            <button type="button" role="menuitem" onClick={() => requestConfirmation("regenerate-impostor")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10">
+                                                                <RefreshCw className="size-4" /> Regenerate Impostor
+                                                            </button>
+                                                            <button type="button" role="menuitem" onClick={() => requestConfirmation("delete-impostor")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-destructive hover:bg-destructive/10">
+                                                                <Trash2 className="size-4" /> Delete Impostor
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <button type="button" role="menuitem" onClick={() => requestConfirmation("enqueue-impostor")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                            <User className="size-4" /> Create Impostor
+                                                        </button>
+                                                    )}
+                                                </>
+                                            ) : null}
                                         </div>
                                     ) : null}
                                 </div>
                             </div>
                         </header>
-                        {error && !moderationAction ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                        {error && !confirmAction ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                         {status ? (
                             <p className="sr-only" role="status">
                                 {status}
@@ -380,21 +406,26 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                             ) : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(avatar, null, 2)}</pre> : null}
                         </div>
-                        {moderationAction ? (
+                        {confirmAction ? (
                             <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
                                 <div ref={confirmationDialog} role="alertdialog" aria-modal="true" aria-labelledby="avatar-moderation-title" aria-describedby="avatar-moderation-description" onKeyDown={trapConfirmationFocus} className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
                                     <h3 id="avatar-moderation-title" className="text-sm font-semibold">
                                         Confirm
                                     </h3>
                                     <p id="avatar-moderation-description" className="mt-2 text-xs text-muted-foreground">
-                                        Are you sure you want to {moderationAction === "block" ? "Block Avatar" : "Unblock Avatar"}?
+                                        Are you sure you want to {avatarActionLabel(confirmAction)}?
                                     </p>
                                     {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}
                                     <div className="mt-5 flex justify-end gap-2">
-                                        <button ref={confirmationCancel} type="button" onClick={() => setModerationAction(null)} disabled={moderating} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                                        <button ref={confirmationCancel} type="button" onClick={() => setConfirmAction(null)} disabled={moderating} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
                                             Cancel
                                         </button>
-                                        <button type="button" onClick={() => void moderateAvatar()} disabled={moderating} className={`inline-flex h-9 items-center gap-1 rounded-md px-4 text-xs disabled:opacity-40 ${moderationAction === "block" ? "bg-destructive text-white" : "bg-primary text-primary-foreground"}`}>
+                                        <button
+                                            type="button"
+                                            onClick={() => void runConfirmedAction()}
+                                            disabled={moderating}
+                                            className={`inline-flex h-9 items-center gap-1 rounded-md px-4 text-xs disabled:opacity-40 ${avatarActionDestructive(confirmAction) ? "bg-destructive text-white" : "bg-primary text-primary-foreground"}`}
+                                        >
                                             {moderating ? <Loader2 className="size-4 animate-spin" /> : null} Confirm
                                         </button>
                                     </div>
@@ -426,6 +457,34 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             </section>
         </div>
     );
+}
+
+function avatarActionLabel(action: AvatarConfirmAction) {
+    const labels: Record<AvatarConfirmAction, string> = {
+        block: "Block Avatar",
+        "delete-impostor": "Delete Impostor",
+        "enqueue-impostor": "Create Impostor",
+        "regenerate-impostor": "Regenerate Impostor",
+        "select-fallback": "Select Fallback Avatar",
+        unblock: "Unblock Avatar",
+    };
+    return labels[action];
+}
+
+function avatarActionStatus(action: AvatarConfirmAction) {
+    const messages: Record<AvatarConfirmAction, string> = {
+        block: "Avatar blocked",
+        "delete-impostor": "Impostor deleted",
+        "enqueue-impostor": "Impostor queued",
+        "regenerate-impostor": "Impostor regenerated",
+        "select-fallback": "Fallback avatar changed",
+        unblock: "Avatar unblocked",
+    };
+    return messages[action];
+}
+
+function avatarActionDestructive(action: AvatarConfirmAction) {
+    return action === "block" || action === "delete-impostor" || action === "regenerate-impostor";
 }
 
 function AvatarGallery({

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { requestVrchat } from "./client";
+import { isAllowedVrchatEndpoint, requestVrchat } from "./client";
 
 const uuid = "00000000-0000-0000-0000-000000000001";
 
@@ -31,6 +31,13 @@ describe("VRChat response decoding", () => {
             vi.fn(async () => Response.json({ ok: true })),
         );
         await expect(requestVrchat<{ ok: boolean }>("config")).resolves.toEqual({ data: { ok: true }, cookies: {} });
+    });
+
+    it("allowlists only the fixed Avatar Dialog maintenance paths", () => {
+        expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/selectfallback`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/impostor`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/impostor/enqueue`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/impostor/delete/all`)).toBe(false);
     });
 
     it("forwards multipart gallery uploads without overriding the boundary header", async () => {

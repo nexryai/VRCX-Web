@@ -162,7 +162,7 @@ const favoriteAvatar = {
     created_at: new Date(now.getTime() - 420 * 86_400_000).toISOString(),
     updated_at: new Date(now.getTime() - 6 * 86_400_000).toISOString(),
     styles: { primary: "Realistic", secondary: "Human" },
-    tags: ["content_featured", "author_tag_dancer"],
+    tags: ["content_featured", "author_tag_dancer", "system_quest_fallback"],
     unityPackages: [
         { platform: "standalonewindows", performanceRating: "Good" },
         { platform: "android", performanceRating: "Medium" },

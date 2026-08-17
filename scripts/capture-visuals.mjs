@@ -55,6 +55,10 @@ const captures = [
     { name: "avatar-dialog-unblock-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Unblock Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: true, avatarConfirm: "unblock" },
     { name: "avatar-dialog-gallery", path: "/favorites/avatars", readyText: "Creator Avatar Access", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true },
     { name: "avatar-dialog-gallery-preview", path: "/favorites/avatars", readyText: "Creator Avatar Access", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarGalleryPreview: true },
+    { name: "avatar-dialog-maintenance-menu", path: "/favorites/avatars", readyText: "Regenerate Impostor", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarMenu: true },
+    { name: "avatar-dialog-regenerate-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Regenerate Impostor?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "regenerate-impostor" },
+    { name: "avatar-dialog-create-impostor-menu", path: "/favorites/avatars", readyText: "Create Impostor", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarWithoutImpostor: true, avatarMenu: true },
+    { name: "avatar-dialog-fallback-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Select Fallback Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "select-fallback" },
     { name: "avatar-favorite-dialog", path: "/favorites/avatars", readyText: "VRChat Favorites", favoriteKind: "avatar", avatarDialog: true, favoriteActionLabel: "Manage favorites for Favorite Browser Avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/my-avatars", readyText: "Dance", avatars: true },
@@ -124,7 +128,7 @@ for (const width of widths) {
                 await page.route(`**/api/favorites?section=items&type=${capture.favoriteKind}`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) }));
             }
         }
-        if (capture.avatarModerationState !== undefined || capture.avatarOwner) {
+        if (capture.avatarModerationState !== undefined || capture.avatarOwner || capture.avatarWithoutImpostor) {
             await page.route("**/api/avatars/**", async (route) => {
                 const requestUrl = new URL(route.request().url());
                 if (route.request().method() !== "GET" || requestUrl.pathname !== "/api/avatars/avtr_00000000-0000-0000-0000-000000000052") return route.fallback();
@@ -136,7 +140,15 @@ for (const width of widths) {
                     body: JSON.stringify({
                         ...payload,
                         ...(capture.avatarModerationState !== undefined ? { isBlocked: capture.avatarModerationState } : {}),
-                        ...(capture.avatarOwner ? { avatar: { ...payload.avatar, authorId: "usr_00000000-0000-0000-0000-000000000001", authorName: "Visual Operator" } } : {}),
+                        ...(capture.avatarOwner || capture.avatarWithoutImpostor
+                            ? {
+                                  avatar: {
+                                      ...payload.avatar,
+                                      ...(capture.avatarOwner ? { authorId: "usr_00000000-0000-0000-0000-000000000001", authorName: "Visual Operator" } : {}),
+                                      ...(capture.avatarWithoutImpostor ? { unityPackages: payload.avatar.unityPackages.filter((item) => item.variant !== "impostor") } : {}),
+                                  },
+                              }
+                            : {}),
                     }),
                 });
             });
@@ -494,7 +506,9 @@ for (const width of widths) {
             if (capture.avatarOwner) await page.getByRole("button", { name: "Open gallery image 1 of 2", exact: true }).waitFor();
             if (capture.avatarMenu || capture.avatarConfirm) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
             if (capture.avatarConfirm) {
-                const actionLabel = capture.avatarConfirm === "block" ? "Block Avatar" : "Unblock Avatar";
+                const actionLabels = { block: "Block Avatar", unblock: "Unblock Avatar", "select-fallback": "Select Fallback Avatar", "delete-impostor": "Delete Impostor", "enqueue-impostor": "Create Impostor", "regenerate-impostor": "Regenerate Impostor" };
+                const actionLabel = actionLabels[capture.avatarConfirm];
+                if (!actionLabel) throw new Error(`Unknown avatar confirmation fixture: ${capture.avatarConfirm}`);
                 await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
                 const confirmation = page.getByRole("alertdialog", { name: "Confirm", exact: true });
                 await confirmation.waitFor();
