@@ -430,6 +430,23 @@ export const vrchatGroupMemberSchema = z
 
 export type VrchatGroupMember = z.infer<typeof vrchatGroupMemberSchema>;
 
+export const vrchatGroupAuditLogSchema = z
+    .object({
+        id: z.string().min(1),
+        created_at: z.string(),
+        eventType: z.string().min(1),
+        actorId: z.string().optional(),
+        actorDisplayName: z.string().optional(),
+        description: z.string().default(""),
+        targetId: z.string().optional(),
+        data: z.record(z.string(), z.unknown()).optional(),
+    })
+    .passthrough();
+
+export type VrchatGroupAuditLog = z.infer<typeof vrchatGroupAuditLogSchema>;
+
+export const vrchatGroupAuditLogResponseSchema = z.object({ results: z.array(vrchatGroupAuditLogSchema).default([]), hasNext: z.boolean().default(false) }).passthrough();
+
 export const vrchatPlayerModerationSchema = z
     .object({
         id: z.string().optional(),

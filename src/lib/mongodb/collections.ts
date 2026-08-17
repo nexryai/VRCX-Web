@@ -3,7 +3,24 @@ import "server-only";
 import type { Collection, Db } from "mongodb";
 
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
-import type { VrchatAvatar, VrchatFavorite, VrchatFavoriteGroup, VrchatFile, VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatNotification, VrchatPlayerModeration, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import type {
+    VrchatAvatar,
+    VrchatFavorite,
+    VrchatFavoriteGroup,
+    VrchatFile,
+    VrchatGroup,
+    VrchatGroupAuditLog,
+    VrchatGroupCalendarEvent,
+    VrchatGroupGallery,
+    VrchatGroupGalleryImage,
+    VrchatGroupInstance,
+    VrchatGroupMember,
+    VrchatGroupPost,
+    VrchatNotification,
+    VrchatPlayerModeration,
+    VrchatUser,
+    VrchatWorld,
+} from "@/lib/vrchat/types";
 
 export type EncryptedValue = {
     algorithm: "aes-256-gcm";
@@ -194,6 +211,19 @@ export type GroupInviteSnapshotDocument = {
     invites: VrchatGroupMember[];
     joinRequests: VrchatGroupMember[];
     blockedRequests: VrchatGroupMember[];
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type GroupAuditLogSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    groupId: string;
+    filterKey: string;
+    eventTypes: string[];
+    availableEventTypes: string[];
+    logs: VrchatGroupAuditLog[];
+    truncated: boolean;
     observedAt: Date;
     updatedAt: Date;
 };
@@ -404,6 +434,7 @@ export type Collections = {
     groupMembers: Collection<GroupMemberDocument>;
     groupBanSnapshots: Collection<GroupBanSnapshotDocument>;
     groupInviteSnapshots: Collection<GroupInviteSnapshotDocument>;
+    groupAuditLogSnapshots: Collection<GroupAuditLogSnapshotDocument>;
     groupInstanceSnapshots: Collection<GroupInstanceSnapshotDocument>;
     groupCalendarSnapshots: Collection<GroupCalendarSnapshotDocument>;
     groupGallerySnapshots: Collection<GroupGallerySnapshotDocument>;
@@ -438,6 +469,7 @@ export function collections(db: Db): Collections {
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupBanSnapshots: db.collection<GroupBanSnapshotDocument>("group_ban_snapshots"),
         groupInviteSnapshots: db.collection<GroupInviteSnapshotDocument>("group_invite_snapshots"),
+        groupAuditLogSnapshots: db.collection<GroupAuditLogSnapshotDocument>("group_audit_log_snapshots"),
         groupInstanceSnapshots: db.collection<GroupInstanceSnapshotDocument>("group_instance_snapshots"),
         groupCalendarSnapshots: db.collection<GroupCalendarSnapshotDocument>("group_calendar_snapshots"),
         groupGallerySnapshots: db.collection<GroupGallerySnapshotDocument>("group_gallery_snapshots"),

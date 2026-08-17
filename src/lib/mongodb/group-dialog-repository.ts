@@ -1,7 +1,20 @@
 import "server-only";
 
 import { groupGalleryIdSchema } from "@/lib/vrchat/ids";
-import { type VrchatGroupCalendarEvent, type VrchatGroupCalendarInterestUpdate, type VrchatGroupGallery, type VrchatGroupGalleryImage, type VrchatGroupInstance, type VrchatGroupMember, type VrchatGroupPost, vrchatGroupGalleryImageSchema, vrchatGroupGallerySchema, vrchatGroupMemberSchema } from "@/lib/vrchat/types";
+import {
+    type VrchatGroupAuditLog,
+    type VrchatGroupCalendarEvent,
+    type VrchatGroupCalendarInterestUpdate,
+    type VrchatGroupGallery,
+    type VrchatGroupGalleryImage,
+    type VrchatGroupInstance,
+    type VrchatGroupMember,
+    type VrchatGroupPost,
+    vrchatGroupAuditLogSchema,
+    vrchatGroupGalleryImageSchema,
+    vrchatGroupGallerySchema,
+    vrchatGroupMemberSchema,
+} from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
@@ -157,6 +170,19 @@ export async function projectGroupInviteAction(ownerId: string, groupId: string,
                 : { joinRequests: snapshot.joinRequests.filter((row) => row.userId !== userId) };
     await collection.updateOne({ _id: snapshot._id, ownerId, groupId }, { $set: { ...update, observedAt: updatedAt, updatedAt } });
     return true;
+}
+
+export async function getCachedGroupAuditLogs(ownerId: string, groupId: string, filterKey: string) {
+    await ensureMongoSchema();
+    const snapshot = await collections(await getMongoDatabase()).groupAuditLogSnapshots.findOne({ _id: `${ownerId}:${groupId}:${filterKey}`, ownerId, groupId, filterKey });
+    if (!snapshot) return null;
+    return { eventTypes: snapshot.eventTypes, availableEventTypes: snapshot.availableEventTypes, logs: snapshot.logs.map((log) => vrchatGroupAuditLogSchema.parse(log)), truncated: snapshot.truncated, observedAt: snapshot.observedAt };
+}
+
+export async function replaceCachedGroupAuditLogs(ownerId: string, groupId: string, filterKey: string, eventTypes: string[], availableEventTypes: string[], logs: VrchatGroupAuditLog[], truncated: boolean, observedAt = new Date()) {
+    await ensureMongoSchema();
+    const validated = logs.map((log) => vrchatGroupAuditLogSchema.parse(log));
+    await collections(await getMongoDatabase()).groupAuditLogSnapshots.updateOne({ _id: `${ownerId}:${groupId}:${filterKey}` }, { $set: { ownerId, groupId, filterKey, eventTypes, availableEventTypes, logs: validated, truncated, observedAt, updatedAt: observedAt } }, { upsert: true });
 }
 
 export async function removeCachedGroupBan(ownerId: string, groupId: string, userId: string, updatedAt = new Date()) {

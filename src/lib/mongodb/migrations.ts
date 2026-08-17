@@ -399,6 +399,13 @@ const migrations: Migration[] = [
             await Promise.all([c.groupInviteSnapshots.createIndex({ ownerId: 1, groupId: 1 }, { unique: true, name: "owner_group_unique" }), c.groupInviteSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 35,
+        name: "add-group-audit-log-snapshot-indexes",
+        async apply(c) {
+            await Promise.all([c.groupAuditLogSnapshots.createIndex({ ownerId: 1, groupId: 1, filterKey: 1 }, { unique: true, name: "owner_group_filter_unique" }), c.groupAuditLogSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

@@ -53,6 +53,8 @@ describe("VRChat entity ID boundary", () => {
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/invites/usr_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/requests/usr_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/requests/usr_${uuid}/extra`)).toBe(false);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/auditLogTypes`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/auditLogs`)).toBe(true);
         expect(isAllowedVrchatEndpoint("users/usr_000000000000-0000-0000-000000000001")).toBe(false);
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}-suffix`)).toBe(false);
     });
