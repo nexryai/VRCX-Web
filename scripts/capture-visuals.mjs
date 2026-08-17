@@ -53,6 +53,8 @@ const captures = [
     { name: "avatar-dialog-block-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Block Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: false, avatarConfirm: "block" },
     { name: "avatar-dialog-unblock-menu", path: "/favorites/avatars", readyText: "Unblock Avatar", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: true, avatarMenu: true },
     { name: "avatar-dialog-unblock-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Unblock Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarModerationState: true, avatarConfirm: "unblock" },
+    { name: "avatar-dialog-gallery", path: "/favorites/avatars", readyText: "Creator Avatar Access", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true },
+    { name: "avatar-dialog-gallery-preview", path: "/favorites/avatars", readyText: "Creator Avatar Access", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarGalleryPreview: true },
     { name: "avatar-favorite-dialog", path: "/favorites/avatars", readyText: "VRChat Favorites", favoriteKind: "avatar", avatarDialog: true, favoriteActionLabel: "Manage favorites for Favorite Browser Avatar" },
     { name: "moderation", path: "/social/moderation", readyText: "Moderated Cobalt User" },
     { name: "my-avatars", path: "/my-avatars", readyText: "Dance", avatars: true },
@@ -122,14 +124,35 @@ for (const width of widths) {
                 await page.route(`**/api/favorites?section=items&type=${capture.favoriteKind}`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) }));
             }
         }
-        if (capture.avatarModerationState !== undefined) {
+        if (capture.avatarModerationState !== undefined || capture.avatarOwner) {
             await page.route("**/api/avatars/**", async (route) => {
                 const requestUrl = new URL(route.request().url());
                 if (route.request().method() !== "GET" || requestUrl.pathname !== "/api/avatars/avtr_00000000-0000-0000-0000-000000000052") return route.fallback();
                 const response = await route.fetch();
                 const payload = await response.json();
-                return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, isBlocked: capture.avatarModerationState }) });
+                return route.fulfill({
+                    response,
+                    contentType: "application/json",
+                    body: JSON.stringify({
+                        ...payload,
+                        ...(capture.avatarModerationState !== undefined ? { isBlocked: capture.avatarModerationState } : {}),
+                        ...(capture.avatarOwner ? { avatar: { ...payload.avatar, authorId: "usr_00000000-0000-0000-0000-000000000001", authorName: "Visual Operator" } } : {}),
+                    }),
+                });
             });
+        }
+        if (capture.avatarDialog) {
+            await page.route("https://assets.vrchat.com/visual-fixture/avatar-gallery-*.svg", async (route) => {
+                const second = route.request().url().includes("two");
+                await route.fulfill({
+                    status: 200,
+                    contentType: "image/svg+xml",
+                    body: `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450"><rect width="800" height="450" fill="${second ? "#38245f" : "#18344d"}"/><circle cx="${second ? 210 : 610}" cy="150" r="95" fill="${second ? "#e97c03" : "#00b8ff"}" opacity=".8"/><path d="M0 390 230 170l135 135 105-80 330 225H0Z" fill="${second ? "#ff4f8b" : "#2ed319"}" opacity=".55"/><text x="34" y="62" fill="white" font-family="sans-serif" font-size="32" font-weight="700">Avatar Gallery ${second ? "Two" : "One"}</text></svg>`,
+                });
+            });
+            await page.route("https://api.vrchat.cloud/api/1/file/file_00000000-0000-0000-0000-000000000053/1/", (route) =>
+                route.fulfill({ status: 200, contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="64" fill="#42275f"/><path d="m26 92 34-48 18 25 12-15 18 38Z" fill="#ff4f8b"/></svg>' }),
+            );
         }
         if (capture.avatars) {
             await page.route("**/api/avatars?offset=*", (route) => {
@@ -468,6 +491,7 @@ for (const width of widths) {
         }
         if (capture.avatarDialog) {
             await page.getByText("Favorite Browser Avatar", { exact: true }).first().click();
+            if (capture.avatarOwner) await page.getByRole("button", { name: "Open gallery image 1 of 2", exact: true }).waitFor();
             if (capture.avatarMenu || capture.avatarConfirm) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
             if (capture.avatarConfirm) {
                 const actionLabel = capture.avatarConfirm === "block" ? "Block Avatar" : "Unblock Avatar";
@@ -484,6 +508,18 @@ for (const width of widths) {
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar moderation confirmation did not restore focus.");
                 await manage.click();
                 await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+            }
+            if (capture.avatarGalleryPreview) {
+                const trigger = page.getByRole("button", { name: "Open gallery image 1 of 2", exact: true });
+                await trigger.click();
+                const preview = page.getByRole("dialog", { name: "Avatar gallery image", exact: true });
+                await preview.waitFor();
+                await page.keyboard.press("Tab");
+                if (!(await preview.getByRole("button", { name: "Close image preview", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("Avatar gallery preview did not trap focus.");
+                await page.keyboard.press("Escape");
+                await preview.waitFor({ state: "detached" });
+                if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Avatar gallery preview did not restore focus.");
+                await trigger.click();
             }
         }
         if (capture.clickText) {

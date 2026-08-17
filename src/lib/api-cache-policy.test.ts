@@ -25,7 +25,7 @@ describe("authenticated API cache policy", () => {
             getRoutes += 1;
             if (!/Cache-Control["']\s*[:,]\s*["'](?:private,\s*)?no-store["']/.test(source)) missing.push(relative(process.cwd(), file));
         }
-        expect(getRoutes).toBe(39);
+        expect(getRoutes).toBe(40);
         expect(missing).toEqual([]);
     });
 });

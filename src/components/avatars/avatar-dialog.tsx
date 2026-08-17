@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, CheckCircle, Ellipsis, ImageIcon, Loader2, Monitor, RefreshCw, Share2, Smartphone, X, XCircle } from "lucide-react";
+import { Apple, CheckCircle, ChevronLeft, ChevronRight, Ellipsis, ImageIcon, Loader2, Monitor, RefreshCw, Share2, Smartphone, Upload, X, XCircle } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
 import { VrchatImage } from "@/components/vrchat-image";
-import type { VrchatAvatar } from "@/lib/vrchat/types";
+import { latestAvatarGalleryImageUrl } from "@/lib/vrchat/avatar-gallery";
+import type { VrchatAvatar, VrchatFile } from "@/lib/vrchat/types";
 
 type AvatarTab = "Info" | "JSON";
 type AvatarModerationAction = "block" | "unblock";
@@ -24,6 +25,12 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const [menuOpen, setMenuOpen] = useState(false);
     const [moderationAction, setModerationAction] = useState<AvatarModerationAction | null>(null);
     const [moderating, setModerating] = useState(false);
+    const [galleryFiles, setGalleryFiles] = useState<VrchatFile[]>([]);
+    const [galleryIndex, setGalleryIndex] = useState(0);
+    const [galleryLoading, setGalleryLoading] = useState(false);
+    const [galleryUploading, setGalleryUploading] = useState(false);
+    const [galleryError, setGalleryError] = useState("");
+    const [previewUrl, setPreviewUrl] = useState("");
     const [error, setError] = useState("");
     const [status, setStatus] = useState("");
     const [copied, setCopied] = useState("");
@@ -33,6 +40,29 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const confirmationDialog = useRef<HTMLDivElement>(null);
     const confirmationCancel = useRef<HTMLButtonElement>(null);
     const previousModerationAction = useRef<AvatarModerationAction | null>(null);
+    const galleryInput = useRef<HTMLInputElement>(null);
+    const previewClose = useRef<HTMLButtonElement>(null);
+    const previewTrigger = useRef<HTMLButtonElement | null>(null);
+
+    const loadGallery = useCallback(
+        async (refresh = false) => {
+            setGalleryLoading(true);
+            setGalleryError("");
+            try {
+                const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}/gallery${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; files?: VrchatFile[] };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok || !payload.files) throw new Error(payload.error || "The avatar gallery could not be loaded.");
+                setGalleryFiles(payload.files);
+                setGalleryIndex(0);
+            } catch (loadError) {
+                setGalleryError(loadError instanceof Error ? loadError.message : "The avatar gallery could not be loaded.");
+            } finally {
+                setGalleryLoading(false);
+            }
+        },
+        [avatarId],
+    );
 
     const load = useCallback(
         async (refresh = false) => {
@@ -45,13 +75,14 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                 if (!response.ok || !payload.avatar) throw new Error(payload.error || "The avatar could not be loaded.");
                 setAvatar(payload.avatar);
                 setIsBlocked(payload.isBlocked === true);
+                void loadGallery(refresh);
             } catch (loadError) {
                 setError(loadError instanceof Error ? loadError.message : "The avatar could not be loaded.");
             } finally {
                 setLoading(false);
             }
         },
-        [avatarId],
+        [avatarId, loadGallery],
     );
 
     useEffect(() => {
@@ -62,6 +93,10 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         setMenuOpen(false);
         setModerationAction(null);
         setStatus("");
+        setGalleryFiles([]);
+        setGalleryIndex(0);
+        setGalleryError("");
+        setPreviewUrl("");
         void load();
         closeButton.current?.focus();
     }, [avatarId, currentUser.currentAvatar, load]);
@@ -69,6 +104,11 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
             if (event.key !== "Escape") return;
+            if (previewUrl) {
+                setPreviewUrl("");
+                window.requestAnimationFrame(() => previewTrigger.current?.focus());
+                return;
+            }
             if (moderationAction) {
                 setModerationAction(null);
                 return;
@@ -81,7 +121,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [menuOpen, moderationAction, onClose]);
+    }, [menuOpen, moderationAction, onClose, previewUrl]);
 
     useEffect(() => {
         if (moderationAction) confirmationCancel.current?.focus();
@@ -97,6 +137,10 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         window.addEventListener("pointerdown", closeOutside);
         return () => window.removeEventListener("pointerdown", closeOutside);
     }, [menuOpen]);
+
+    useEffect(() => {
+        if (previewUrl) previewClose.current?.focus();
+    }, [previewUrl]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
@@ -160,6 +204,37 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         } finally {
             setModerating(false);
         }
+    }
+
+    async function uploadGalleryImage(file: File) {
+        setGalleryUploading(true);
+        setGalleryError("");
+        setStatus("");
+        try {
+            const body = new FormData();
+            body.set("file", file);
+            const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}/gallery`, { method: "POST", body });
+            const payload = (await response.json()) as { error?: string };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok) throw new Error(payload.error || "The avatar gallery image could not be uploaded.");
+            setStatus("Avatar gallery image uploaded");
+            await loadGallery(true);
+        } catch (uploadError) {
+            setGalleryError(uploadError instanceof Error ? uploadError.message : "The avatar gallery image could not be uploaded.");
+        } finally {
+            setGalleryUploading(false);
+            if (galleryInput.current) galleryInput.current.value = "";
+        }
+    }
+
+    function openPreview(url: string, trigger: HTMLButtonElement) {
+        previewTrigger.current = trigger;
+        setPreviewUrl(url);
+    }
+
+    function closePreview() {
+        setPreviewUrl("");
+        window.requestAnimationFrame(() => previewTrigger.current?.focus());
     }
 
     const platforms = useMemo(() => avatarPlatforms(avatar), [avatar]);
@@ -284,7 +359,25 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                             ))}
                         </div>
                         <div className="min-h-0 flex-1 overflow-y-auto rounded-b-xl bg-card p-3">
-                            {tab === "Info" ? <AvatarInfo avatar={avatar} copied={copied} copy={copy} /> : null}
+                            {tab === "Info" ? (
+                                <>
+                                    <AvatarGallery
+                                        files={galleryFiles}
+                                        index={galleryIndex}
+                                        loading={galleryLoading}
+                                        uploading={galleryUploading}
+                                        error={galleryError}
+                                        inputRef={galleryInput}
+                                        setIndex={setGalleryIndex}
+                                        refresh={() => void loadGallery(true)}
+                                        upload={(file) => void uploadGalleryImage(file)}
+                                        preview={openPreview}
+                                        isOwner={avatar.authorId === currentUser.id}
+                                    />
+                                    <AvatarListings avatar={avatar} preview={openPreview} />
+                                    <AvatarInfo avatar={avatar} copied={copied} copy={copy} />
+                                </>
+                            ) : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(avatar, null, 2)}</pre> : null}
                         </div>
                         {moderationAction ? (
@@ -308,10 +401,157 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                 </div>
                             </div>
                         ) : null}
+                        {previewUrl ? (
+                            <div className="absolute inset-0 z-[80] flex items-center justify-center bg-black/90 p-3" role="dialog" aria-modal="true" aria-label="Avatar gallery image">
+                                <button
+                                    ref={previewClose}
+                                    type="button"
+                                    onClick={closePreview}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Tab") {
+                                            event.preventDefault();
+                                            previewClose.current?.focus();
+                                        }
+                                    }}
+                                    className="absolute top-3 right-3 inline-flex size-9 items-center justify-center rounded-full bg-background/90 text-foreground"
+                                    aria-label="Close image preview"
+                                >
+                                    <X className="size-5" />
+                                </button>
+                                <VrchatImage src={previewUrl} alt="" className="max-h-full max-w-full object-contain" referrerPolicy="no-referrer" fallback={<ImageIcon className="size-12 text-muted-foreground" />} />
+                            </div>
+                        ) : null}
                     </>
                 ) : null}
             </section>
         </div>
+    );
+}
+
+function AvatarGallery({
+    files,
+    index,
+    loading,
+    uploading,
+    error,
+    inputRef,
+    setIndex,
+    refresh,
+    upload,
+    preview,
+    isOwner,
+}: {
+    files: VrchatFile[];
+    index: number;
+    loading: boolean;
+    uploading: boolean;
+    error: string;
+    inputRef: React.RefObject<HTMLInputElement | null>;
+    setIndex: (index: number) => void;
+    refresh: () => void;
+    upload: (file: File) => void;
+    preview: (url: string, trigger: HTMLButtonElement) => void;
+    isOwner: boolean;
+}) {
+    const images = files.map((file) => ({ id: file.id, url: latestAvatarGalleryImageUrl(file) })).filter((image) => image.url);
+    if (!images.length && !isOwner) return null;
+    const selected = images[Math.min(index, Math.max(0, images.length - 1))];
+    return (
+        <section className="w-full px-1.5 py-2" aria-labelledby="avatar-gallery-title">
+            <div className="flex items-center gap-2">
+                <h3 id="avatar-gallery-title" className="truncate text-[13px] font-medium leading-[18px]">
+                    Gallery
+                </h3>
+                {isOwner ? (
+                    <>
+                        <input
+                            ref={inputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="sr-only"
+                            onChange={(event) => {
+                                const file = event.currentTarget.files?.[0];
+                                if (file) upload(file);
+                            }}
+                        />
+                        <button type="button" onClick={() => inputRef.current?.click()} disabled={loading || uploading} className="inline-flex h-7 items-center gap-1 rounded-md border border-input px-2 text-xs hover:bg-muted disabled:opacity-40">
+                            {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Upload
+                        </button>
+                    </>
+                ) : null}
+                {error ? (
+                    <button type="button" onClick={refresh} className="text-xs text-destructive underline">
+                        Retry
+                    </button>
+                ) : null}
+            </div>
+            {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
+            {selected ? (
+                <div className="mx-auto mt-2 flex h-50 w-[80%] items-center gap-2">
+                    <button type="button" onClick={() => setIndex((index - 1 + images.length) % images.length)} disabled={images.length < 2} className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-input bg-background disabled:opacity-20" aria-label="Previous gallery image">
+                        <ChevronLeft className="size-4" />
+                    </button>
+                    <button type="button" onClick={(event) => preview(selected.url, event.currentTarget)} className="min-w-0 flex-1 self-stretch" aria-label={`Open gallery image ${Math.min(index, images.length - 1) + 1} of ${images.length}`}>
+                        <VrchatImage
+                            src={selected.url}
+                            alt=""
+                            className="size-full object-contain"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            fallback={
+                                <span className="flex size-full items-center justify-center bg-muted">
+                                    <ImageIcon className="size-8 text-muted-foreground" />
+                                </span>
+                            }
+                        />
+                    </button>
+                    <button type="button" onClick={() => setIndex((index + 1) % images.length)} disabled={images.length < 2} className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-input bg-background disabled:opacity-20" aria-label="Next gallery image">
+                        <ChevronRight className="size-4" />
+                    </button>
+                </div>
+            ) : loading ? (
+                <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
+                    <Loader2 className="mr-2 size-4 animate-spin" /> Loading gallery…
+                </div>
+            ) : null}
+        </section>
+    );
+}
+
+function AvatarListings({ avatar, preview }: { avatar: VrchatAvatar; preview: (url: string, trigger: HTMLButtonElement) => void }) {
+    if (!avatar.publishedListings?.length) return null;
+    return (
+        <section className="w-full px-1.5 py-2" aria-labelledby="avatar-listings-title">
+            <h3 id="avatar-listings-title" className="truncate text-[13px] font-medium leading-[18px]">
+                Listings
+            </h3>
+            {avatar.publishedListings.map((listing, index) => {
+                const imageUrl = `https://api.vrchat.cloud/api/1/file/${encodeURIComponent(listing.imageId)}/1/`;
+                return (
+                    <div key={listing.id || listing.listingId || `${listing.imageId}:${index}`} className="flex w-full items-center p-1.5 text-[13px]">
+                        <button type="button" onClick={(event) => preview(imageUrl, event.currentTarget)} className="mr-2.5 size-9 shrink-0 overflow-hidden rounded-full" aria-label={`Open listing image for ${listing.displayName}`}>
+                            <VrchatImage
+                                src={imageUrl}
+                                alt=""
+                                className="size-full object-cover"
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                                fallback={
+                                    <span className="flex size-full items-center justify-center bg-muted">
+                                        <ImageIcon className="size-4 text-muted-foreground" />
+                                    </span>
+                                }
+                            />
+                        </button>
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                            <span className="block truncate font-medium leading-[18px]">{listing.displayName}</span>
+                            <span className="block truncate text-xs italic underline">${new Intl.NumberFormat("en").format(listing.priceTokens)}V</span>
+                            <span className="block text-xs break-words">{listing.description}</span>
+                        </div>
+                    </div>
+                );
+            })}
+        </section>
     );
 }
 

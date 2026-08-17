@@ -185,6 +185,16 @@ export type PersonalFileSnapshotDocument = {
     updatedAt: Date;
 };
 
+export type AvatarGallerySnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    avatarId: string;
+    authorId: string;
+    files: VrchatFile[];
+    observedAt: Date;
+    updatedAt: Date;
+};
+
 export type GroupMemberDocument = {
     _id: string;
     ownerId: string;
@@ -443,6 +453,7 @@ export type Collections = {
     groupPosts: Collection<GroupPostDocument>;
     groupPostSnapshots: Collection<GroupPostSnapshotDocument>;
     personalFileSnapshots: Collection<PersonalFileSnapshotDocument>;
+    avatarGallerySnapshots: Collection<AvatarGallerySnapshotDocument>;
     groupMembers: Collection<GroupMemberDocument>;
     groupBanSnapshots: Collection<GroupBanSnapshotDocument>;
     groupInviteSnapshots: Collection<GroupInviteSnapshotDocument>;
@@ -479,6 +490,7 @@ export function collections(db: Db): Collections {
         groupPosts: db.collection<GroupPostDocument>("group_posts"),
         groupPostSnapshots: db.collection<GroupPostSnapshotDocument>("group_post_snapshots"),
         personalFileSnapshots: db.collection<PersonalFileSnapshotDocument>("personal_file_snapshots"),
+        avatarGallerySnapshots: db.collection<AvatarGallerySnapshotDocument>("avatar_gallery_snapshots"),
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupBanSnapshots: db.collection<GroupBanSnapshotDocument>("group_ban_snapshots"),
         groupInviteSnapshots: db.collection<GroupInviteSnapshotDocument>("group_invite_snapshots"),

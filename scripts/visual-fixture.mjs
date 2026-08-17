@@ -169,6 +169,7 @@ const favoriteAvatar = {
         { platform: "ios", performanceRating: "Poor" },
         { platform: "standalonewindows", variant: "impostor", impostorizerVersion: "1.2.0" },
     ],
+    publishedListings: [{ listingId: "listing_visual_avatar", listingType: "permanent", displayName: "Creator Avatar Access", description: "A one-time avatar marketplace listing.", imageId: "file_00000000-0000-0000-0000-000000000053", priceTokens: 1_200 }],
 };
 
 await database.collection("app_settings").insertOne({
@@ -230,6 +231,34 @@ await database.collection("worlds").insertMany([
     { _id: `${ownerId}:wrld_00000000-0000-0000-0000-000000000011`, ownerId, worldId: "wrld_00000000-0000-0000-0000-000000000011", world: { id: "wrld_00000000-0000-0000-0000-000000000011", name: "Midnight Rooftop" }, source: "session", observedAt: now, updatedAt: now },
 ]);
 await database.collection("avatars").insertOne({ _id: `${ownerId}:${favoriteAvatar.id}`, ownerId, avatarId: favoriteAvatar.id, avatar: favoriteAvatar, source: "favorite", observedAt: now, updatedAt: now });
+await database.collection("avatar_gallery_snapshots").insertOne({
+    _id: `${ownerId}:${favoriteAvatar.id}`,
+    ownerId,
+    avatarId: favoriteAvatar.id,
+    authorId: favoriteAvatar.authorId,
+    files: [
+        {
+            id: "file_00000000-0000-0000-0000-000000000054",
+            ownerId: favoriteAvatar.authorId,
+            name: "Gallery One",
+            extension: ".svg",
+            mimeType: "image/svg+xml",
+            tags: ["avatargallery"],
+            versions: [{ version: 1, status: "complete", file: { category: "simple", fileName: "avatar-gallery-one.svg", sizeInBytes: 2048, status: "complete", uploadId: "visual-one", url: "https://assets.vrchat.com/visual-fixture/avatar-gallery-one.svg" } }],
+        },
+        {
+            id: "file_00000000-0000-0000-0000-000000000055",
+            ownerId: favoriteAvatar.authorId,
+            name: "Gallery Two",
+            extension: ".svg",
+            mimeType: "image/svg+xml",
+            tags: ["avatargallery"],
+            versions: [{ version: 1, status: "complete", file: { category: "simple", fileName: "avatar-gallery-two.svg", sizeInBytes: 2048, status: "complete", uploadId: "visual-two", url: "https://assets.vrchat.com/visual-fixture/avatar-gallery-two.svg" } }],
+        },
+    ],
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("avatars").insertMany(ownedAvatars.map((avatar) => ({ _id: `${ownerId}:${avatar.id}`, ownerId, avatarId: avatar.id, avatar, source: "owned", observedAt: now, updatedAt: now })));
 await database.collection("avatar_tags").insertMany([
     { _id: `${ownerId}:${ownedAvatars[0].id}:dance`, ownerId, avatarId: ownedAvatars[0].id, tag: "Dance", normalizedTag: "dance", color: "#3b82f6", createdAt: now, updatedAt: now },

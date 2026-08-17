@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -59,6 +59,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_invite_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_audit_log_snapshots").indexExists(["owner_group_filter_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("avatar_moderations").indexExists(["owner_target_type_unique", "owner_active_updated"])).toBe(true);
+        expect(await database.collection("avatar_gallery_snapshots").indexExists(["owner_avatar_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -380,6 +381,22 @@ describe("MongoDB application repositories", () => {
         expect(await getPersonalGallerySnapshot(ownerId)).toMatchObject({ files: [expect.objectContaining({ name: "Uploaded" })] });
         expect(await upsertPersonalGalleryFile(otherOwnerId, { ...galleryFile("file_00000000-0000-0000-0000-000000000067", "Private"), ownerId: otherOwnerId })).toBe(false);
         expect(await getPersonalGallerySnapshot(otherOwnerId)).toBeNull();
+    });
+
+    test("stores complete avatar Gallery snapshots and uploaded files per owner", async () => {
+        const { getAvatarGallerySnapshot, replaceAvatarGallerySnapshot, upsertAvatarGalleryFile } = await import("./avatar-gallery-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000068";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000069";
+        const authorId = "usr_00000000-0000-0000-0000-000000000070";
+        const avatarId = "avtr_00000000-0000-0000-0000-000000000071";
+        const galleryFile = (id: string, name: string) => ({ id, ownerId: authorId, name, extension: ".png", mimeType: "image/png", tags: ["avatargallery"], versions: [] });
+
+        await replaceAvatarGallerySnapshot(ownerId, avatarId, authorId, []);
+        await replaceAvatarGallerySnapshot(otherOwnerId, avatarId, authorId, [galleryFile("file_00000000-0000-0000-0000-000000000072", "Other owner's view")]);
+        expect(await getAvatarGallerySnapshot(ownerId, avatarId)).toMatchObject({ ownerId, avatarId, authorId, files: [] });
+        expect(await upsertAvatarGalleryFile(ownerId, avatarId, authorId, galleryFile("file_00000000-0000-0000-0000-000000000073", "Uploaded"))).toBe(true);
+        expect(await getAvatarGallerySnapshot(ownerId, avatarId)).toMatchObject({ files: [expect.objectContaining({ name: "Uploaded" })] });
+        expect(await getAvatarGallerySnapshot(otherOwnerId, avatarId)).toMatchObject({ files: [expect.objectContaining({ name: "Other owner's view" })] });
     });
 
     test("stores filtered group audit-log snapshots per owner", async () => {

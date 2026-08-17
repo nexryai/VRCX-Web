@@ -165,6 +165,22 @@ export const vrchatAvatarSchema = z
             })
             .passthrough()
             .optional(),
+        publishedListings: z
+            .array(
+                z
+                    .object({
+                        id: z.string().optional(),
+                        listingId: z.string().optional(),
+                        listingType: z.string().optional(),
+                        displayName: z.string(),
+                        description: z.string().default(""),
+                        imageId: fileIdSchema,
+                        priceTokens: z.number().int().nonnegative(),
+                    })
+                    .passthrough(),
+            )
+            .max(100)
+            .optional(),
         unityPackages: z
             .array(
                 z
