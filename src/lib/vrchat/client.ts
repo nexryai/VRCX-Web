@@ -10,6 +10,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 
 const allowedEndpoints = [
     "auth",
+    "avatarStyles",
     "avatars/favorites",
     "auth/user/favoritelimits",
     "auth/user",

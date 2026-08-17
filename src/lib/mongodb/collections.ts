@@ -6,6 +6,7 @@ import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
 import type {
     VrchatAvatar,
     VrchatAvatarModeration,
+    VrchatAvatarStyle,
     VrchatFavorite,
     VrchatFavoriteGroup,
     VrchatFile,
@@ -191,6 +192,14 @@ export type AvatarGallerySnapshotDocument = {
     avatarId: string;
     authorId: string;
     files: VrchatFile[];
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type AvatarStyleSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    styles: VrchatAvatarStyle[];
     observedAt: Date;
     updatedAt: Date;
 };
@@ -454,6 +463,7 @@ export type Collections = {
     groupPostSnapshots: Collection<GroupPostSnapshotDocument>;
     personalFileSnapshots: Collection<PersonalFileSnapshotDocument>;
     avatarGallerySnapshots: Collection<AvatarGallerySnapshotDocument>;
+    avatarStyleSnapshots: Collection<AvatarStyleSnapshotDocument>;
     groupMembers: Collection<GroupMemberDocument>;
     groupBanSnapshots: Collection<GroupBanSnapshotDocument>;
     groupInviteSnapshots: Collection<GroupInviteSnapshotDocument>;
@@ -491,6 +501,7 @@ export function collections(db: Db): Collections {
         groupPostSnapshots: db.collection<GroupPostSnapshotDocument>("group_post_snapshots"),
         personalFileSnapshots: db.collection<PersonalFileSnapshotDocument>("personal_file_snapshots"),
         avatarGallerySnapshots: db.collection<AvatarGallerySnapshotDocument>("avatar_gallery_snapshots"),
+        avatarStyleSnapshots: db.collection<AvatarStyleSnapshotDocument>("avatar_style_snapshots"),
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupBanSnapshots: db.collection<GroupBanSnapshotDocument>("group_ban_snapshots"),
         groupInviteSnapshots: db.collection<GroupInviteSnapshotDocument>("group_invite_snapshots"),

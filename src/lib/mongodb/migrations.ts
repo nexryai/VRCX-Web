@@ -420,6 +420,13 @@ const migrations: Migration[] = [
             await Promise.all([c.avatarGallerySnapshots.createIndex({ ownerId: 1, avatarId: 1 }, { unique: true, name: "owner_avatar_unique" }), c.avatarGallerySnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 38,
+        name: "add-avatar-style-snapshot-indexes",
+        async apply(c) {
+            await Promise.all([c.avatarStyleSnapshots.createIndex({ ownerId: 1 }, { unique: true, name: "owner_unique" }), c.avatarStyleSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

@@ -2,14 +2,15 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { replaceAvatarStyleSnapshot } from "@/lib/mongodb/avatar-style-repository";
 import { getCachedAvatar, removeCachedAvatar, upsertCachedAvatars } from "@/lib/mongodb/entity-repository";
 import { isAvatarBlocked } from "@/lib/mongodb/projection-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { isMutationOriginAllowed } from "@/lib/request-security";
-import { avatarOwnershipError, avatarUpdateSchema } from "@/lib/vrchat/avatar-metadata";
+import { avatarOwnershipError, avatarUpdateSchema, buildAvatarUpstreamUpdate } from "@/lib/vrchat/avatar-metadata";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
-import { vrchatAvatarSchema } from "@/lib/vrchat/types";
+import { type VrchatAvatarStyle, vrchatAvatarSchema, vrchatAvatarStyleSchema } from "@/lib/vrchat/types";
 
 const avatarIdSchema = z.string().regex(/^avtr_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 export async function GET(request: NextRequest, context: RouteContext<"/api/avatars/[avatarId]">) {
@@ -54,10 +55,19 @@ export async function PATCH(request: NextRequest, context: RouteContext<"/api/av
             return avatarResponse({ error: ownershipError }, 403);
         }
         const currentCookies = { ...cookies, ...currentResponse.cookies };
-        const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "PUT", cookies: currentCookies, body: { id: avatarId.data, ...body.data } });
+        let mutationCookies = currentCookies;
+        let availableStyles: VrchatAvatarStyle[] = [];
+        if (body.data.styles !== undefined) {
+            const stylesResponse = await requestVrchat<unknown>("avatarStyles", { cookies: mutationCookies });
+            availableStyles = z.array(vrchatAvatarStyleSchema).max(500).parse(stylesResponse.data);
+            mutationCookies = { ...mutationCookies, ...stylesResponse.cookies };
+            await replaceAvatarStyleSnapshot(ownerId, availableStyles);
+        }
+        const mutation = buildAvatarUpstreamUpdate(current, body.data, availableStyles);
+        const upstream = await requestVrchat<unknown>(`avatars/${avatarId.data}`, { method: "PUT", cookies: mutationCookies, body: { id: avatarId.data, ...mutation.upstream } });
         const parsed = vrchatAvatarSchema.safeParse(upstream.data);
-        const avatar = parsed.success && parsed.data.id === avatarId.data && parsed.data.authorId === ownerId ? parsed.data : { ...current, ...body.data };
-        const persistence = await Promise.allSettled([upsertCachedAvatars(ownerId, [avatar], "owned"), persistRotatedVrchatCookies({ ...currentCookies, ...upstream.cookies }, cookies.auth)]);
+        const avatar = parsed.success && parsed.data.id === avatarId.data && parsed.data.authorId === ownerId ? parsed.data : mutation.optimistic;
+        const persistence = await Promise.allSettled([upsertCachedAvatars(ownerId, [avatar], "owned"), persistRotatedVrchatCookies({ ...mutationCookies, ...upstream.cookies }, cookies.auth)]);
         return avatarResponse({ avatar, refreshRequired: !parsed.success || persistence.some((result) => result.status === "rejected") });
     } catch (error) {
         return await avatarMutationError(error, "The avatar could not be updated.", expectedAuthCookie);

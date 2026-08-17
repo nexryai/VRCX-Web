@@ -9,11 +9,12 @@ import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
 import { VrchatImage } from "@/components/vrchat-image";
 import { latestAvatarGalleryImageUrl } from "@/lib/vrchat/avatar-gallery";
-import type { VrchatAvatar, VrchatFile } from "@/lib/vrchat/types";
+import type { VrchatAvatar, VrchatAvatarStyle, VrchatFile } from "@/lib/vrchat/types";
 
 type AvatarTab = "Info" | "JSON";
 type AvatarConfirmAction = "block" | "delete-avatar" | "delete-impostor" | "enqueue-impostor" | "make-private" | "make-public" | "regenerate-impostor" | "select-fallback" | "unblock";
 type AvatarEditField = "description" | "name";
+type AvatarMetadataDialog = "content" | "styles";
 
 export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string; openUser: (userId: string) => void; onClose: () => void }) {
     const currentUser = useCurrentUser();
@@ -35,6 +36,16 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const [editField, setEditField] = useState<AvatarEditField | null>(null);
     const [editValue, setEditValue] = useState("");
     const [editSaving, setEditSaving] = useState(false);
+    const [metadataDialog, setMetadataDialog] = useState<AvatarMetadataDialog | null>(null);
+    const [metadataLoading, setMetadataLoading] = useState(false);
+    const [metadataSaving, setMetadataSaving] = useState(false);
+    const [contentTagsCsv, setContentTagsCsv] = useState("");
+    const [ownedAvatars, setOwnedAvatars] = useState<VrchatAvatar[]>([]);
+    const [selectedAvatarIds, setSelectedAvatarIds] = useState<string[]>([]);
+    const [styleOptions, setStyleOptions] = useState<VrchatAvatarStyle[]>([]);
+    const [primaryStyle, setPrimaryStyle] = useState("");
+    const [secondaryStyle, setSecondaryStyle] = useState("");
+    const [authorTagsCsv, setAuthorTagsCsv] = useState("");
     const [error, setError] = useState("");
     const [status, setStatus] = useState("");
     const [copied, setCopied] = useState("");
@@ -50,6 +61,9 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
     const editorDialog = useRef<HTMLDivElement>(null);
     const editorInput = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
     const previousEditField = useRef<AvatarEditField | null>(null);
+    const metadataDialogRef = useRef<HTMLDivElement>(null);
+    const metadataInitialFocus = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(null);
+    const previousMetadataDialog = useRef<AvatarMetadataDialog | null>(null);
 
     const loadGallery = useCallback(
         async (refresh = false) => {
@@ -106,6 +120,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         setPreviewUrl("");
         setEditField(null);
         setEditValue("");
+        setMetadataDialog(null);
         void load();
         closeButton.current?.focus();
     }, [avatarId, currentUser.currentAvatar, load]);
@@ -122,6 +137,10 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                 setEditField(null);
                 return;
             }
+            if (metadataDialog) {
+                if (!metadataSaving) setMetadataDialog(null);
+                return;
+            }
             if (confirmAction) {
                 setConfirmAction(null);
                 return;
@@ -134,7 +153,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [confirmAction, editField, menuOpen, onClose, previewUrl]);
+    }, [confirmAction, editField, menuOpen, metadataDialog, metadataSaving, onClose, previewUrl]);
 
     useEffect(() => {
         if (confirmAction) confirmationCancel.current?.focus();
@@ -160,6 +179,12 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
         else if (previousEditField.current) manageButton.current?.focus();
         previousEditField.current = editField;
     }, [editField]);
+
+    useEffect(() => {
+        if (metadataDialog && !metadataLoading) metadataInitialFocus.current?.focus();
+        else if (previousMetadataDialog.current) manageButton.current?.focus();
+        previousMetadataDialog.current = metadataDialog;
+    }, [metadataDialog, metadataLoading]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
@@ -287,6 +312,114 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             setError(editError instanceof Error ? editError.message : "The avatar could not be updated.");
         } finally {
             setEditSaving(false);
+        }
+    }
+
+    async function requestMetadataDialog(mode: AvatarMetadataDialog) {
+        if (!avatar) return;
+        setMenuOpen(false);
+        setError("");
+        setMetadataDialog(mode);
+        setMetadataLoading(true);
+        if (mode === "content") {
+            setContentTagsCsv(
+                (avatar.tags || [])
+                    .filter((tag) => tag.startsWith("content_"))
+                    .map((tag) => tag.slice(8))
+                    .join(","),
+            );
+            setOwnedAvatars([avatar]);
+            setSelectedAvatarIds([avatar.id]);
+            try {
+                const all = new Map<string, VrchatAvatar>([[avatar.id, avatar]]);
+                for (let offset = 0; offset <= 5_000; offset += 50) {
+                    const response = await fetch(`/api/avatars?offset=${offset}`, { cache: "no-store" });
+                    const payload = (await response.json()) as { avatars?: VrchatAvatar[]; error?: string };
+                    if (response.status === 401) window.location.assign("/login");
+                    if (!response.ok || !payload.avatars) throw new Error(payload.error || "Owned avatars could not be loaded.");
+                    for (const item of payload.avatars) all.set(item.id, item);
+                    if (payload.avatars.length < 50) break;
+                }
+                setOwnedAvatars([...all.values()]);
+            } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : "Owned avatars could not be loaded.");
+            } finally {
+                setMetadataLoading(false);
+            }
+            return;
+        }
+
+        setPrimaryStyle(avatar.styles?.primary || "");
+        setSecondaryStyle(avatar.styles?.secondary || "");
+        setAuthorTagsCsv(
+            (avatar.tags || [])
+                .filter((tag) => tag.startsWith("author_tag_"))
+                .map((tag) => tag.slice(11))
+                .join(","),
+        );
+        try {
+            const response = await fetch("/api/avatars/styles", { cache: "no-store" });
+            const payload = (await response.json()) as { styles?: VrchatAvatarStyle[]; error?: string };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.styles) throw new Error(payload.error || "Avatar styles could not be loaded.");
+            setStyleOptions(payload.styles);
+        } catch (loadError) {
+            setError(loadError instanceof Error ? loadError.message : "Avatar styles could not be loaded.");
+        } finally {
+            setMetadataLoading(false);
+        }
+    }
+
+    function closeMetadataDialog() {
+        if (metadataSaving) return;
+        setMetadataDialog(null);
+        setError("");
+    }
+
+    function trapMetadataFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+        if (event.key !== "Tab") return;
+        const focusable = Array.from(metadataDialogRef.current?.querySelectorAll<HTMLElement>("input:not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])") ?? []);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first)?.focus();
+        }
+    }
+
+    async function saveMetadataDialog() {
+        if (!metadataDialog || !avatar) return;
+        setMetadataSaving(true);
+        setError("");
+        try {
+            if (metadataDialog === "content") {
+                const contentTags = splitEditableTags(contentTagsCsv);
+                for (const id of selectedAvatarIds) {
+                    const response = await fetch(`/api/avatars/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentTags }) });
+                    const payload = (await response.json()) as { avatar?: VrchatAvatar; error?: string };
+                    if (response.status === 401) window.location.assign("/login");
+                    if (!response.ok || !payload.avatar) throw new Error(payload.error || "Avatar content tags could not be updated.");
+                    if (id === avatar.id) setAvatar(payload.avatar);
+                }
+                setStatus("Avatar content tags changed");
+            } else {
+                const response = await fetch(`/api/avatars/${encodeURIComponent(avatar.id)}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ styles: { primary: primaryStyle, secondary: secondaryStyle }, authorTags: splitEditableTags(authorTagsCsv) }),
+                });
+                const payload = (await response.json()) as { avatar?: VrchatAvatar; error?: string };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok || !payload.avatar) throw new Error(payload.error || "Avatar styles and author tags could not be updated.");
+                setAvatar(payload.avatar);
+                setStatus("Avatar styles and author tags changed");
+            }
+            setMetadataDialog(null);
+        } catch (saveError) {
+            setError(saveError instanceof Error ? saveError.message : "Avatar metadata could not be updated.");
+        } finally {
+            setMetadataSaving(false);
         }
     }
 
@@ -442,6 +575,12 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                                     <button type="button" role="menuitem" onClick={() => requestEdit("description")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
                                                         <Pencil className="size-4" /> Change Description
                                                     </button>
+                                                    <button type="button" role="menuitem" onClick={() => void requestMetadataDialog("content")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                        <Pencil className="size-4" /> Change Content Tags
+                                                    </button>
+                                                    <button type="button" role="menuitem" onClick={() => void requestMetadataDialog("styles")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+                                                        <Pencil className="size-4" /> Change Styles and Author Tags
+                                                    </button>
                                                     <div className="my-1 border-t border-border" />
                                                     {hasImpostor ? (
                                                         <>
@@ -467,7 +606,7 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                                 </div>
                             </div>
                         </header>
-                        {error && !confirmAction && !editField ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                        {error && !confirmAction && !editField && !metadataDialog ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
                         {status ? (
                             <p className="sr-only" role="status">
                                 {status}
@@ -502,6 +641,142 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
                             ) : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(avatar, null, 2)}</pre> : null}
                         </div>
+                        {metadataDialog ? (
+                            <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-3">
+                                <div
+                                    ref={metadataDialogRef}
+                                    role="dialog"
+                                    aria-modal="true"
+                                    aria-labelledby="avatar-metadata-title"
+                                    onKeyDown={trapMetadataFocus}
+                                    className={`flex max-h-[calc(100dvh-24px)] w-full flex-col rounded-xl border border-border bg-popover p-4 shadow-2xl ${metadataDialog === "content" ? "max-w-[780px]" : "max-w-[400px]"}`}
+                                >
+                                    <h3 id="avatar-metadata-title" className="shrink-0 text-sm font-semibold">
+                                        {metadataDialog === "content" ? "Set Avatar Tags" : "Set Avatar Styles"}
+                                    </h3>
+                                    {metadataDialog === "content" ? (
+                                        <div className="min-h-0 flex-1 overflow-y-auto pr-1 text-xs">
+                                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                                {CONTENT_TAGS.map((tag) => (
+                                                    <label key={tag} className="inline-flex items-center gap-2">
+                                                        <input
+                                                            ref={
+                                                                tag === CONTENT_TAGS[0]
+                                                                    ? (node) => {
+                                                                          metadataInitialFocus.current = node;
+                                                                      }
+                                                                    : undefined
+                                                            }
+                                                            type="checkbox"
+                                                            checked={splitEditableTags(contentTagsCsv).includes(tag)}
+                                                            onChange={(event) => setContentTagsCsv(toggleEditableTag(contentTagsCsv, tag, event.target.checked))}
+                                                            className="size-4 accent-primary"
+                                                        />
+                                                        {CONTENT_TAG_LABELS[tag]}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            <textarea
+                                                value={contentTagsCsv}
+                                                onChange={(event) => setContentTagsCsv(event.target.value)}
+                                                rows={2}
+                                                maxLength={2_079}
+                                                placeholder="Custom tags"
+                                                className="mt-3 w-full resize-none rounded-md border border-input bg-background p-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            />
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <button type="button" onClick={() => setSelectedAvatarIds(selectedAvatarIds.length === ownedAvatars.length ? [] : ownedAvatars.map((item) => item.id))} className="h-8 rounded-md border border-input px-3 hover:bg-muted">
+                                                    {selectedAvatarIds.length === ownedAvatars.length ? "Select None" : "Select All"}
+                                                </button>
+                                                <span>
+                                                    {selectedAvatarIds.length} / {ownedAvatars.length}
+                                                </span>
+                                                {metadataLoading ? <Loader2 className="size-4 animate-spin" /> : null}
+                                            </div>
+                                            <div className="mt-2 grid max-h-[300px] min-h-15 grid-cols-1 content-start gap-1 overflow-y-auto sm:grid-cols-2">
+                                                {ownedAvatars.map((item) => (
+                                                    <label key={item.id} className="flex min-w-0 cursor-pointer items-center gap-2 rounded p-1.5 hover:bg-muted">
+                                                        <VrchatImage src={item.thumbnailImageUrl || item.imageUrl} alt="" className="size-9 shrink-0 rounded-full object-cover" loading="lazy" fallback={<span className="size-9 rounded-full bg-muted" />} />
+                                                        <span className="min-w-0 flex-1">
+                                                            <span className="block truncate font-medium">{item.name}</span>
+                                                            <span className="block truncate text-muted-foreground">{item.releaseStatus || "private"}</span>
+                                                            <span className="block truncate text-muted-foreground">
+                                                                {(item.tags || [])
+                                                                    .filter((tag) => tag.startsWith("content_"))
+                                                                    .map((tag) => tag.slice(8))
+                                                                    .join(", ")}
+                                                            </span>
+                                                        </span>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedAvatarIds.includes(item.id)}
+                                                            onChange={(event) => setSelectedAvatarIds((current) => (event.target.checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id)))}
+                                                            className="size-4 shrink-0 accent-primary"
+                                                        />
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-3 space-y-3 text-xs">
+                                            <label className="block">
+                                                <span>Primary Style</span>
+                                                <select
+                                                    ref={(node) => {
+                                                        metadataInitialFocus.current = node;
+                                                    }}
+                                                    value={primaryStyle}
+                                                    onChange={(event) => setPrimaryStyle(event.target.value)}
+                                                    disabled={metadataLoading}
+                                                    className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2"
+                                                >
+                                                    <option value="">None</option>
+                                                    {styleOptions.map((style) => (
+                                                        <option key={style.id} value={style.styleName}>
+                                                            {style.styleName}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                            <label className="block">
+                                                <span>Secondary Style</span>
+                                                <select value={secondaryStyle} onChange={(event) => setSecondaryStyle(event.target.value)} disabled={metadataLoading} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2">
+                                                    <option value="">None</option>
+                                                    {styleOptions.map((style) => (
+                                                        <option key={style.id} value={style.styleName}>
+                                                            {style.styleName}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+                                            <label className="block">
+                                                <span>Author Tags</span>
+                                                <textarea value={authorTagsCsv} onChange={(event) => setAuthorTagsCsv(event.target.value)} rows={3} maxLength={2_079} className="mt-1 w-full resize-none rounded-md border border-input bg-background p-2" />
+                                            </label>
+                                            {metadataLoading ? (
+                                                <p className="inline-flex items-center gap-2 text-muted-foreground">
+                                                    <Loader2 className="size-4 animate-spin" /> Loading styles…
+                                                </p>
+                                            ) : null}
+                                        </div>
+                                    )}
+                                    {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+                                    <div className="mt-4 flex shrink-0 justify-end gap-2">
+                                        <button type="button" onClick={closeMetadataDialog} disabled={metadataSaving} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => void saveMetadataDialog()}
+                                            disabled={metadataLoading || metadataSaving || (metadataDialog === "content" && !selectedAvatarIds.length)}
+                                            className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-4 text-xs text-primary-foreground disabled:opacity-40"
+                                        >
+                                            {metadataSaving ? <Loader2 className="size-4 animate-spin" /> : null} Save
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
                         {editField ? (
                             <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
                                 <form
@@ -604,6 +879,26 @@ export function AvatarDialog({ avatarId, openUser, onClose }: { avatarId: string
             </section>
         </div>
     );
+}
+
+const CONTENT_TAGS = ["horror", "gore", "violence", "adult", "sex"] as const;
+const CONTENT_TAG_LABELS: Record<(typeof CONTENT_TAGS)[number], string> = { horror: "Horror", gore: "Gore", violence: "Violence", adult: "Adult", sex: "Sexual" };
+
+function splitEditableTags(value: string) {
+    return [
+        ...new Set(
+            value
+                .split(",")
+                .map((tag) => tag.trim())
+                .filter(Boolean),
+        ),
+    ].slice(0, 32);
+}
+
+function toggleEditableTag(value: string, tag: string, enabled: boolean) {
+    const tags = splitEditableTags(value).filter((item) => item !== tag);
+    if (enabled) tags.push(tag);
+    return tags.join(",");
 }
 
 function avatarActionLabel(action: AvatarConfirmAction) {

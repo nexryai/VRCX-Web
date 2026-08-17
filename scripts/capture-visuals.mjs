@@ -60,6 +60,8 @@ const captures = [
     { name: "avatar-dialog-rename", path: "/favorites/avatars", readyText: "Rename Avatar", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarEdit: "name" },
     { name: "avatar-dialog-description", path: "/favorites/avatars", readyText: "Change Description", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarEdit: "description" },
     { name: "avatar-dialog-delete-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Delete?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "delete-avatar" },
+    { name: "avatar-dialog-content-tags", path: "/favorites/avatars", readyText: "Select All", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarMetadata: "content" },
+    { name: "avatar-dialog-styles", path: "/favorites/avatars", readyText: "Primary Style", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarMetadata: "styles" },
     { name: "avatar-dialog-regenerate-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Regenerate Impostor?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "regenerate-impostor" },
     { name: "avatar-dialog-create-impostor-menu", path: "/favorites/avatars", readyText: "Create Impostor", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarWithoutImpostor: true, avatarMenu: true },
     { name: "avatar-dialog-fallback-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Select Fallback Avatar?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "select-fallback" },
@@ -158,6 +160,19 @@ for (const width of widths) {
             });
         }
         if (capture.avatarDialog) {
+            if (capture.avatarMetadata === "content") {
+                await page.route("**/api/avatars?offset=*", (route) => {
+                    const offset = new URL(route.request().url()).searchParams.get("offset");
+                    const avatars =
+                        offset === "0"
+                            ? [
+                                  { id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorId: "usr_00000000-0000-0000-0000-000000000001", authorName: "Visual Operator", releaseStatus: "public", tags: ["content_featured", "author_tag_dancer", "system_quest_fallback"] },
+                                  { id: "avtr_00000000-0000-0000-0000-000000000054", name: "Visual Dance Avatar", authorId: "usr_00000000-0000-0000-0000-000000000001", authorName: "Visual Operator", releaseStatus: "private", tags: ["content_gore"] },
+                              ]
+                            : [];
+                    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ avatars }) });
+                });
+            }
             await page.route("https://assets.vrchat.com/visual-fixture/avatar-gallery-*.svg", async (route) => {
                 const second = route.request().url().includes("two");
                 await route.fulfill({
@@ -508,7 +523,7 @@ for (const width of widths) {
         if (capture.avatarDialog) {
             await page.getByText("Favorite Browser Avatar", { exact: true }).first().click();
             if (capture.avatarOwner) await page.getByRole("button", { name: "Open gallery image 1 of 2", exact: true }).waitFor();
-            if (capture.avatarMenu || capture.avatarConfirm || capture.avatarEdit) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
+            if (capture.avatarMenu || capture.avatarConfirm || capture.avatarEdit || capture.avatarMetadata) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
             if (capture.avatarConfirm) {
                 const actionLabels = {
                     block: "Block Avatar",
@@ -551,6 +566,24 @@ for (const width of widths) {
                 await editor.waitFor({ state: "detached" });
                 const manage = page.getByRole("button", { name: "Manage avatar", exact: true });
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar metadata editor did not restore focus.");
+                await manage.click();
+                await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+            }
+            if (capture.avatarMetadata) {
+                const actionLabel = capture.avatarMetadata === "content" ? "Change Content Tags" : "Change Styles and Author Tags";
+                const dialogName = capture.avatarMetadata === "content" ? "Set Avatar Tags" : "Set Avatar Styles";
+                await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+                const editor = page.getByRole("dialog", { name: dialogName, exact: true });
+                await editor.waitFor();
+                const initial = capture.avatarMetadata === "content" ? editor.getByRole("checkbox").first() : editor.getByRole("combobox").first();
+                const initialHandle = await initial.elementHandle();
+                await page.waitForFunction((element) => document.activeElement === element, initialHandle);
+                await page.keyboard.press("Shift+Tab");
+                if (!(await editor.getByRole("button", { name: "Save", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("Avatar tag/style editor did not trap focus.");
+                await page.keyboard.press("Escape");
+                await editor.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage avatar", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar tag/style editor did not restore focus.");
                 await manage.click();
                 await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
             }

@@ -259,6 +259,17 @@ await database.collection("avatar_gallery_snapshots").insertOne({
     observedAt: now,
     updatedAt: now,
 });
+await database.collection("avatar_style_snapshots").insertOne({
+    _id: ownerId,
+    ownerId,
+    styles: [
+        { id: "avst_00000000-0000-0000-0000-000000000061", styleName: "Realistic" },
+        { id: "avst_00000000-0000-0000-0000-000000000062", styleName: "Human" },
+        { id: "avst_00000000-0000-0000-0000-000000000063", styleName: "Cartoon" },
+    ],
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("avatars").insertMany(ownedAvatars.map((avatar) => ({ _id: `${ownerId}:${avatar.id}`, ownerId, avatarId: avatar.id, avatar, source: "owned", observedAt: now, updatedAt: now })));
 await database.collection("avatar_tags").insertMany([
     { _id: `${ownerId}:${ownedAvatars[0].id}:dance`, ownerId, avatarId: ownedAvatars[0].id, tag: "Dance", normalizedTag: "dance", color: "#3b82f6", createdAt: now, updatedAt: now },

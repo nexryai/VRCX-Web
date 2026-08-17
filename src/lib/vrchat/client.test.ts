@@ -34,6 +34,7 @@ describe("VRChat response decoding", () => {
     });
 
     it("allowlists only the fixed Avatar Dialog maintenance paths", () => {
+        expect(isAllowedVrchatEndpoint("avatarStyles")).toBe(true);
         expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/selectfallback`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/impostor`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/impostor/enqueue`)).toBe(true);

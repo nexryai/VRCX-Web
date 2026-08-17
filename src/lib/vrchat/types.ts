@@ -200,6 +200,15 @@ export const vrchatAvatarSchema = z
 
 export type VrchatAvatar = z.infer<typeof vrchatAvatarSchema>;
 
+export const vrchatAvatarStyleSchema = z
+    .object({
+        id: z.string().regex(/^avst_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
+        styleName: z.string().min(1).max(128),
+    })
+    .passthrough();
+
+export type VrchatAvatarStyle = z.infer<typeof vrchatAvatarStyleSchema>;
+
 export const vrchatFavoriteSchema = z
     .object({
         id: z.string(),
