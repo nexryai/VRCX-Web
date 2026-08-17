@@ -5,6 +5,8 @@ import { mkdir } from "node:fs/promises";
 const port = process.env.VRCX_VISUAL_PORT || "3210";
 const output = ".visual";
 const executablePath = process.env.VRCX_PLAYWRIGHT_EXECUTABLE;
+const browserLibraryPath = process.env.VRCX_PLAYWRIGHT_LD_LIBRARY_PATH;
+const browserFontconfigPath = process.env.VRCX_PLAYWRIGHT_FONTCONFIG_PATH;
 await mkdir(output, { recursive: true });
 
 const captures = [
@@ -37,6 +39,7 @@ const captures = [
     { name: "group-dialog-post-delete", path: "/friends-locations", readyText: "Delete post?", groupDialog: true, groupTab: "Posts", groupPostDialog: "delete" },
     { name: "group-dialog-post-image", path: "/friends-locations", readyText: "Select Gallery Image", groupDialog: true, groupTab: "Posts", groupPostDialog: "image" },
     { name: "group-dialog-invite", path: "/friends-locations", readyText: "Invite To Group", groupDialog: true, groupInvite: true },
+    { name: "group-dialog-moderation-members", path: "/friends-locations", readyText: "Selected Users", groupDialog: true, groupModeration: true },
     { name: "group-dialog-members", path: "/friends-locations", readyText: "Group Host Sample", groupDialog: true, groupTab: "Members" },
     { name: "favorite-avatars", path: "/favorites/avatars", readyText: "Avatar Artist", favoriteKind: "avatar" },
     { name: "avatar-dialog", path: "/favorites/avatars", readyText: "Avatar ID", favoriteKind: "avatar", avatarDialog: true },
@@ -76,7 +79,18 @@ for (const width of widths) {
     for (const capture of selectedCaptures) {
         // A fresh browser per capture avoids native Chromium resource leakage in
         // minimal CI containers while keeping each screenshot deterministic.
-        const browser = await chromium.launch(executablePath ? { executablePath } : undefined);
+        const browser = await chromium.launch({
+            ...(executablePath ? { executablePath } : {}),
+            ...(browserLibraryPath || browserFontconfigPath
+                ? {
+                      env: {
+                          ...process.env,
+                          ...(browserLibraryPath ? { LD_LIBRARY_PATH: browserLibraryPath } : {}),
+                          ...(browserFontconfigPath ? { FONTCONFIG_PATH: browserFontconfigPath } : {}),
+                      },
+                  }
+                : {}),
+        });
         // Groups live in VRCX's desktop friends sidebar. Open the selected group
         // before resizing so the dialog itself can still be verified at narrow widths.
         const navigationWidth = capture.groupDialog && width < 1280 ? 1280 : width;
@@ -240,7 +254,7 @@ for (const width of widths) {
             // racing this click while its initial request is still resolving.
             await page.getByRole("tab", { name: /^Groups\s+1$/ }).click();
             await page.getByRole("button", { name: /^VRCX Test Group\b/ }).click();
-            await page.getByText("Visual Operator", { exact: true }).waitFor();
+            await page.getByLabel("Manage group", { exact: true }).waitFor();
             if (capture.groupTab) await page.getByRole("tab", { name: capture.groupTab, exact: true }).click();
             if (capture.groupTab === "Photos") {
                 await page.getByText(capture.readyText, { exact: true }).waitFor();
@@ -361,6 +375,27 @@ for (const width of widths) {
                 await dialog.waitFor({ state: "detached" });
                 await manage.click();
                 await page.getByRole("button", { name: "Invite To Group", exact: true }).click();
+            }
+            if (capture.groupModeration) {
+                const manage = page.getByLabel("Manage group", { exact: true });
+                await manage.click();
+                await page.getByRole("button", { name: "Moderation Tools", exact: true }).click();
+                const overlay = page.locator("[data-group-moderation-overlay]");
+                const dialog = overlay.getByRole("dialog");
+                await dialog.waitFor();
+                const closeModeration = overlay.getByRole("button", { name: "Close moderation tools", exact: true });
+                if (!(await closeModeration.evaluate((element) => document.activeElement === element))) throw new Error("Group moderation dialog did not focus its close button.");
+                await page.keyboard.press("Shift+Tab");
+                await page.keyboard.press("Tab");
+                if (!(await closeModeration.evaluate((element) => document.activeElement === element))) throw new Error("Group moderation dialog did not trap keyboard focus.");
+                await page.keyboard.press("Escape");
+                await dialog.waitFor({ state: "detached" });
+                await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Manage group");
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Group moderation dialog did not restore focus to Manage group.");
+                await manage.click();
+                await page.getByRole("button", { name: "Moderation Tools", exact: true }).click();
+                await page.getByLabel("Select Aoi Sample", { exact: true }).check();
+                await overlay.getByText("Selected Users", { exact: true }).scrollIntoViewIfNeeded();
             }
             if (navigationWidth !== width) await page.setViewportSize({ width, height: 800 });
             if (capture.groupCalendar) await page.getByText(capture.readyText, { exact: true }).scrollIntoViewIfNeeded();

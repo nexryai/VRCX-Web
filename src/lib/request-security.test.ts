@@ -63,8 +63,8 @@ describe("mutation origin checks", () => {
                 if (!handler.includes("isMutationOriginAllowed")) missing.push(`${relative(process.cwd(), file)}:${match[1]}`);
             }
         }
-        expect(routeCount).toBe(29);
-        expect(handlerCount).toBe(37);
+        expect(routeCount).toBe(30);
+        expect(handlerCount).toBe(38);
         expect(missing).toEqual([]);
     });
 });

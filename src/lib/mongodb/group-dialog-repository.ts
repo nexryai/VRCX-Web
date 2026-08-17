@@ -75,6 +75,11 @@ export async function upsertCachedGroupMembers(ownerId: string, groupId: string,
     );
 }
 
+export async function deactivateCachedGroupMember(ownerId: string, groupId: string, userId: string, observedAt = new Date()) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).groupMembers.updateOne({ _id: `${ownerId}:${groupId}:${userId}`, ownerId, groupId, userId }, { $set: { active: false, observedAt, updatedAt: observedAt } });
+}
+
 export async function getCachedGroupInstances(ownerId: string, groupId: string) {
     await ensureMongoSchema();
     const document = await collections(await getMongoDatabase()).groupInstanceSnapshots.findOne({ _id: `${ownerId}:${groupId}` });

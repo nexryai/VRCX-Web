@@ -32,6 +32,11 @@ describe("VRChat entity ID boundary", () => {
     it("applies the same canonical boundary to upstream endpoint allowlists", () => {
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/members/usr_${uuid}`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/members/search`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/bans`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/bans/usr_${uuid}`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/members/usr_${uuid}/roles/grol_${uuid}`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`groups/grp_${uuid}/members/usr_${uuid}/roles/grol_${uuid}/extra`)).toBe(false);
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/instances/groups/grp_${uuid}`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/instances/groups`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/instances/groups/grp_${uuid}/extra`)).toBe(false);

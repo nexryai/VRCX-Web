@@ -305,7 +305,7 @@ describe("MongoDB application repositories", () => {
     });
 
     test("caches group posts and member pages per active owner", async () => {
-        const { deactivateCachedGroupPost, getCachedGroupPosts, listCachedGroupMembers, replaceCachedGroupPosts, upsertCachedGroupMembers, upsertCachedGroupPost } = await import("./group-dialog-repository");
+        const { deactivateCachedGroupMember, deactivateCachedGroupPost, getCachedGroupPosts, listCachedGroupMembers, replaceCachedGroupPosts, upsertCachedGroupMembers, upsertCachedGroupPost } = await import("./group-dialog-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000051";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000052";
         const groupId = "grp_00000000-0000-0000-0000-000000000053";
@@ -325,6 +325,10 @@ describe("MongoDB application repositories", () => {
         expect(await getCachedGroupPosts(otherOwnerId, groupId)).toEqual([]);
         expect(await listCachedGroupMembers(ownerId, groupId, 0, 100)).toMatchObject({ total: 1, members: [expect.objectContaining({ userId })] });
         expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
+        await upsertCachedGroupMembers(otherOwnerId, groupId, [{ id: "gmem_other", userId, roleIds: [] }]);
+        await deactivateCachedGroupMember(ownerId, groupId, userId);
+        expect(await listCachedGroupMembers(ownerId, groupId, 0, 100)).toEqual({ total: 0, members: [] });
+        expect(await listCachedGroupMembers(otherOwnerId, groupId, 0, 100)).toMatchObject({ total: 1, members: [expect.objectContaining({ userId })] });
     });
 
     test("stores complete personal Gallery snapshots and uploaded files per owner", async () => {

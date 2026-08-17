@@ -25,6 +25,7 @@ import {
     RefreshCw,
     Repeat,
     Search,
+    Settings,
     Share2,
     ShieldCheck,
     Star,
@@ -66,6 +67,17 @@ function canManageGroupPosts(group: VrchatGroup) {
     return permissions.includes("*") || permissions.includes("group-announcement-manage");
 }
 
+const groupModerationPermissions = ["group-invites-manage", "group-moderates-manage", "group-audit-view", "group-bans-manage", "group-data-manage", "group-members-manage", "group-members-remove", "group-roles-assign", "group-roles-manage", "group-default-role-manage"];
+
+function hasGroupPermission(group: VrchatGroup, permission: string) {
+    const permissions = group.myMember?.permissions || [];
+    return permissions.includes("*") || permissions.includes(permission);
+}
+
+function canModerateGroup(group: VrchatGroup) {
+    return groupModerationPermissions.some((permission) => hasGroupPermission(group, permission));
+}
+
 export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: string; friends: VrchatUser[]; openUser: (userId: string) => void; onClose: () => void }) {
     const currentUser = useCurrentUser();
     const [group, setGroup] = useState<VrchatGroup | null>(null);
@@ -98,10 +110,12 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [postToDelete, setPostToDelete] = useState<VrchatGroupPost | null>(null);
     const [postMutationLoading, setPostMutationLoading] = useState(false);
     const [inviteOpen, setInviteOpen] = useState(false);
+    const [moderationOpen, setModerationOpen] = useState(false);
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
     const postActionReturnFocus = useRef<HTMLElement | null>(null);
     const inviteReturnFocus = useRef<HTMLElement | null>(null);
+    const moderationReturnFocus = useRef<HTMLElement | null>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -252,7 +266,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
-            if (event.key === "Escape" && !document.querySelector("[data-group-post-overlay], [data-group-invite-overlay]")) onClose();
+            if (event.key === "Escape" && !document.querySelector("[data-group-post-overlay], [data-group-invite-overlay], [data-group-moderation-overlay]")) onClose();
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
@@ -444,6 +458,10 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                         inviteReturnFocus.current = trigger;
                                         setInviteOpen(true);
                                     }}
+                                    moderate={(trigger) => {
+                                        moderationReturnFocus.current = trigger;
+                                        setModerationOpen(true);
+                                    }}
                                 />
                             </div>
                         </header>
@@ -536,6 +554,17 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                     }}
                 />
             ) : null}
+            {moderationOpen && group ? (
+                <GroupMemberModerationDialog
+                    group={group}
+                    currentUserId={currentUser.id}
+                    openUser={openUser}
+                    close={() => {
+                        setModerationOpen(false);
+                        window.setTimeout(() => moderationReturnFocus.current?.focus(), 0);
+                    }}
+                />
+            ) : null}
         </div>
     );
 }
@@ -582,6 +611,7 @@ function GroupManageMenu({
     confirm,
     createPost,
     invite,
+    moderate,
 }: {
     group: VrchatGroup;
     loading: GroupActionName | "";
@@ -589,6 +619,7 @@ function GroupManageMenu({
     confirm: (action: ConfirmAction) => void;
     createPost: (trigger: HTMLElement) => void;
     invite: (trigger: HTMLElement) => void;
+    moderate: (trigger: HTMLElement) => void;
 }) {
     const member = inGroup(group) && group.myMember;
     const closeAndRun = (event: React.MouseEvent<HTMLButtonElement>, action: () => void) => {
@@ -637,6 +668,15 @@ function GroupManageMenu({
                                 }}
                             />
                         ) : null}
+                        <GroupMenuButton
+                            icon={<Settings />}
+                            label="Moderation Tools"
+                            disabled={loading !== "" || !canModerateGroup(group)}
+                            action={(event) => {
+                                const returnFocus = event.currentTarget.closest("details")?.querySelector<HTMLElement>("summary") || event.currentTarget;
+                                closeAndRun(event, () => moderate(returnFocus));
+                            }}
+                        />
                         {group.privacy === "default" ? (
                             <>
                                 <hr className="my-1 border-border" />
@@ -1084,6 +1124,440 @@ function GroupInviteDialog({ group, friends, close }: { group: VrchatGroup; frie
                 )}
             </div>
         </div>
+    );
+}
+
+type GroupMemberModerationAction = "add-role" | "ban" | "kick" | "remove-role" | "set-note" | "unban";
+
+// Faithful React translation of VRCX's MIT-licensed GroupMemberModerationDialog,
+// Members tab, selection composable, and sequential batch-operation behavior.
+function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: { group: VrchatGroup; currentUserId: string; openUser: (userId: string) => void; close: () => void }) {
+    const [members, setMembers] = useState<VrchatGroupMember[]>([]);
+    const [searchResults, setSearchResults] = useState<VrchatGroupMember[]>([]);
+    const [selected, setSelected] = useState<Record<string, VrchatGroupMember>>({});
+    const [search, setSearch] = useState("");
+    const [sort, setSort] = useState("joinedAt:desc");
+    const [roleFilter, setRoleFilter] = useState("");
+    const [page, setPage] = useState(0);
+    const [pageSize, setPageSize] = useState(15);
+    const [userIdInput, setUserIdInput] = useState("");
+    const [note, setNote] = useState("");
+    const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [progress, setProgress] = useState({ current: 0, total: 0 });
+    const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
+    const dialog = useRef<HTMLDivElement>(null);
+    const closeButton = useRef<HTMLButtonElement>(null);
+    const continueBatch = useRef(true);
+
+    const loadMembers = useCallback(
+        async (refresh = false) => {
+            setLoading(true);
+            setError("");
+            try {
+                const loaded: VrchatGroupMember[] = [];
+                for (let offset = 0, pageIndex = 0; pageIndex < 50; pageIndex += 1, offset += 100) {
+                    const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/members?offset=${offset}${refresh ? "&refresh=true" : ""}`, { cache: "no-store" });
+                    const payload = (await response.json()) as { error?: string; members?: VrchatGroupMember[]; hasMore?: boolean };
+                    if (response.status === 401) {
+                        window.location.assign("/login");
+                        return;
+                    }
+                    if (!response.ok) throw new Error(payload.error || "Group members could not be loaded.");
+                    loaded.push(...(payload.members || []));
+                    if (!payload.hasMore) break;
+                }
+                setMembers(Array.from(new Map(loaded.map((member) => [member.userId, member])).values()));
+            } catch (loadError) {
+                setError(loadError instanceof Error ? loadError.message : "Group members could not be loaded.");
+            } finally {
+                setLoading(false);
+            }
+        },
+        [group.id],
+    );
+
+    useEffect(() => {
+        void loadMembers();
+        closeButton.current?.focus();
+        function handleKey(event: KeyboardEvent) {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                close();
+                return;
+            }
+            if (event.key !== "Tab" || !dialog.current) return;
+            const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])"));
+            const first = focusable[0];
+            const last = focusable.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+            }
+        }
+        window.addEventListener("keydown", handleKey, true);
+        return () => window.removeEventListener("keydown", handleKey, true);
+    }, [close, loadMembers]);
+
+    useEffect(() => {
+        const query = search.trim();
+        if (query.length < 3) {
+            setSearchResults([]);
+            return;
+        }
+        setSearchResults([]);
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            setLoading(true);
+            setError("");
+            try {
+                const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/members?query=${encodeURIComponent(query)}`, { cache: "no-store", signal: controller.signal });
+                const payload = (await response.json()) as { error?: string; members?: VrchatGroupMember[] };
+                if (response.status === 401) {
+                    window.location.assign("/login");
+                    return;
+                }
+                if (!response.ok) throw new Error(payload.error || "Group members could not be searched.");
+                setSearchResults(payload.members || []);
+            } catch (searchError) {
+                if (searchError instanceof DOMException && searchError.name === "AbortError") return;
+                setError(searchError instanceof Error ? searchError.message : "Group members could not be searched.");
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
+            }
+        }, 200);
+        return () => {
+            window.clearTimeout(timer);
+            controller.abort();
+        };
+    }, [group.id, search]);
+
+    const roleNames = useMemo(() => new Map((group.roles || []).map((role) => [role.id, role.name])), [group.roles]);
+    const filteredMembers = useMemo(() => {
+        const query = search.trim().toLocaleLowerCase();
+        if (query && query.length < 3) return [];
+        return (query ? searchResults : members)
+            .filter((member) => Boolean(query) || !roleFilter || member.roleIds.includes(roleFilter))
+            .toSorted((left, right) => {
+                if (sort.startsWith("displayName")) {
+                    const value = (left.user?.displayName || left.userId).localeCompare(right.user?.displayName || right.userId);
+                    return sort.endsWith("desc") ? -value : value;
+                }
+                const value = Date.parse(left.joinedAt || "") - Date.parse(right.joinedAt || "");
+                return sort.endsWith("desc") ? -value : value;
+            });
+    }, [members, roleFilter, search, searchResults, sort]);
+    const pageCount = Math.max(1, Math.ceil(filteredMembers.length / pageSize));
+    const pageMembers = filteredMembers.slice(Math.min(page, pageCount - 1) * pageSize, Math.min(page, pageCount - 1) * pageSize + pageSize);
+    const selectedMembers = Object.values(selected);
+    const busy = progress.total > 0;
+
+    function toggleMember(member: VrchatGroupMember, checked: boolean) {
+        setSelected((current) => {
+            const next = { ...current };
+            if (checked) next[member.userId] = member;
+            else delete next[member.userId];
+            return next;
+        });
+    }
+
+    async function addUserId() {
+        setError("");
+        const matches = Array.from(new Set(userIdInput.match(/usr_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}/gi) || []));
+        if (!matches.length) {
+            setError("Enter one or more canonical VRChat user IDs.");
+            return;
+        }
+        for (const userId of matches) {
+            const member = members.find((item) => item.userId === userId);
+            if (member) {
+                toggleMember(member, true);
+                continue;
+            }
+            try {
+                const response = await fetch(`/api/users/${encodeURIComponent(userId)}`, { cache: "no-store" });
+                const payload = (await response.json()) as { error?: string; user?: VrchatUser };
+                if (!response.ok || !payload.user) throw new Error(payload.error || `User ${userId} could not be loaded.`);
+                toggleMember({ id: `${group.id}:${userId}`, groupId: group.id, userId, roleIds: [], membershipStatus: "none", user: payload.user }, true);
+            } catch (selectionError) {
+                setError(selectionError instanceof Error ? selectionError.message : `User ${userId} could not be loaded.`);
+            }
+        }
+        setUserIdInput("");
+    }
+
+    async function runBatch(action: GroupMemberModerationAction) {
+        const users = selectedMembers;
+        if (!users.length) return;
+        setError("");
+        setNotice("");
+        continueBatch.current = true;
+        setProgress({ current: 0, total: users.length });
+        let failures = 0;
+        let completed = 0;
+        let lastFailure = "";
+        for (const [index, member] of users.entries()) {
+            if (!continueBatch.current) break;
+            setProgress({ current: index + 1, total: users.length });
+            if (member.userId === currentUserId && action !== "set-note") continue;
+            const payloads = action === "add-role" || action === "remove-role" ? selectedRoles.map((roleId) => ({ action, roleId })) : action === "set-note" ? [{ action, note }] : [{ action }];
+            for (const payload of payloads) {
+                if (!continueBatch.current) break;
+                try {
+                    const response = await fetch(`/api/groups/${encodeURIComponent(group.id)}/moderation/members/${encodeURIComponent(member.userId)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                    const result = (await response.json()) as { error?: string };
+                    if (response.status === 401) {
+                        window.location.assign("/login");
+                        return;
+                    }
+                    if (!response.ok) throw new Error(result.error || `The ${action} action failed.`);
+                } catch (actionError) {
+                    failures += 1;
+                    lastFailure = actionError instanceof Error ? actionError.message : `The ${action} action failed.`;
+                }
+            }
+            completed += 1;
+        }
+        setProgress({ current: 0, total: 0 });
+        setSelected({});
+        setSearch("");
+        setNotice(`${completed} selected user${completed === 1 ? "" : "s"} processed${failures ? ` with ${failures} failure${failures === 1 ? "" : "s"}` : ""}.`);
+        await loadMembers(true);
+        if (lastFailure) setError(lastFailure);
+    }
+
+    return (
+        <div data-group-moderation-overlay className="absolute inset-0 z-[90] flex items-center justify-center bg-black/65 p-2 sm:p-4">
+            <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="group-moderation-title" className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border border-border bg-popover p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
+                <div className="flex shrink-0 items-start justify-between gap-3">
+                    <div>
+                        <h3 id="group-moderation-title" className="font-semibold">
+                            {group.name}
+                        </h3>
+                        <div className="mt-2 border-b-2 border-primary px-4 pb-2 text-xs">Members</div>
+                    </div>
+                    <button ref={closeButton} type="button" onClick={close} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-muted" aria-label="Close moderation tools">
+                        <X className="size-4" />
+                    </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto pt-2">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSearch("");
+                                void loadMembers(true);
+                            }}
+                            disabled={loading || busy}
+                            className="inline-flex size-8 items-center justify-center rounded-full border border-input hover:bg-muted disabled:opacity-40"
+                            aria-label="Refresh group members"
+                        >
+                            {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                        </button>
+                        <span>
+                            {members.length}/{group.memberCount ?? members.length}
+                        </span>
+                        <span className="ml-auto">Sort by</span>
+                        <select
+                            value={sort}
+                            onChange={(event) => {
+                                setSort(event.target.value);
+                                setPage(0);
+                            }}
+                            disabled={loading || Boolean(search)}
+                            className="h-8 rounded-md border border-input bg-background px-2"
+                        >
+                            <option value="joinedAt:desc">Joined At (Newest)</option>
+                            <option value="joinedAt:asc">Joined At (Oldest)</option>
+                            <option value="displayName:asc">Display Name (A-Z)</option>
+                            <option value="displayName:desc">Display Name (Z-A)</option>
+                        </select>
+                        <span>Filter</span>
+                        <select
+                            value={roleFilter}
+                            onChange={(event) => {
+                                setRoleFilter(event.target.value);
+                                setPage(0);
+                            }}
+                            disabled={loading || Boolean(search)}
+                            className="h-8 rounded-md border border-input bg-background px-2"
+                        >
+                            <option value="">Everyone</option>
+                            {(group.roles || []).map((role) => (
+                                <option key={role.id} value={role.id}>
+                                    {role.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="relative mt-2">
+                        <Search className="pointer-events-none absolute top-2.5 left-2.5 size-3.5 text-muted-foreground" />
+                        <input
+                            value={search}
+                            onChange={(event) => {
+                                setSearch(event.target.value);
+                                setPage(0);
+                            }}
+                            disabled={!hasGroupPermission(group, "group-bans-manage")}
+                            placeholder="Search group members"
+                            className="h-9 w-full rounded-md border border-input bg-background pr-3 pl-8 text-xs outline-none focus:ring-2 focus:ring-ring disabled:opacity-40"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setSelected((current) => ({ ...current, ...Object.fromEntries(filteredMembers.map((member) => [member.userId, member])) }))}
+                        disabled={!filteredMembers.length || busy}
+                        className="mt-2 h-8 rounded-md border border-input px-3 text-xs hover:bg-muted disabled:opacity-40"
+                    >
+                        Select All
+                    </button>
+
+                    <div className="mt-2 overflow-x-auto rounded-md border border-border">
+                        <table className="w-full min-w-[850px] table-fixed text-left text-xs">
+                            <thead className="bg-muted/70 text-muted-foreground">
+                                <tr>
+                                    <th className="w-12 p-2" />
+                                    <th className="w-16 p-2">Avatar</th>
+                                    <th className="w-40 p-2">Display Name</th>
+                                    <th className="p-2">Roles</th>
+                                    <th className="p-2">Notes</th>
+                                    <th className="w-40 p-2">Joined At</th>
+                                    <th className="w-28 p-2">Visibility</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {pageMembers.map((member) => (
+                                    <tr key={member.userId} className="border-t border-border hover:bg-muted/50">
+                                        <td className="p-2 text-center">
+                                            <input type="checkbox" checked={Boolean(selected[member.userId])} onChange={(event) => toggleMember(member, event.target.checked)} className="size-4 accent-primary" aria-label={`Select ${member.user?.displayName || member.userId}`} />
+                                        </td>
+                                        <td className="p-2">{member.user ? <FriendAvatar friend={member.user} size="sm" /> : null}</td>
+                                        <td className="truncate p-2">
+                                            <button type="button" onClick={() => openUser(member.userId)} className="font-medium hover:underline">
+                                                {member.user?.displayName || member.userId}
+                                            </button>
+                                        </td>
+                                        <td className="truncate p-2" title={member.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ")}>
+                                            {member.roleIds.map((roleId) => roleNames.get(roleId) || roleId).join(", ") || "—"}
+                                        </td>
+                                        <td className="truncate p-2" title={member.managerNotes}>
+                                            {member.managerNotes || "—"}
+                                        </td>
+                                        <td className="p-2">{dateTime(member.joinedAt)}</td>
+                                        <td className="truncate p-2">{member.visibility || "—"}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {!loading && !pageMembers.length ? <EmptyState>{search.trim() && search.trim().length < 3 ? "Enter at least three characters to search." : "No group members available."}</EmptyState> : null}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-xs">
+                        <label>
+                            Rows{" "}
+                            <select
+                                value={pageSize}
+                                onChange={(event) => {
+                                    setPageSize(Number(event.target.value));
+                                    setPage(0);
+                                }}
+                                className="ml-1 h-8 rounded-md border border-input bg-background px-2"
+                            >
+                                <option value="15">15</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </label>
+                        <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={page <= 0} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                            Previous
+                        </button>
+                        <span>
+                            {Math.min(page, pageCount - 1) + 1}/{pageCount}
+                        </span>
+                        <button type="button" onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))} disabled={page >= pageCount - 1} className="h-8 rounded-md border border-input px-3 disabled:opacity-40">
+                            Next
+                        </button>
+                    </div>
+
+                    <section className="mt-5 space-y-3 text-xs">
+                        <label className="block font-medium">User ID</label>
+                        <input value={userIdInput} onChange={(event) => setUserIdInput(event.target.value)} placeholder="usr_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" className="h-9 w-full rounded-md border border-input bg-background px-3 outline-none focus:ring-2 focus:ring-ring" />
+                        <button type="button" onClick={() => void addUserId()} disabled={!userIdInput.trim() || busy} className="h-8 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
+                            Select User
+                        </button>
+
+                        <div className="font-medium">
+                            Selected Users{" "}
+                            <button type="button" onClick={() => setSelected({})} disabled={!selectedMembers.length || busy} className="ml-1 inline-flex size-7 items-center justify-center rounded-full border border-input disabled:opacity-40" aria-label="Clear selected users">
+                                <Trash2 className="size-3.5" />
+                            </button>
+                        </div>
+                        <div className="flex min-h-6 flex-wrap gap-1.5">
+                            {selectedMembers.map((member) => (
+                                <span key={member.userId} className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-1 font-medium">
+                                    {member.membershipStatus !== "member" ? <span title="User isn't in group">⚠</span> : null}
+                                    {member.user?.displayName || member.userId}
+                                    <button type="button" onClick={() => toggleMember(member, false)} disabled={busy} aria-label={`Remove ${member.user?.displayName || member.userId}`}>
+                                        <X className="size-3" />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+
+                        <label className="block font-medium">Notes</label>
+                        <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={2} maxLength={2048} placeholder="Set manager note for selected users" className="w-full resize-none rounded-md border border-input bg-background p-2 outline-none focus:ring-2 focus:ring-ring" />
+                        <label className="block font-medium">Selected Roles</label>
+                        <select multiple value={selectedRoles} onChange={(event) => setSelectedRoles(Array.from(event.target.selectedOptions, (option) => option.value))} className="min-h-24 w-full rounded-md border border-input bg-background p-2">
+                            {(group.roles || []).map((role) => (
+                                <option key={role.id} value={role.id}>
+                                    {role.name}
+                                </option>
+                            ))}
+                        </select>
+                        <div className="font-medium">Actions</div>
+                        <div className="flex flex-wrap gap-2">
+                            <ModerationActionButton label="Add Roles" disabled={busy || !selectedMembers.length || !selectedRoles.length || !hasGroupPermission(group, "group-roles-assign")} action={() => void runBatch("add-role")} />
+                            <ModerationActionButton label="Remove Roles" secondary disabled={busy || !selectedMembers.length || !selectedRoles.length || !hasGroupPermission(group, "group-roles-assign")} action={() => void runBatch("remove-role")} />
+                            <ModerationActionButton label="Save Note" disabled={busy || !selectedMembers.length || !hasGroupPermission(group, "group-members-manage")} action={() => void runBatch("set-note")} />
+                            <ModerationActionButton label="Kick" disabled={busy || !selectedMembers.length || !hasGroupPermission(group, "group-members-remove")} action={() => void runBatch("kick")} />
+                            <ModerationActionButton label="Ban" disabled={busy || !selectedMembers.length || !hasGroupPermission(group, "group-bans-manage")} action={() => void runBatch("ban")} />
+                            <ModerationActionButton label="Unban" disabled={busy || !selectedMembers.length || !hasGroupPermission(group, "group-bans-manage")} action={() => void runBatch("unban")} />
+                            {busy ? (
+                                <span className="inline-flex items-center gap-2 px-2">
+                                    <Loader2 className="size-3.5 animate-spin" /> Progress {progress.current}/{progress.total}
+                                </span>
+                            ) : null}
+                            {busy ? (
+                                <ModerationActionButton
+                                    label="Cancel"
+                                    secondary
+                                    disabled={false}
+                                    action={() => {
+                                        continueBatch.current = false;
+                                    }}
+                                />
+                            ) : null}
+                        </div>
+                    </section>
+                    {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                    {notice ? <p className="mt-3 rounded-md border border-border bg-muted/50 p-2 text-xs">{notice}</p> : null}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ModerationActionButton({ label, action, disabled, secondary = false }: { label: string; action: () => void; disabled: boolean; secondary?: boolean }) {
+    return (
+        <button type="button" onClick={action} disabled={disabled} className={`h-9 rounded-md px-3 text-xs disabled:opacity-40 ${secondary ? "bg-secondary" : "border border-input hover:bg-muted"}`}>
+            {label}
+        </button>
     );
 }
 
