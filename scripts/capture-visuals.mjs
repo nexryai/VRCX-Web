@@ -59,6 +59,7 @@ const captures = [
     { name: "avatar-dialog-make-private-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Make Private?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "make-private" },
     { name: "avatar-dialog-rename", path: "/favorites/avatars", readyText: "Rename Avatar", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarEdit: "name" },
     { name: "avatar-dialog-description", path: "/favorites/avatars", readyText: "Change Description", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarEdit: "description" },
+    { name: "avatar-dialog-change-image", path: "/favorites/avatars", readyText: "Crop Image", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarImage: true },
     { name: "avatar-dialog-delete-confirm", path: "/favorites/avatars", readyText: "Are you sure you want to Delete?", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarConfirm: "delete-avatar" },
     { name: "avatar-dialog-content-tags", path: "/favorites/avatars", readyText: "Select All", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarMetadata: "content" },
     { name: "avatar-dialog-styles", path: "/favorites/avatars", readyText: "Primary Style", favoriteKind: "avatar", avatarDialog: true, avatarOwner: true, avatarMetadata: "styles" },
@@ -558,7 +559,7 @@ for (const width of widths) {
         if (capture.avatarDialog) {
             await page.getByText("Favorite Browser Avatar", { exact: true }).first().click();
             if (capture.avatarOwner) await page.getByRole("button", { name: "Open gallery image 1 of 2", exact: true }).waitFor();
-            if (capture.avatarMenu || capture.avatarConfirm || capture.avatarEdit || capture.avatarMetadata) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
+            if (capture.avatarMenu || capture.avatarConfirm || capture.avatarEdit || capture.avatarMetadata || capture.avatarImage) await page.getByRole("button", { name: "Manage avatar", exact: true }).click();
             if (capture.avatarConfirm) {
                 const actionLabels = {
                     block: "Block Avatar",
@@ -621,6 +622,27 @@ for (const width of widths) {
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar tag/style editor did not restore focus.");
                 await manage.click();
                 await page.getByRole("menuitem", { name: actionLabel, exact: true }).click();
+            }
+            if (capture.avatarImage) {
+                const openCropper = async () => {
+                    const chooserPromise = page.waitForEvent("filechooser");
+                    await page.getByRole("menuitem", { name: "Change Image", exact: true }).click();
+                    const chooser = await chooserPromise;
+                    await chooser.setFiles("public/vrcx.png");
+                };
+                await openCropper();
+                const cropper = page.getByRole("dialog", { name: "Change Avatar Image", exact: true });
+                await cropper.waitFor();
+                const rotateLeft = cropper.getByRole("button", { name: "Rotate Left", exact: true });
+                if (!(await rotateLeft.evaluate((element) => document.activeElement === element))) throw new Error("Avatar image cropper did not focus its first control.");
+                await page.keyboard.press("Shift+Tab");
+                if (!(await cropper.getByRole("button", { name: "Crop Image", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("Avatar image cropper did not trap focus.");
+                await page.keyboard.press("Escape");
+                await cropper.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage avatar", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("Avatar image cropper did not restore focus.");
+                await manage.click();
+                await openCropper();
             }
             if (capture.avatarGalleryPreview) {
                 const trigger = page.getByRole("button", { name: "Open gallery image 1 of 2", exact: true });

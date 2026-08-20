@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Apple, Check, CheckCircle, ChevronLeft, ChevronRight, Ellipsis, ImageIcon, Loader2, Monitor, Pencil, RefreshCw, Share2, Smartphone, Trash2, Upload, User, X, XCircle } from "lucide-react";
 
+import { AvatarImageCropDialog } from "@/components/avatars/avatar-image-crop-dialog";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
@@ -39,6 +40,9 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
     const [metadataDialog, setMetadataDialog] = useState<AvatarMetadataDialog | null>(null);
     const [metadataLoading, setMetadataLoading] = useState(false);
     const [metadataSaving, setMetadataSaving] = useState(false);
+    const [cropFile, setCropFile] = useState<File | null>(null);
+    const [imageUploading, setImageUploading] = useState(false);
+    const [cropError, setCropError] = useState("");
     const [contentTagsCsv, setContentTagsCsv] = useState("");
     const [ownedAvatars, setOwnedAvatars] = useState<VrchatAvatar[]>([]);
     const [selectedAvatarIds, setSelectedAvatarIds] = useState<string[]>([]);
@@ -65,6 +69,8 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
     const metadataInitialFocus = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(null);
     const previousMetadataDialog = useRef<AvatarMetadataDialog | null>(null);
     const initialMetadataOpened = useRef(false);
+    const avatarImageInput = useRef<HTMLInputElement>(null);
+    const previousCropFile = useRef<File | null>(null);
 
     const loadGallery = useCallback(
         async (refresh = false) => {
@@ -122,6 +128,8 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
         setEditField(null);
         setEditValue("");
         setMetadataDialog(null);
+        setCropFile(null);
+        setCropError("");
         initialMetadataOpened.current = false;
         void load();
         closeButton.current?.focus();
@@ -144,6 +152,10 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
                 window.requestAnimationFrame(() => previewTrigger.current?.focus());
                 return;
             }
+            if (cropFile) {
+                if (!imageUploading) setCropFile(null);
+                return;
+            }
             if (editField) {
                 setEditField(null);
                 return;
@@ -164,7 +176,7 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [confirmAction, editField, menuOpen, metadataDialog, metadataSaving, onClose, previewUrl]);
+    }, [confirmAction, cropFile, editField, imageUploading, menuOpen, metadataDialog, metadataSaving, onClose, previewUrl]);
 
     useEffect(() => {
         if (confirmAction) confirmationCancel.current?.focus();
@@ -196,6 +208,11 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
         else if (previousMetadataDialog.current) manageButton.current?.focus();
         previousMetadataDialog.current = metadataDialog;
     }, [metadataDialog, metadataLoading]);
+
+    useEffect(() => {
+        if (!cropFile && previousCropFile.current) manageButton.current?.focus();
+        previousCropFile.current = cropFile;
+    }, [cropFile]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
@@ -434,6 +451,38 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
         }
     }
 
+    function chooseAvatarImage(file?: File) {
+        if (avatarImageInput.current) avatarImageInput.current.value = "";
+        if (!file) return;
+        if (file.size >= 20_000_000 || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+            setError("Choose a PNG, JPEG, or WebP image smaller than 20 MB.");
+            return;
+        }
+        setCropError("");
+        setCropFile(file);
+    }
+
+    async function uploadAvatarImage(blob: Blob) {
+        setImageUploading(true);
+        setCropError("");
+        setStatus("");
+        try {
+            const body = new FormData();
+            body.set("file", blob, "avatar-image.png");
+            const response = await fetch(`/api/avatars/${encodeURIComponent(avatarId)}/image`, { method: "POST", body });
+            const payload = (await response.json()) as { avatar?: VrchatAvatar; error?: string; uploadAccepted?: boolean };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.avatar) throw new Error(payload.error || "The avatar image could not be changed.");
+            setAvatar(payload.avatar);
+            setStatus("Avatar image changed");
+            setCropFile(null);
+        } catch (uploadError) {
+            setCropError(uploadError instanceof Error ? uploadError.message : "The avatar image could not be changed.");
+        } finally {
+            setImageUploading(false);
+        }
+    }
+
     async function uploadGalleryImage(file: File) {
         setGalleryUploading(true);
         setGalleryError("");
@@ -583,6 +632,18 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
                                                     <button type="button" role="menuitem" onClick={() => requestEdit("name")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
                                                         <Pencil className="size-4" /> Rename
                                                     </button>
+                                                    <button
+                                                        type="button"
+                                                        role="menuitem"
+                                                        onClick={() => {
+                                                            setMenuOpen(false);
+                                                            setError("");
+                                                            avatarImageInput.current?.click();
+                                                        }}
+                                                        className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted"
+                                                    >
+                                                        <ImageIcon className="size-4" /> Change Image
+                                                    </button>
                                                     <button type="button" role="menuitem" onClick={() => requestEdit("description")} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
                                                         <Pencil className="size-4" /> Change Description
                                                     </button>
@@ -615,6 +676,7 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
                                         </div>
                                     ) : null}
                                 </div>
+                                {avatar.authorId === currentUser.id ? <input ref={avatarImageInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => chooseAvatarImage(event.currentTarget.files?.[0])} /> : null}
                             </div>
                         </header>
                         {error && !confirmAction && !editField && !metadataDialog ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
@@ -652,6 +714,7 @@ export function AvatarDialog({ avatarId, initialMetadata, openUser, onClose }: {
                             ) : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(avatar, null, 2)}</pre> : null}
                         </div>
+                        {cropFile ? <AvatarImageCropDialog file={cropFile} uploading={imageUploading} error={cropError} cancel={() => setCropFile(null)} confirm={(blob) => void uploadAvatarImage(blob)} /> : null}
                         {metadataDialog ? (
                             <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-3">
                                 <div
