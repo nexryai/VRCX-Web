@@ -2,26 +2,40 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, Clipboard, ExternalLink, History, ImageIcon, Loader2, Monitor, RefreshCw, Smartphone, User, X } from "lucide-react";
+import { Apple, Clipboard, Ellipsis, ExternalLink, History, ImageIcon, Loader2, Monitor, Pencil, RefreshCw, Smartphone, User, X } from "lucide-react";
 
+import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { MemoField } from "@/components/memo-field";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import type { VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import { normalizeYoutubePreview } from "@/lib/vrchat/world-metadata";
 
 type WorldTab = "Info" | "Instances" | "JSON";
+type WorldEditField = "capacity" | "description" | "name" | "previewYoutubeId" | "recommendedCapacity";
 
 export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: string; friends: VrchatUser[]; openUser: (userId: string) => void; onClose: () => void }) {
+    const currentUser = useCurrentUser();
     const [world, setWorld] = useState<VrchatWorld | null>(null);
     const [tab, setTab] = useState<WorldTab>("Info");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [copied, setCopied] = useState("");
     const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [editField, setEditField] = useState<WorldEditField | null>(null);
+    const [editValue, setEditValue] = useState("");
+    const [editSaving, setEditSaving] = useState(false);
+    const [status, setStatus] = useState("");
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
+    const menu = useRef<HTMLDivElement>(null);
+    const manageButton = useRef<HTMLButtonElement>(null);
+    const editorDialog = useRef<HTMLDivElement>(null);
+    const editorInput = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+    const previousEditField = useRef<WorldEditField | null>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -46,22 +60,114 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         setWorld(null);
         setTab("Info");
         setPreviousInstancesOpen(false);
+        setMenuOpen(false);
+        setEditField(null);
+        setStatus("");
         void load();
         closeButton.current?.focus();
     }, [load]);
 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
-            if (event.key === "Escape") onClose();
+            if (event.key !== "Escape") return;
+            if (editField) {
+                if (!editSaving) setEditField(null);
+                return;
+            }
+            if (menuOpen) {
+                setMenuOpen(false);
+                return;
+            }
+            onClose();
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [onClose]);
+    }, [editField, editSaving, menuOpen, onClose]);
+
+    useEffect(() => {
+        if (!menuOpen) return;
+        function closeOutside(event: PointerEvent) {
+            if (!menu.current?.contains(event.target as Node)) setMenuOpen(false);
+        }
+        window.addEventListener("pointerdown", closeOutside);
+        return () => window.removeEventListener("pointerdown", closeOutside);
+    }, [menuOpen]);
+
+    useEffect(() => {
+        if (editField) editorInput.current?.focus();
+        else if (previousEditField.current) manageButton.current?.focus();
+        previousEditField.current = editField;
+    }, [editField]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
         setCopied(label);
         window.setTimeout(() => setCopied(""), 1_500);
+    }
+
+    function requestEdit(field: WorldEditField) {
+        if (!world) return;
+        const values: Record<WorldEditField, string> = {
+            capacity: String(world.capacity ?? ""),
+            description: world.description || "",
+            name: world.name,
+            previewYoutubeId: world.previewYoutubeId || "",
+            recommendedCapacity: String(world.recommendedCapacity ?? ""),
+        };
+        setMenuOpen(false);
+        setError("");
+        setEditValue(values[field]);
+        setEditField(field);
+    }
+
+    function trapEditorFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+        if (event.key !== "Tab") return;
+        const focusable = Array.from(editorDialog.current?.querySelectorAll<HTMLElement>("input:not([disabled]), textarea:not([disabled]), button:not([disabled])") ?? []);
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first)?.focus();
+        }
+    }
+
+    async function saveEditor() {
+        if (!world || !editField) return;
+        const trimmed = editValue.trim();
+        let body: Record<string, string | number>;
+        if (editField === "capacity" || editField === "recommendedCapacity") {
+            const value = Number(trimmed);
+            if (!Number.isInteger(value) || value < 0 || value > 80) {
+                setError("Enter a whole number from 0 through 80.");
+                return;
+            }
+            body = { [editField]: value };
+        } else if (editField === "previewYoutubeId") {
+            const previewYoutubeId = normalizeYoutubePreview(trimmed);
+            if (previewYoutubeId === null) {
+                setError("Valid YouTube video ID or URL is required.");
+                return;
+            }
+            body = { previewYoutubeId };
+        } else {
+            if (!trimmed) return;
+            body = { [editField]: trimmed };
+        }
+        setEditSaving(true);
+        setError("");
+        try {
+            const response = await fetch(`/api/worlds/${encodeURIComponent(world.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            const payload = (await response.json()) as { world?: VrchatWorld; error?: string };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.world) throw new Error(payload.error || "The world could not be updated.");
+            setWorld(payload.world);
+            setStatus(worldEditStatus(editField));
+            setEditField(null);
+        } catch (saveError) {
+            setError(saveError instanceof Error ? saveError.message : "The world could not be updated.");
+        } finally {
+            setEditSaving(false);
+        }
     }
 
     const worldFriends = useMemo(() => friends.filter((friend) => friend.location?.startsWith(`${worldId}:`)), [friends, worldId]);
@@ -131,9 +237,30 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                                 <a href={`https://vrchat.com/home/world/${encodeURIComponent(world.id)}`} target="_blank" rel="noreferrer" className="inline-flex size-9 items-center justify-center rounded-full border border-input" aria-label="Open on VRChat">
                                     <ExternalLink className="size-4" />
                                 </a>
+                                {world.authorId === currentUser.id ? (
+                                    <div ref={menu} className="relative">
+                                        <button ref={manageButton} type="button" onClick={() => setMenuOpen((value) => !value)} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted" aria-label="Manage world" aria-haspopup="menu" aria-expanded={menuOpen}>
+                                            <Ellipsis className="size-4" />
+                                        </button>
+                                        {menuOpen ? (
+                                            <div role="menu" className="absolute top-11 right-0 z-50 min-w-60 rounded-md border border-border bg-popover p-1 text-xs shadow-xl">
+                                                <WorldEditMenuItem label="Rename" action={() => requestEdit("name")} />
+                                                <WorldEditMenuItem label="Change Description" action={() => requestEdit("description")} />
+                                                <WorldEditMenuItem label="Change Capacity" action={() => requestEdit("capacity")} />
+                                                <WorldEditMenuItem label="Change Recommended Capacity" action={() => requestEdit("recommendedCapacity")} />
+                                                <WorldEditMenuItem label="Change YouTube Preview" action={() => requestEdit("previewYoutubeId")} />
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                ) : null}
                             </div>
                         </header>
                         {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
+                        {status ? (
+                            <p className="sr-only" role="status">
+                                {status}
+                            </p>
+                        ) : null}
                         <div className="mt-3 flex shrink-0 overflow-x-auto border-b border-border" role="tablist" aria-label="World details">
                             {(["Info", "Instances", "JSON"] as WorldTab[]).map((item) => (
                                 <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={`h-10 shrink-0 border-b-2 px-4 text-xs ${tab === item ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
@@ -155,12 +282,95 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                             ) : null}
                             {tab === "JSON" ? <pre className="overflow-auto whitespace-pre-wrap break-all rounded-lg bg-background p-3 text-[10px] leading-5">{JSON.stringify(world, null, 2)}</pre> : null}
                         </div>
+                        {editField ? (
+                            <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+                                <form
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        void saveEditor();
+                                    }}
+                                    className="contents"
+                                >
+                                    <div ref={editorDialog} role="dialog" aria-modal="true" aria-labelledby="world-editor-title" aria-describedby="world-editor-description" onKeyDown={trapEditorFocus} className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                                        <h3 id="world-editor-title" className="text-sm font-semibold">
+                                            {worldEditTitle(editField)}
+                                        </h3>
+                                        <p id="world-editor-description" className="mt-2 text-xs text-muted-foreground">
+                                            {worldEditDescription(editField)}
+                                        </p>
+                                        {editField === "description" ? (
+                                            <textarea
+                                                ref={(node) => {
+                                                    editorInput.current = node;
+                                                }}
+                                                value={editValue}
+                                                onChange={(event) => setEditValue(event.target.value)}
+                                                rows={4}
+                                                maxLength={1_024}
+                                                className="mt-3 w-full resize-none rounded-md border border-input bg-background p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            />
+                                        ) : (
+                                            <input
+                                                ref={(node) => {
+                                                    editorInput.current = node;
+                                                }}
+                                                type={editField === "capacity" || editField === "recommendedCapacity" ? "number" : "text"}
+                                                min={editField === "capacity" || editField === "recommendedCapacity" ? 0 : undefined}
+                                                max={editField === "capacity" || editField === "recommendedCapacity" ? 80 : undefined}
+                                                value={editValue}
+                                                onChange={(event) => setEditValue(event.target.value)}
+                                                maxLength={editField === "name" ? 64 : undefined}
+                                                className="mt-3 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            />
+                                        )}
+                                        {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+                                        <div className="mt-5 flex justify-end gap-2">
+                                            <button type="button" onClick={() => setEditField(null)} disabled={editSaving} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                                                Cancel
+                                            </button>
+                                            <button type="submit" disabled={editSaving || !editValue.trim()} className="inline-flex h-9 items-center gap-1 rounded-md bg-primary px-4 text-xs text-primary-foreground disabled:opacity-40">
+                                                {editSaving ? <Loader2 className="size-4 animate-spin" /> : null} OK
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        ) : null}
                     </>
                 ) : null}
             </section>
             {previousInstancesOpen && world ? <PreviousInstancesDialog variant="world" entityId={world.id} label={world.name} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
         </div>
     );
+}
+
+function WorldEditMenuItem({ label, action }: { label: string; action: () => void }) {
+    return (
+        <button type="button" role="menuitem" onClick={action} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+            <Pencil className="size-4" /> {label}
+        </button>
+    );
+}
+
+function worldEditTitle(field: WorldEditField) {
+    const titles: Record<WorldEditField, string> = { capacity: "Change Capacity", description: "Change Description", name: "Rename World", previewYoutubeId: "Change YouTube Preview", recommendedCapacity: "Change Recommended Capacity" };
+    return titles[field];
+}
+
+function worldEditDescription(field: WorldEditField) {
+    const descriptions: Record<WorldEditField, string> = {
+        capacity: "Enter world maximum capacity (hard cap), Max: 80",
+        description: "Enter world description",
+        name: "Enter world name",
+        previewYoutubeId: "Enter world YouTube preview",
+        recommendedCapacity: "Enter world recommended capacity (soft cap)",
+    };
+    return descriptions[field];
+}
+
+function worldEditStatus(field: WorldEditField) {
+    const statuses: Record<WorldEditField, string> = { capacity: "World capacity changed", description: "World description changed", name: "World renamed", previewYoutubeId: "World YouTube preview changed", recommendedCapacity: "World recommended capacity changed" };
+    return statuses[field];
 }
 
 function WorldInfo({ world, copy, copied, onOpenPreviousInstances, previousInstancesButton }: { world: VrchatWorld; copy: (value: string, label: string) => Promise<void>; copied: string; onOpenPreviousInstances: () => void; previousInstancesButton: React.RefObject<HTMLButtonElement | null> }) {

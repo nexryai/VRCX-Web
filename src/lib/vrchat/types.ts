@@ -86,6 +86,7 @@ export const vrchatWorldSchema = z
         popularity: z.number().optional(),
         version: z.number().optional(),
         releaseStatus: z.string().optional(),
+        previewYoutubeId: z.string().optional(),
         publicationDate: z.string().optional(),
         labsPublicationDate: z.string().optional(),
         created_at: z.string().optional(),

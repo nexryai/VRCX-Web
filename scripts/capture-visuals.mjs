@@ -27,6 +27,12 @@ const captures = [
     { name: "favorite-friends-export", path: "/favorites/friends", readyText: "Export favorite friends", favoriteKind: "friend", favoriteDialog: "Export" },
     { name: "favorite-worlds", path: "/favorites/worlds", readyText: "Favorite World Author (24)", favoriteKind: "world" },
     { name: "world-dialog", path: "/favorites/worlds", readyText: "World ID", favoriteKind: "world", worldDialog: true },
+    { name: "world-dialog-owner-menu", path: "/favorites/worlds", readyText: "Change YouTube Preview", favoriteKind: "world", worldDialog: true, worldOwner: true, worldMenu: true },
+    { name: "world-dialog-rename", path: "/favorites/worlds", readyText: "Rename World", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "name" },
+    { name: "world-dialog-description", path: "/favorites/worlds", readyText: "Change Description", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "description" },
+    { name: "world-dialog-capacity", path: "/favorites/worlds", readyText: "Change Capacity", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "capacity" },
+    { name: "world-dialog-recommended-capacity", path: "/favorites/worlds", readyText: "Change Recommended Capacity", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "recommendedCapacity" },
+    { name: "world-dialog-youtube-preview", path: "/favorites/worlds", readyText: "Change YouTube Preview", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "previewYoutubeId" },
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
@@ -136,6 +142,17 @@ for (const width of widths) {
                         : [{ id: "avtr_00000000-0000-0000-0000-000000000052", name: "Favorite Browser Avatar", authorName: "Avatar Artist", releaseStatus: "public" }];
                 await page.route(`**/api/favorites?section=items&type=${capture.favoriteKind}`, (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items }) }));
             }
+        }
+        if (capture.worldOwner) {
+            await page.route("**/api/worlds/wrld_00000000-0000-0000-0000-000000000051", async (route) => {
+                const response = await route.fetch();
+                const payload = await response.json();
+                return route.fulfill({
+                    response,
+                    contentType: "application/json",
+                    body: JSON.stringify({ world: { ...payload.world, authorId: "usr_00000000-0000-0000-0000-000000000001", authorName: "Visual Operator", previewYoutubeId: "dQw4w9WgXcQ" } }),
+                });
+            });
         }
         if (capture.avatarModerationState !== undefined || capture.avatarOwner || capture.avatarWithoutImpostor) {
             await page.route("**/api/avatars/**", async (route) => {
@@ -357,6 +374,32 @@ for (const width of widths) {
         }
         if (capture.worldDialog) {
             await page.getByText("Favorite Moonlit World", { exact: true }).first().click();
+            if (capture.worldMenu || capture.worldEdit) await page.getByRole("button", { name: "Manage world", exact: true }).click();
+            if (capture.worldEdit) {
+                const labels = {
+                    capacity: "Change Capacity",
+                    description: "Change Description",
+                    name: "Rename",
+                    previewYoutubeId: "Change YouTube Preview",
+                    recommendedCapacity: "Change Recommended Capacity",
+                };
+                const titles = { ...labels, name: "Rename World" };
+                const label = labels[capture.worldEdit];
+                const title = titles[capture.worldEdit];
+                await page.getByRole("menuitem", { name: label, exact: true }).click();
+                const editor = page.getByRole("dialog", { name: title, exact: true });
+                await editor.waitFor();
+                const input = editor.locator("input,textarea").first();
+                if (!(await input.evaluate((element) => document.activeElement === element))) throw new Error("World metadata editor did not focus its field.");
+                await page.keyboard.press("Shift+Tab");
+                if (!(await editor.getByRole("button", { name: "OK", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("World metadata editor did not trap focus.");
+                await page.keyboard.press("Escape");
+                await editor.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage world", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("World metadata editor did not restore focus.");
+                await manage.click();
+                await page.getByRole("menuitem", { name: label, exact: true }).click();
+            }
         }
         if (capture.groupDialog) {
             // Waiting for the count prevents the persisted sidebar setting from
