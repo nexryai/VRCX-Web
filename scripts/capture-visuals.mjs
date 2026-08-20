@@ -33,6 +33,8 @@ const captures = [
     { name: "world-dialog-capacity", path: "/favorites/worlds", readyText: "Change Capacity", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "capacity" },
     { name: "world-dialog-recommended-capacity", path: "/favorites/worlds", readyText: "Change Recommended Capacity", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "recommendedCapacity" },
     { name: "world-dialog-youtube-preview", path: "/favorites/worlds", readyText: "Change YouTube Preview", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "previewYoutubeId" },
+    { name: "world-dialog-tags", path: "/favorites/worlds", readyText: "Set World Tags", favoriteKind: "world", worldDialog: true, worldOwner: true, worldManage: "tags" },
+    { name: "world-dialog-domains", path: "/favorites/worlds", readyText: "Allowed Video Player Domains", favoriteKind: "world", worldDialog: true, worldOwner: true, worldManage: "domains" },
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
@@ -150,7 +152,17 @@ for (const width of widths) {
                 return route.fulfill({
                     response,
                     contentType: "application/json",
-                    body: JSON.stringify({ world: { ...payload.world, authorId: "usr_00000000-0000-0000-0000-000000000001", authorName: "Visual Operator", previewYoutubeId: "dQw4w9WgXcQ" } }),
+                    body: JSON.stringify({
+                        world: {
+                            ...payload.world,
+                            authorId: "usr_00000000-0000-0000-0000-000000000001",
+                            authorName: "Visual Operator",
+                            previewYoutubeId: "dQw4w9WgXcQ",
+                            urlList: ["youtube.com", "media.example.com"],
+                            disabledPropAbilities: ["player_movement"],
+                            tags: [...(payload.world.tags || []), "author_tag_featured", "content_horror", "feature_stickers_disabled"],
+                        },
+                    }),
                 });
             });
         }
@@ -374,7 +386,7 @@ for (const width of widths) {
         }
         if (capture.worldDialog) {
             await page.getByText("Favorite Moonlit World", { exact: true }).first().click();
-            if (capture.worldMenu || capture.worldEdit) await page.getByRole("button", { name: "Manage world", exact: true }).click();
+            if (capture.worldMenu || capture.worldEdit || capture.worldManage) await page.getByRole("button", { name: "Manage world", exact: true }).click();
             if (capture.worldEdit) {
                 const labels = {
                     capacity: "Change Capacity",
@@ -397,6 +409,23 @@ for (const width of widths) {
                 await editor.waitFor({ state: "detached" });
                 const manage = page.getByRole("button", { name: "Manage world", exact: true });
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("World metadata editor did not restore focus.");
+                await manage.click();
+                await page.getByRole("menuitem", { name: label, exact: true }).click();
+            }
+            if (capture.worldManage) {
+                const label = capture.worldManage === "tags" ? "Change Content Warnings, Settings and Tags" : "Change Allowed Video Player Domains";
+                const title = capture.worldManage === "tags" ? "Set World Tags" : "Allowed Video Player Domains";
+                await page.getByRole("menuitem", { name: label, exact: true }).click();
+                const editor = page.getByRole("dialog", { name: title, exact: true });
+                await editor.waitFor();
+                const firstInput = editor.locator("input,textarea").first();
+                if (!(await firstInput.evaluate((element) => document.activeElement === element))) throw new Error("World management editor did not focus its first control.");
+                await page.keyboard.press("Shift+Tab");
+                if (!(await editor.getByRole("button", { name: "Save", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("World management editor did not trap focus.");
+                await page.keyboard.press("Escape");
+                await editor.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage world", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("World management editor did not restore focus.");
                 await manage.click();
                 await page.getByRole("menuitem", { name: label, exact: true }).click();
             }
