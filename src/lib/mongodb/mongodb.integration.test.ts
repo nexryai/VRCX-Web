@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -38,6 +38,7 @@ describe("MongoDB application repositories", () => {
             myAvatarsCardSpacing: 1,
             myAvatarsTablePageSize: 20,
             favoriteSortByDate: false,
+            localFavoriteFriendsGroups: [],
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
             favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
             moderationFilters: [],
@@ -293,6 +294,32 @@ describe("MongoDB application repositories", () => {
         expect(await renameLocalFavoriteGroup(ownerId, group.groupId, "Weekends")).toMatchObject({ name: "Weekends", normalizedName: "weekends" });
         expect(await listLocalFavoriteGroups(ownerId, "world")).toEqual([expect.objectContaining({ groupId: group.groupId, count: 1 })]);
         expect(await listLocalFavorites(ownerId, group.groupId)).toMatchObject({ items: [expect.objectContaining({ objectId: world.id, item: world })] });
+    });
+
+    test("projects the selected remote friend groups together with all local favorites", async () => {
+        const { upsertCachedUser } = await import("./user-repository");
+        const { upsertFavoriteProjection } = await import("./projection-repository");
+        const { addLocalFavorite, createLocalFavoriteGroup } = await import("./local-favorites-repository");
+        const { listSelectedFavoriteFriendIds } = await import("./friend-favorites-repository");
+        const { collections } = await import("./collections");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000171";
+        const firstId = "usr_00000000-0000-0000-0000-000000000172";
+        const secondId = "usr_00000000-0000-0000-0000-000000000173";
+        const localId = "usr_00000000-0000-0000-0000-000000000174";
+        await upsertFavoriteProjection(ownerId, { id: "fvrt_first", favoriteId: firstId, type: "friend", tags: ["group_0"] });
+        await upsertFavoriteProjection(ownerId, { id: "fvrt_second", favoriteId: secondId, type: "friend", tags: ["group_1"] });
+        await upsertCachedUser(ownerId, { id: localId, displayName: "Local Friend" }, "lookup");
+        const localGroup = await createLocalFavoriteGroup(ownerId, "friend", "Local Circle");
+        expect((await addLocalFavorite(ownerId, localGroup.groupId, "friend", localId)).status).toBe("ok");
+
+        const appSettings = collections(await getMongoDatabase()).appSettings;
+        await appSettings.updateOne({ _id: "singleton" }, { $set: { localFavoriteFriendsGroups: ["friend:group_1"] } });
+        expect(new Set(await listSelectedFavoriteFriendIds(ownerId))).toEqual(new Set([secondId, localId]));
+
+        await appSettings.updateOne({ _id: "singleton" }, { $set: { localFavoriteFriendsGroups: [`local:${localGroup.groupId}`] } });
+        expect(new Set(await listSelectedFavoriteFriendIds(ownerId))).toEqual(new Set([firstId, secondId, localId]));
+        await appSettings.updateOne({ _id: "singleton" }, { $set: { localFavoriteFriendsGroups: [] } });
     });
 
     test("removes only the active owner's deleted world projection", async () => {

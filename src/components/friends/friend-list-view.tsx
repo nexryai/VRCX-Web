@@ -8,6 +8,7 @@ import { useCurrentUser } from "@/components/current-user-provider";
 import type { FriendActivity } from "@/lib/activity-log";
 import { trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
+import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { type FriendListSearchField, type FriendListUser, friendListSearchFields, friendMatchesSearch } from "@/lib/friend-list";
 import { statusColor } from "@/lib/friends";
 import type { MutualGraphSnapshot } from "@/lib/mutual-graph";
@@ -59,9 +60,7 @@ export function FriendListView() {
     useEffect(() => {
         const controller = new AbortController();
         void Promise.all([
-            fetch("/api/favorites?section=records", { cache: "no-store", signal: controller.signal })
-                .then((response) => response.json())
-                .then((payload: { favorites?: Array<{ favoriteId?: string; type?: string }> }) => setFavoriteIds(new Set((payload.favorites || []).filter((favorite) => favorite.type === "friend" && favorite.favoriteId).map((favorite) => favorite.favoriteId as string)))),
+            loadFavoriteFriendIds(controller.signal).then(setFavoriteIds),
             fetch("/api/mutual-graph", { cache: "no-store", signal: controller.signal })
                 .then((response) => response.json())
                 .then((payload: { snapshot?: MutualGraphSnapshot | null }) => setSnapshot(payload.snapshot || null)),

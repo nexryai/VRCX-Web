@@ -5,8 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Pencil, Search, Settings, Users } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
+import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { groupFriendsByLocation, locationLabel, statusColor } from "@/lib/friends";
-import type { VrchatFavorite, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
@@ -29,19 +30,6 @@ const skeletonIds = ["friend-a", "friend-b", "friend-c", "friend-d", "friend-e",
 
 function saveSettings(update: Partial<LocationSettings>) {
     void fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(update) });
-}
-
-async function loadFavoriteFriendIds(signal: AbortSignal) {
-    const ids = new Set<string>();
-    for (let offset = 0; offset < 5_000; offset += 100) {
-        const response = await fetch(`/api/favorites?section=records&offset=${offset}`, { cache: "no-store", signal });
-        if (!response.ok) break;
-        const payload = (await response.json()) as { favorites?: VrchatFavorite[] };
-        const page = payload.favorites ?? [];
-        for (const favorite of page) if (favorite.type === "friend") ids.add(favorite.favoriteId);
-        if (page.length < 100) break;
-    }
-    return ids;
 }
 
 export function FriendsLocationsView() {

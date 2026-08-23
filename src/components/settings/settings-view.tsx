@@ -2,21 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { AlertCircle, CheckCircle2, Download, ExternalLink, Trash2, TriangleAlert, Upload } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, ChevronDown, Download, ExternalLink, Trash2, TriangleAlert, Upload } from "lucide-react";
 
 import type { AppSettingsPayload } from "@/lib/app-settings";
 import { clearImportedLegacyBrowserSettings, type LegacyBrowserSettingsImport, readLegacyBrowserSettings } from "@/lib/legacy-browser-settings";
+import type { VrchatFavoriteGroup } from "@/lib/vrchat/types";
 
-type Tab = "Interface" | "System";
+type Tab = "Interface" | "Social" | "System";
 type PageSizeKey = "activityTablePageSize" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "notificationTablePageSize";
-type SettingsState = Required<Pick<AppSettingsPayload, "activityTablePageSize" | "avatarAutoCleanupDays" | "favoriteSortByDate" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "navigationCollapsed" | "notificationTablePageSize" | "theme">>;
+type SettingsState = Required<Pick<AppSettingsPayload, "activityTablePageSize" | "avatarAutoCleanupDays" | "favoriteSortByDate" | "friendListTablePageSize" | "localFavoriteFriendsGroups" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "navigationCollapsed" | "notificationTablePageSize" | "theme">>;
 type AvatarPurgeDays = 180 | 365 | 730 | "all";
 type LegacyImportState = { checked: boolean; completed: boolean; importing: boolean; payload: LegacyBrowserSettingsImport | null };
+type FavoriteGroupOption = { key: string; label: string; local: boolean };
 
 const defaults: SettingsState = {
     theme: "dark",
     navigationCollapsed: false,
     favoriteSortByDate: false,
+    localFavoriteFriendsGroups: [],
     activityTablePageSize: 20,
     friendListTablePageSize: 20,
     notificationTablePageSize: 20,
@@ -30,6 +33,7 @@ export function SettingsView({ version }: { version: string }) {
     const [settings, setSettings] = useState<SettingsState>(defaults);
     const [loading, setLoading] = useState(true);
     const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
+    const [favoriteGroupOptions, setFavoriteGroupOptions] = useState<FavoriteGroupOption[]>([]);
     const [legacyImport, setLegacyImport] = useState<LegacyImportState>({ checked: false, completed: false, importing: false, payload: null });
     const fileInput = useRef<HTMLInputElement>(null);
 
@@ -45,6 +49,24 @@ export function SettingsView({ version }: { version: string }) {
                 if (!(error instanceof DOMException && error.name === "AbortError")) setMessage({ error: true, text: error instanceof Error ? error.message : "Settings could not be loaded." });
             })
             .finally(() => setLoading(false));
+        return () => controller.abort();
+    }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        void Promise.all([fetch("/api/favorites?section=groups&offset=0", { cache: "no-store", signal: controller.signal }), fetch("/api/local-favorites?kind=friend", { cache: "no-store", signal: controller.signal })])
+            .then(async ([remoteResponse, localResponse]) => {
+                if (!remoteResponse.ok || !localResponse.ok) throw new Error("Favorite groups could not be loaded.");
+                const remote = (await remoteResponse.json()) as { groups?: VrchatFavoriteGroup[] };
+                const local = (await localResponse.json()) as { groups?: Array<{ groupId: string; name: string }> };
+                setFavoriteGroupOptions([
+                    ...(remote.groups || []).filter((group) => group.type === "friend").map((group) => ({ key: `friend:${group.name}`, label: group.displayName || group.name, local: false })),
+                    ...(local.groups || []).map((group) => ({ key: `local:${group.groupId}`, label: group.name, local: true })),
+                ]);
+            })
+            .catch((error) => {
+                if (!(error instanceof DOMException && error.name === "AbortError")) setMessage({ error: true, text: error instanceof Error ? error.message : "Favorite groups could not be loaded." });
+            });
         return () => controller.abort();
     }, []);
 
@@ -79,6 +101,7 @@ export function SettingsView({ version }: { version: string }) {
         try {
             const response = await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
             if (!response.ok) throw new Error("The setting could not be saved.");
+            window.dispatchEvent(new CustomEvent("vrcx:settings-saved", { detail: patch }));
         } catch (error) {
             setSettings(previous);
             if (patch.theme) document.documentElement.dataset.theme = previous.theme;
@@ -172,7 +195,7 @@ export function SettingsView({ version }: { version: string }) {
                 Settings
             </h1>
             <div className="flex shrink-0 gap-5 overflow-x-auto border-b border-border px-1" role="tablist" aria-label="Settings categories">
-                {(["System", "Interface"] as const).map((item) => (
+                {(["System", "Interface", "Social"] as const).map((item) => (
                     <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={`h-10 shrink-0 border-b-2 px-2 text-sm ${tab === item ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                         {item}
                     </button>
@@ -190,12 +213,68 @@ export function SettingsView({ version }: { version: string }) {
                         <div className="h-32 animate-pulse rounded-lg border border-border bg-card" />
                     ) : tab === "System" ? (
                         <SystemSettings version={version} fileInput={fileInput} importSettings={importSettings} legacyImport={legacyImport} importLegacySettings={importLegacySettings} settings={settings} change={change} purgeAvatarFeed={purgeAvatarFeed} />
-                    ) : (
+                    ) : tab === "Interface" ? (
                         <InterfaceSettings settings={settings} change={change} />
+                    ) : (
+                        <SocialSettings settings={settings} options={favoriteGroupOptions} change={change} />
                     )}
                 </div>
             </div>
         </section>
+    );
+}
+
+function SocialSettings({ settings, options, change }: { settings: SettingsState; options: FavoriteGroupOption[]; change: (patch: Partial<SettingsState>) => Promise<void> }) {
+    return (
+        <SettingsGroup title="Favorites">
+            <SettingsRow label="Favorite Groups Filter" description="Select which VRChat friend groups count as favorites in Feed and social views. When no VRChat group is selected, every VRChat friend favorite is included. Local favorites are always included.">
+                <FavoriteGroupSelector selected={settings.localFavoriteFriendsGroups} options={options} change={(localFavoriteFriendsGroups) => void change({ localFavoriteFriendsGroups })} />
+            </SettingsRow>
+        </SettingsGroup>
+    );
+}
+
+function FavoriteGroupSelector({ selected, options, change }: { selected: string[]; options: FavoriteGroupOption[]; change: (selected: string[]) => void }) {
+    const detailsRef = useRef<HTMLDetailsElement>(null);
+    const selectedSet = new Set(selected);
+    const selectedLabels = options.filter((option) => selectedSet.has(option.key)).map((option) => option.label);
+
+    function toggle(key: string) {
+        change(selectedSet.has(key) ? selected.filter((value) => value !== key) : [...selected, key]);
+    }
+
+    return (
+        <details
+            ref={detailsRef}
+            className="group relative w-48"
+            onKeyDown={(event) => {
+                if (event.key !== "Escape" || !detailsRef.current?.open) return;
+                event.preventDefault();
+                detailsRef.current.open = false;
+                detailsRef.current.querySelector("summary")?.focus();
+            }}
+        >
+            <summary className="flex h-8 cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-xs outline-none marker:hidden focus-visible:ring-2 focus-visible:ring-ring">
+                <span className={`min-w-0 truncate ${selectedLabels.length ? "text-foreground" : "text-muted-foreground"}`}>{selectedLabels.length ? selectedLabels.join(", ") : "Select Groups"}</span>
+                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div role="menu" aria-label="Favorite Groups Filter" className="absolute top-9 right-0 z-30 max-h-72 w-64 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg">
+                {options.length ? (
+                    options.map((option, index) => (
+                        <div key={option.key}>
+                            {index > 0 && option.local && !options[index - 1]?.local ? <div className="my-1 border-t border-border" /> : null}
+                            <button type="button" role="menuitemcheckbox" aria-checked={selectedSet.has(option.key)} onClick={() => toggle(option.key)} className="flex min-h-8 w-full items-center gap-2 rounded px-2 text-left text-xs hover:bg-muted">
+                                <span className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-input">{selectedSet.has(option.key) ? <Check className="size-3" /> : null}</span>
+                                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                                {option.local ? <span className="text-[10px] text-muted-foreground">Local</span> : null}
+                            </button>
+                        </div>
+                    ))
+                ) : (
+                    <p className="px-2 py-3 text-xs text-muted-foreground">No favorite groups</p>
+                )}
+            </div>
+        </details>
     );
 }
 

@@ -67,6 +67,7 @@ export type AppSettingsDocument = {
     notificationFilters: string[];
     notificationTablePageSize: 20 | 50 | 100;
     favoriteSortByDate: boolean;
+    localFavoriteFriendsGroups: string[];
     favoriteCardScale: Record<"avatar" | "friend" | "world", number>;
     favoriteCardSpacing: Record<"avatar" | "friend" | "world", number>;
     moderationFilters: string[];

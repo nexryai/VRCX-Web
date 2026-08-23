@@ -8,6 +8,7 @@ describe("application settings boundary", () => {
             theme: "dark",
             navigationCollapsed: false,
             favoriteSortByDate: false,
+            localFavoriteFriendsGroups: [],
             activityTablePageSize: 20,
             avatarAutoCleanupDays: 0,
             mutualGraphLayoutIterations: 800,
@@ -19,6 +20,10 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ theme: "light", activeUserId: "usr_00000000-0000-0000-0000-000000000001" }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ theme: "light", encryptedCookies: "secret" }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ avatarAutoCleanupDays: 7 }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "friend:group_0"] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["world:group_0"] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: [`friend:${"a".repeat(81)}`] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
     });
 
     it("accepts only the versioned settings backup format", () => {

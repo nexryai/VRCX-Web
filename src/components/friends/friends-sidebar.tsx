@@ -7,8 +7,9 @@ import { Bell, ChevronDown, RefreshCw, Search, Settings, User } from "lucide-rea
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { VrchatImage } from "@/components/vrchat-image";
+import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { locationLabel } from "@/lib/friends";
-import type { VrchatFavorite, VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
@@ -31,22 +32,33 @@ export function FriendsSidebar() {
     useEffect(() => {
         const controller = new AbortController();
         async function loadSidebarData() {
-            const [settingsResponse, favoritesResponse, groupsResponse] = await Promise.all([
-                fetch("/api/settings", { cache: "no-store", signal: controller.signal }),
-                fetch("/api/favorites?section=records&offset=0", { cache: "no-store", signal: controller.signal }),
-                fetch("/api/groups", { cache: "no-store", signal: controller.signal }),
-            ]);
+            const [settingsResponse, favoriteIds, groupsResponse] = await Promise.all([fetch("/api/settings", { cache: "no-store", signal: controller.signal }), loadFavoriteFriendIds(controller.signal), fetch("/api/groups", { cache: "no-store", signal: controller.signal })]);
             const settings = (await settingsResponse.json()) as { sidebarGroupByInstance?: boolean; sidebarCollapsedSections?: SectionKey[]; sidebarTab?: SidebarTab };
-            const favorites = (await favoritesResponse.json()) as { favorites?: VrchatFavorite[] };
             const groupPayload = (await groupsResponse.json()) as { groups?: VrchatGroup[] };
             setGroupByInstance(settings.sidebarGroupByInstance === true);
             setCollapsed(new Set(settings.sidebarCollapsedSections ?? []));
             setTab(settings.sidebarTab ?? "friends");
-            setFavoriteIds(new Set((favorites.favorites ?? []).filter((favorite) => favorite.type === "friend").map((favorite) => favorite.favoriteId)));
+            setFavoriteIds(favoriteIds);
             setGroups(groupPayload.groups ?? []);
         }
         void loadSidebarData().catch(() => undefined);
         return () => controller.abort();
+    }, []);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        function refreshFavoriteGroups(event: Event) {
+            const detail = (event as CustomEvent<Record<string, unknown>>).detail;
+            if (!("localFavoriteFriendsGroups" in detail)) return;
+            void loadFavoriteFriendIds(controller.signal)
+                .then(setFavoriteIds)
+                .catch(() => undefined);
+        }
+        window.addEventListener("vrcx:settings-saved", refreshFavoriteGroups);
+        return () => {
+            controller.abort();
+            window.removeEventListener("vrcx:settings-saved", refreshFavoriteGroups);
+        };
     }, []);
 
     useEffect(() => {

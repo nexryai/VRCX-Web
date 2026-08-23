@@ -7,6 +7,7 @@ import { ArrowDown, ArrowRight, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRi
 import { useFriends } from "@/components/friends/friends-provider";
 import { VrchatImage } from "@/components/vrchat-image";
 import type { ActivityType, FriendActivity } from "@/lib/activity-log";
+import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 
 type ActivityMode = "feed" | "friend-log";
 type FeedType = Extract<ActivityType, "GPS" | "Online" | "Offline" | "Status" | "Avatar" | "Bio">;
@@ -87,9 +88,7 @@ export function ActivityView({ mode }: { mode: ActivityMode }) {
             fetch("/api/settings", { cache: "no-store" })
                 .then((response) => response.json())
                 .then((payload: Partial<ActivitySettings>) => setSettings({ ...defaultSettings, ...payload })),
-            fetch("/api/favorites?section=records", { cache: "no-store" })
-                .then((response) => response.json())
-                .then((payload: { favorites?: Array<{ favoriteId?: string; type?: string }> }) => setFavoriteIds(new Set((payload.favorites || []).filter((favorite) => favorite.type === "friend" && favorite.favoriteId).map((favorite) => favorite.favoriteId as string)))),
+            loadFavoriteFriendIds().then(setFavoriteIds),
         ]);
         const interval = window.setInterval(() => void reload(), 30_000);
         return () => window.clearInterval(interval);

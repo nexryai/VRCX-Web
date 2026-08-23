@@ -434,6 +434,13 @@ const migrations: Migration[] = [
             await Promise.all([c.worldPersistSnapshots.createIndex({ ownerId: 1, worldId: 1 }, { unique: true, name: "owner_world_unique" }), c.worldPersistSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 40,
+        name: "add-social-favorite-group-filter",
+        async apply(c) {
+            await c.appSettings.updateMany({ localFavoriteFriendsGroups: { $exists: false } }, { $set: { localFavoriteFriendsGroups: [], updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

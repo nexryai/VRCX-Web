@@ -91,6 +91,8 @@ const captures = [
     { name: "settings", path: "/settings", readyText: "Application data" },
     { name: "settings-avatar-purge", path: "/settings", readyText: "This action cannot be undone.", avatarPurgeDialog: true },
     { name: "settings-interface", path: "/settings", readyText: "Sort favorites by", clickText: "Interface" },
+    { name: "settings-social", path: "/settings", readyText: "Favorite Groups Filter", settingsTab: "Social" },
+    { name: "settings-social-groups", path: "/settings", readyText: "Event Crew", settingsTab: "Social", settingsFavoriteGroups: true },
 ];
 
 const searchFixture = [
@@ -804,6 +806,18 @@ for (const width of widths) {
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
+        }
+        if (capture.settingsTab) {
+            await page.getByRole("tab", { name: capture.settingsTab, exact: true }).click();
+        }
+        if (capture.settingsFavoriteGroups) {
+            const trigger = page.getByText("Select Groups", { exact: true });
+            await trigger.click();
+            await page.getByRole("menu", { name: "Favorite Groups Filter", exact: true }).waitFor();
+            await page.keyboard.press("Escape");
+            if (await page.getByRole("menu", { name: "Favorite Groups Filter", exact: true }).isVisible()) throw new Error("Favorite group selector did not close with Escape.");
+            if (!(await trigger.evaluate((element) => document.activeElement === element.closest("summary")))) throw new Error("Favorite group selector did not restore focus after Escape.");
+            await trigger.click();
         }
         if (capture.previousInstances) {
             const trigger = page.getByRole("button", { name: "Previous Instances", exact: true });

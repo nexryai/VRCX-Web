@@ -2,6 +2,14 @@ import { z } from "zod";
 
 import { userIdSchema } from "@/lib/vrchat/ids";
 
+const remoteFavoriteFriendGroupKeySchema = z
+    .string()
+    .max(80)
+    .regex(/^friend:[a-z0-9_-]+$/i);
+const localFavoriteFriendGroupKeySchema = z.string().regex(/^local:lfg_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
+export const favoriteFriendGroupKeySchema = z.union([remoteFavoriteFriendGroupKeySchema, localFavoriteFriendGroupKeySchema]);
+
 export const appSettingsUpdateSchema = z
     .object({
         theme: z.enum(["dark", "light"]).optional(),
@@ -35,6 +43,11 @@ export const appSettingsUpdateSchema = z
         notificationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
         notificationTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
         favoriteSortByDate: z.boolean().optional(),
+        localFavoriteFriendsGroups: z
+            .array(favoriteFriendGroupKeySchema)
+            .max(200)
+            .refine((values) => new Set(values).size === values.length)
+            .optional(),
         favoriteCardScale: z.object({ avatar: z.number().min(0.6).max(1), friend: z.number().min(0.6).max(1), world: z.number().min(0.6).max(1) }).optional(),
         favoriteCardSpacing: z.object({ avatar: z.number().min(0.5).max(1.5), friend: z.number().min(0.5).max(1.5), world: z.number().min(0.5).max(1.5) }).optional(),
         moderationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
@@ -84,6 +97,7 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         notificationFilters: settings?.notificationFilters ?? [],
         notificationTablePageSize: settings?.notificationTablePageSize ?? 20,
         favoriteSortByDate: settings?.favoriteSortByDate ?? false,
+        localFavoriteFriendsGroups: settings?.localFavoriteFriendsGroups ?? [],
         favoriteCardScale: settings?.favoriteCardScale ?? { avatar: 1, friend: 1, world: 1 },
         favoriteCardSpacing: settings?.favoriteCardSpacing ?? { avatar: 1, friend: 1, world: 1 },
         moderationFilters: settings?.moderationFilters ?? [],
