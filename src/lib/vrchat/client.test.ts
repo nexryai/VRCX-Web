@@ -41,6 +41,11 @@ describe("VRChat response decoding", () => {
         expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/impostor/delete/all`)).toBe(false);
     });
 
+    it("allowlists only the fixed World Dialog publication child", () => {
+        expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}/publish`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}/publish/other`)).toBe(false);
+    });
+
     it("forwards multipart gallery uploads without overriding the boundary header", async () => {
         const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
             expect(init?.body).toBeInstanceOf(FormData);

@@ -22,6 +22,11 @@ export async function getCachedWorld(ownerId: string, worldId: string) {
     return (await collections(await getMongoDatabase()).worlds.findOne({ _id: `${ownerId}:${worldId}` }))?.world || null;
 }
 
+export async function removeCachedWorld(ownerId: string, worldId: string) {
+    await ensureMongoSchema();
+    await collections(await getMongoDatabase()).worlds.deleteOne({ _id: `${ownerId}:${worldId}` });
+}
+
 export async function upsertCachedGroups(ownerId: string, groups: VrchatGroup[], source: GroupDocument["source"], observedAt = new Date()) {
     if (!groups.length) return;
     await ensureMongoSchema();

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, Clipboard, Ellipsis, ExternalLink, History, ImageIcon, Loader2, Monitor, Pencil, Plus, RefreshCw, Smartphone, Trash2, User, X } from "lucide-react";
+import { Apple, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, Monitor, Pencil, Plus, RefreshCw, Smartphone, Trash2, User, X } from "lucide-react";
 
 import { AvatarImageCropDialog } from "@/components/avatars/avatar-image-crop-dialog";
 import { useCurrentUser } from "@/components/current-user-provider";
@@ -12,6 +12,7 @@ import { MemoField } from "@/components/memo-field";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import type { VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import type { WorldAction } from "@/lib/vrchat/world-actions";
 import { normalizeYoutubePreview, type WorldTagSettings, worldTagSettingsFromWorld } from "@/lib/vrchat/world-metadata";
 
 type WorldTab = "Info" | "Instances" | "JSON";
@@ -39,6 +40,8 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     const [cropFile, setCropFile] = useState<File | null>(null);
     const [imageUploading, setImageUploading] = useState(false);
     const [cropError, setCropError] = useState("");
+    const [confirmAction, setConfirmAction] = useState<WorldAction | null>(null);
+    const [actionSaving, setActionSaving] = useState(false);
     const [status, setStatus] = useState("");
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
@@ -53,6 +56,8 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     const nextDomainId = useRef(1);
     const worldImageInput = useRef<HTMLInputElement>(null);
     const previousCropFile = useRef<File | null>(null);
+    const confirmationCancel = useRef<HTMLButtonElement>(null);
+    const previousConfirmAction = useRef<WorldAction | null>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -82,6 +87,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         setManageDialog(null);
         setCropFile(null);
         setCropError("");
+        setConfirmAction(null);
         setStatus("");
         void load();
         closeButton.current?.focus();
@@ -92,6 +98,10 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
             if (event.key !== "Escape") return;
             if (cropFile) {
                 if (!imageUploading) setCropFile(null);
+                return;
+            }
+            if (confirmAction) {
+                if (!actionSaving) setConfirmAction(null);
                 return;
             }
             if (editField) {
@@ -110,7 +120,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [cropFile, editField, editSaving, imageUploading, manageDialog, manageSaving, menuOpen, onClose]);
+    }, [actionSaving, confirmAction, cropFile, editField, editSaving, imageUploading, manageDialog, manageSaving, menuOpen, onClose]);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -137,6 +147,12 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         if (!cropFile && previousCropFile.current) manageButton.current?.focus();
         previousCropFile.current = cropFile;
     }, [cropFile]);
+
+    useEffect(() => {
+        if (confirmAction) confirmationCancel.current?.focus();
+        else if (previousConfirmAction.current) manageButton.current?.focus();
+        previousConfirmAction.current = confirmAction;
+    }, [confirmAction]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
@@ -310,6 +326,30 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         }
     }
 
+    async function runWorldAction() {
+        if (!world || !confirmAction) return;
+        setActionSaving(true);
+        setError("");
+        try {
+            const action = confirmAction;
+            const response = await fetch(`/api/worlds/${encodeURIComponent(world.id)}/actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
+            const payload = (await response.json()) as { deleted?: boolean; world?: VrchatWorld; error?: string };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || (action === "delete" ? !payload.deleted : !payload.world)) throw new Error(payload.error || "The world action could not be completed.");
+            if (action === "delete") {
+                onClose();
+                return;
+            }
+            setWorld(payload.world || world);
+            setStatus(action === "publish" ? "World has been published" : "World has been unpublished");
+            setConfirmAction(null);
+        } catch (actionError) {
+            setError(actionError instanceof Error ? actionError.message : "The world action could not be completed.");
+        } finally {
+            setActionSaving(false);
+        }
+    }
+
     const worldFriends = useMemo(() => friends.filter((friend) => friend.location?.startsWith(`${worldId}:`)), [friends, worldId]);
     return (
         <div className="fixed inset-0 z-[82] flex items-end justify-center sm:items-center sm:p-4" role="presentation">
@@ -397,6 +437,35 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                                                     action={() => {
                                                         setMenuOpen(false);
                                                         worldImageInput.current?.click();
+                                                    }}
+                                                />
+                                                <div className="my-1 h-px bg-border" role="separator" />
+                                                {(world.tags || []).some((tag) => tag === "system_approved" || tag === "system_labs") ? (
+                                                    <WorldEditMenuItem
+                                                        label="Unpublish"
+                                                        icon={<Eye className="size-4" />}
+                                                        action={() => {
+                                                            setMenuOpen(false);
+                                                            setConfirmAction("unpublish");
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <WorldEditMenuItem
+                                                        label="Publish To Labs. You can only publish once per week (7 days)."
+                                                        icon={<Eye className="size-4" />}
+                                                        action={() => {
+                                                            setMenuOpen(false);
+                                                            setConfirmAction("publish");
+                                                        }}
+                                                    />
+                                                )}
+                                                <WorldEditMenuItem
+                                                    label="Delete"
+                                                    destructive
+                                                    icon={<Trash2 className="size-4" />}
+                                                    action={() => {
+                                                        setMenuOpen(false);
+                                                        setConfirmAction("delete");
                                                     }}
                                                 />
                                             </div>
@@ -528,6 +597,27 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                             </div>
                         ) : null}
                         {cropFile ? <AvatarImageCropDialog title="Change World Image" file={cropFile} uploading={imageUploading} error={cropError} cancel={() => setCropFile(null)} confirm={(blob) => void uploadWorldImage(blob)} /> : null}
+                        {confirmAction ? (
+                            <div className="absolute inset-0 z-[76] flex items-center justify-center bg-black/70 p-4">
+                                <div role="alertdialog" aria-modal="true" aria-labelledby="world-confirm-title" aria-describedby="world-confirm-description" onKeyDown={trapConfirmationFocus} className="w-full max-w-sm rounded-xl border border-border bg-popover p-4 shadow-2xl">
+                                    <h3 id="world-confirm-title" className="text-sm font-semibold">
+                                        Confirm
+                                    </h3>
+                                    <p id="world-confirm-description" className="mt-3 text-xs text-muted-foreground">
+                                        Continue {worldActionLabel(confirmAction)}?
+                                    </p>
+                                    {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+                                    <div className="mt-5 flex justify-end gap-2">
+                                        <button ref={confirmationCancel} type="button" onClick={() => setConfirmAction(null)} disabled={actionSaving} className="h-9 rounded-md bg-secondary px-4 text-xs disabled:opacity-40">
+                                            Cancel
+                                        </button>
+                                        <button type="button" onClick={() => void runWorldAction()} disabled={actionSaving} className={`inline-flex h-9 items-center gap-1 rounded-md px-4 text-xs text-white disabled:opacity-40 ${confirmAction === "delete" ? "bg-destructive" : "bg-primary"}`}>
+                                            {actionSaving ? <Loader2 className="size-4 animate-spin" /> : null} Confirm
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
                     </>
                 ) : null}
             </section>
@@ -660,12 +750,29 @@ function WorldDomainsEditor({ domains, initialFocus, setDomains }: { domains: Wo
     );
 }
 
-function WorldEditMenuItem({ label, action, icon }: { label: string; action: () => void; icon?: React.ReactNode }) {
+function WorldEditMenuItem({ label, action, icon, destructive = false }: { label: string; action: () => void; icon?: React.ReactNode; destructive?: boolean }) {
     return (
-        <button type="button" role="menuitem" onClick={action} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
+        <button type="button" role="menuitem" onClick={action} className={`flex min-h-8 w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-muted ${destructive ? "text-destructive" : ""}`}>
             {icon || <Pencil className="size-4" />} {label}
         </button>
     );
+}
+
+function trapConfirmationFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab") return;
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
+    const first = buttons[0];
+    const last = buttons.at(-1);
+    if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+    }
+}
+
+function worldActionLabel(action: WorldAction) {
+    if (action === "publish") return "Publish To Labs. You can only publish once per week (7 days).";
+    if (action === "unpublish") return "Unpublish";
+    return "Delete";
 }
 
 function worldEditTitle(field: WorldEditField) {

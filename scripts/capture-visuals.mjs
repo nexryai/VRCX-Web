@@ -36,6 +36,9 @@ const captures = [
     { name: "world-dialog-tags", path: "/favorites/worlds", readyText: "Set World Tags", favoriteKind: "world", worldDialog: true, worldOwner: true, worldManage: "tags" },
     { name: "world-dialog-domains", path: "/favorites/worlds", readyText: "Allowed Video Player Domains", favoriteKind: "world", worldDialog: true, worldOwner: true, worldManage: "domains" },
     { name: "world-dialog-image", path: "/favorites/worlds", readyText: "Change World Image", favoriteKind: "world", worldDialog: true, worldOwner: true, worldImage: true },
+    { name: "world-dialog-publish", path: "/favorites/worlds", readyText: "Continue Publish To Labs. You can only publish once per week (7 days).?", favoriteKind: "world", worldDialog: true, worldOwner: true, worldConfirm: "publish" },
+    { name: "world-dialog-unpublish", path: "/favorites/worlds", readyText: "Continue Unpublish?", favoriteKind: "world", worldDialog: true, worldOwner: true, worldPublished: true, worldConfirm: "unpublish" },
+    { name: "world-dialog-delete", path: "/favorites/worlds", readyText: "Continue Delete?", favoriteKind: "world", worldDialog: true, worldOwner: true, worldConfirm: "delete" },
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
@@ -161,7 +164,7 @@ for (const width of widths) {
                             previewYoutubeId: "dQw4w9WgXcQ",
                             urlList: ["youtube.com", "media.example.com"],
                             disabledPropAbilities: ["player_movement"],
-                            tags: [...(payload.world.tags || []), "author_tag_featured", "content_horror", "feature_stickers_disabled"],
+                            tags: [...(payload.world.tags || []), ...(capture.worldPublished ? ["system_labs"] : []), "author_tag_featured", "content_horror", "feature_stickers_disabled"],
                         },
                     }),
                 });
@@ -387,7 +390,7 @@ for (const width of widths) {
         }
         if (capture.worldDialog) {
             await page.getByText("Favorite Moonlit World", { exact: true }).first().click();
-            if (capture.worldMenu || capture.worldEdit || capture.worldManage || capture.worldImage) await page.getByRole("button", { name: "Manage world", exact: true }).click();
+            if (capture.worldMenu || capture.worldEdit || capture.worldManage || capture.worldImage || capture.worldConfirm) await page.getByRole("button", { name: "Manage world", exact: true }).click();
             if (capture.worldEdit) {
                 const labels = {
                     capacity: "Change Capacity",
@@ -450,6 +453,26 @@ for (const width of widths) {
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("World image cropper did not restore focus.");
                 await manage.click();
                 await openCropper();
+            }
+            if (capture.worldConfirm) {
+                const labels = {
+                    delete: "Delete",
+                    publish: "Publish To Labs. You can only publish once per week (7 days).",
+                    unpublish: "Unpublish",
+                };
+                const label = labels[capture.worldConfirm];
+                await page.getByRole("menuitem", { name: label, exact: true }).click();
+                const confirmation = page.getByRole("alertdialog", { name: "Confirm", exact: true });
+                await confirmation.waitFor();
+                if (!(await confirmation.getByRole("button", { name: "Cancel", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("World action confirmation did not focus Cancel.");
+                await page.keyboard.press("Shift+Tab");
+                if (!(await confirmation.getByRole("button", { name: "Confirm", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("World action confirmation did not trap focus.");
+                await page.keyboard.press("Escape");
+                await confirmation.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage world", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("World action confirmation did not restore focus.");
+                await manage.click();
+                await page.getByRole("menuitem", { name: label, exact: true }).click();
             }
         }
         if (capture.groupDialog) {

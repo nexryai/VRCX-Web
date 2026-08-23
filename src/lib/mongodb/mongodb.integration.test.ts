@@ -295,6 +295,18 @@ describe("MongoDB application repositories", () => {
         expect(await listLocalFavorites(ownerId, group.groupId)).toMatchObject({ items: [expect.objectContaining({ objectId: world.id, item: world })] });
     });
 
+    test("removes only the active owner's deleted world projection", async () => {
+        const { getCachedWorld, removeCachedWorld, upsertCachedWorlds } = await import("./entity-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000081";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000082";
+        const world = { id: "wrld_00000000-0000-0000-0000-000000000083", name: "Deleted World" };
+        await upsertCachedWorlds(ownerId, [world], "lookup");
+        await upsertCachedWorlds(otherOwnerId, [world], "lookup");
+        await removeCachedWorld(ownerId, world.id);
+        expect(await getCachedWorld(ownerId, world.id)).toBeNull();
+        expect(await getCachedWorld(otherOwnerId, world.id)).toEqual(world);
+    });
+
     test("replaces owner-scoped avatar tags in MongoDB", async () => {
         const { listAvatarTags, replaceAvatarTags } = await import("./avatar-tags-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000045";
