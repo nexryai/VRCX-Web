@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -39,6 +39,8 @@ describe("MongoDB application repositories", () => {
             myAvatarsTablePageSize: 20,
             favoriteSortByDate: false,
             localFavoriteFriendsGroups: [],
+            recentActionCooldownEnabled: false,
+            recentActionCooldownMinutes: 60,
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
             favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
             moderationFilters: [],
@@ -68,6 +70,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
+        expect(await database.collection("recent_actions").indexExists(["owner_user_action_unique", "expires_at_ttl"])).toBe(true);
         expect(await databaseCollections.monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
     });
@@ -320,6 +323,22 @@ describe("MongoDB application repositories", () => {
         await appSettings.updateOne({ _id: "singleton" }, { $set: { localFavoriteFriendsGroups: [`local:${localGroup.groupId}`] } });
         expect(new Set(await listSelectedFavoriteFriendIds(ownerId))).toEqual(new Set([firstId, secondId, localId]));
         await appSettings.updateOne({ _id: "singleton" }, { $set: { localFavoriteFriendsGroups: [] } });
+    });
+
+    test("stores recent social actions per owner with bounded retention", async () => {
+        const { getRecentActionAt, recordRecentAction } = await import("./recent-actions-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000181";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000182";
+        const userId = "usr_00000000-0000-0000-0000-000000000183";
+        const first = new Date("2026-08-23T12:00:00.000Z");
+        const second = new Date("2026-08-23T12:05:00.000Z");
+        await recordRecentAction(ownerId, userId, "friend-request", first);
+        await recordRecentAction(otherOwnerId, userId, "friend-request", second);
+        await recordRecentAction(ownerId, userId, "friend-request", second);
+        expect(await getRecentActionAt(ownerId, userId, "friend-request")).toEqual(second);
+        expect(await getRecentActionAt(otherOwnerId, userId, "friend-request")).toEqual(second);
+        const document = await (await import("./collections")).collections(await (await import("./client")).getMongoDatabase()).recentActions.findOne({ ownerId, userId });
+        expect(document?.expiresAt).toEqual(new Date(second.getTime() + 24 * 60 * 60 * 1_000));
     });
 
     test("removes only the active owner's deleted world projection", async () => {

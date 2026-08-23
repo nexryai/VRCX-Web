@@ -441,6 +441,19 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ localFavoriteFriendsGroups: { $exists: false } }, { $set: { localFavoriteFriendsGroups: [], updatedAt: new Date() } });
         },
     },
+    {
+        version: 41,
+        name: "add-recent-social-actions",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ recentActionCooldownEnabled: { $exists: false } }, { $set: { recentActionCooldownEnabled: false, updatedAt } }),
+                c.appSettings.updateMany({ recentActionCooldownMinutes: { $exists: false } }, { $set: { recentActionCooldownMinutes: 60, updatedAt } }),
+                c.recentActions.createIndex({ ownerId: 1, userId: 1, action: 1 }, { unique: true, name: "owner_user_action_unique" }),
+                c.recentActions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "expires_at_ttl" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

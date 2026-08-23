@@ -17,6 +17,7 @@ const captures = [
     { name: "friend-list-note-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Note", query: "world-building meetup" } },
     { name: "friend-list-memo-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Memo", query: "browser-port test crew" } },
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
+    { name: "user-dialog-recent-action", path: "/search", readyText: "Add Friend", searchQuery: "sample creator", recentActionUser: true },
     { name: "previous-instances-user", path: "/social/friend-list", readyText: "Remote user", clickText: "Aoi Sample", previousInstances: "user" },
     { name: "user-favorite-dialog", path: "/social/friend-list", readyText: "VRChat Favorites", clickText: "Aoi Sample", favoriteKind: "friend", favoriteActionLabel: "Manage favorites for Aoi Sample" },
     { name: "notifications", path: "/notification", readyText: "Group announcement, Community meetup starts in one hour." },
@@ -140,6 +141,9 @@ for (const width of widths) {
         if (capture.searchQuery) {
             await page.route("**/api/search/config", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ worldRows: [{ index: 0, name: "Featured", sortHeading: "featured" }] }) }));
             await page.route("**/api/search?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ type: "users", results: searchFixture, offset: 0, pageSize: 10 }) }));
+        }
+        if (capture.recentActionUser) {
+            await page.route("**/api/users/usr_00000000-0000-0000-0000-000000000031", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user: searchFixture[0], recentFriendRequestAt: new Date().toISOString() }) }));
         }
         if (capture.favoriteKind) {
             await page.route("**/api/favorites?section=limits", (route) =>
@@ -808,6 +812,7 @@ for (const width of widths) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
         }
         if (capture.settingsTab) {
+            await page.getByText("Application data", { exact: true }).waitFor({ state: "attached" });
             await page.getByRole("tab", { name: capture.settingsTab, exact: true }).click();
         }
         if (capture.settingsFavoriteGroups) {
@@ -845,6 +850,10 @@ for (const width of widths) {
         if (capture.searchQuery) {
             await page.getByRole("searchbox", { name: "Search users" }).fill(capture.searchQuery);
             await page.getByRole("searchbox", { name: "Search users" }).press("Enter");
+        }
+        if (capture.recentActionUser) {
+            await page.getByText("Search Result Creator", { exact: true }).click();
+            await page.getByRole("dialog", { name: "Search Result Creator", exact: true }).waitFor();
         }
         await page.getByText(capture.readyText, { exact: true }).first().waitFor({ state: "attached" });
         await page.waitForTimeout(250);

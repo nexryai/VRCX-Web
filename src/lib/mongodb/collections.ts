@@ -68,6 +68,8 @@ export type AppSettingsDocument = {
     notificationTablePageSize: 20 | 50 | 100;
     favoriteSortByDate: boolean;
     localFavoriteFriendsGroups: string[];
+    recentActionCooldownEnabled: boolean;
+    recentActionCooldownMinutes: number;
     favoriteCardScale: Record<"avatar" | "friend" | "world", number>;
     favoriteCardSpacing: Record<"avatar" | "friend" | "world", number>;
     moderationFilters: string[];
@@ -434,6 +436,16 @@ export type LocalFavoriteDocument = {
     updatedAt: Date;
 };
 
+export type RecentActionDocument = {
+    _id: string;
+    ownerId: string;
+    userId: string;
+    action: "friend-request";
+    occurredAt: Date;
+    expiresAt: Date;
+    updatedAt: Date;
+};
+
 export type ModerationDocument = {
     _id: string;
     ownerId: string;
@@ -494,6 +506,7 @@ export type Collections = {
     favoriteGroups: Collection<FavoriteGroupDocument>;
     localFavoriteGroups: Collection<LocalFavoriteGroupDocument>;
     localFavorites: Collection<LocalFavoriteDocument>;
+    recentActions: Collection<RecentActionDocument>;
     moderations: Collection<ModerationDocument>;
     avatarModerations: Collection<AvatarModerationDocument>;
     schemaMigrations: Collection<SchemaMigrationDocument>;
@@ -533,6 +546,7 @@ export function collections(db: Db): Collections {
         favoriteGroups: db.collection<FavoriteGroupDocument>("favorite_groups"),
         localFavoriteGroups: db.collection<LocalFavoriteGroupDocument>("local_favorite_groups"),
         localFavorites: db.collection<LocalFavoriteDocument>("local_favorites"),
+        recentActions: db.collection<RecentActionDocument>("recent_actions"),
         moderations: db.collection<ModerationDocument>("moderations"),
         avatarModerations: db.collection<AvatarModerationDocument>("avatar_moderations"),
         schemaMigrations: db.collection<SchemaMigrationDocument>("schema_migrations"),

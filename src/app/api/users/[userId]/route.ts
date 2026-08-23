@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { collections } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
+import { getRecentActionAt } from "@/lib/mongodb/recent-actions-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { getCachedUser, upsertCachedUser } from "@/lib/mongodb/user-repository";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
@@ -29,9 +30,9 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/user
     if (!query.data.refresh) {
         const ownerId = await requireActiveUserId();
         await ensureMongoSchema();
-        const [cached, snapshot] = await Promise.all([getCachedUser(ownerId, userId.data), collections(await getMongoDatabase()).friendSnapshots.findOne({ ownerId, friendId: userId.data })]);
+        const [cached, snapshot, recentFriendRequestAt] = await Promise.all([getCachedUser(ownerId, userId.data), collections(await getMongoDatabase()).friendSnapshots.findOne({ ownerId, friendId: userId.data }), getRecentActionAt(ownerId, userId.data, "friend-request")]);
         if (cached || snapshot) {
-            const response = NextResponse.json({ user: { ...cached, ...snapshot?.user } });
+            const response = NextResponse.json({ user: { ...cached, ...snapshot?.user }, recentFriendRequestAt: recentFriendRequestAt?.toISOString() });
             response.headers.set("Cache-Control", "private, no-store");
             return response;
         }
@@ -43,8 +44,10 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/user
         expectedAuthCookie = cookies.auth;
         const upstream = await requestVrchat<unknown>(`users/${userId.data}`, { cookies });
         const user = vrchatUserSchema.parse(upstream.data);
-        await upsertCachedUser(await requireActiveUserId(), user, "lookup");
-        const response = NextResponse.json({ user });
+        const ownerId = await requireActiveUserId();
+        await upsertCachedUser(ownerId, user, "lookup");
+        const recentFriendRequestAt = await getRecentActionAt(ownerId, userId.data, "friend-request");
+        const response = NextResponse.json({ user, recentFriendRequestAt: recentFriendRequestAt?.toISOString() });
         await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
         response.headers.set("Cache-Control", "private, no-store");
         return response;

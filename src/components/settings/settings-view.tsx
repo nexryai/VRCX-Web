@@ -10,7 +10,23 @@ import type { VrchatFavoriteGroup } from "@/lib/vrchat/types";
 
 type Tab = "Interface" | "Social" | "System";
 type PageSizeKey = "activityTablePageSize" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "notificationTablePageSize";
-type SettingsState = Required<Pick<AppSettingsPayload, "activityTablePageSize" | "avatarAutoCleanupDays" | "favoriteSortByDate" | "friendListTablePageSize" | "localFavoriteFriendsGroups" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "navigationCollapsed" | "notificationTablePageSize" | "theme">>;
+type SettingsState = Required<
+    Pick<
+        AppSettingsPayload,
+        | "activityTablePageSize"
+        | "avatarAutoCleanupDays"
+        | "favoriteSortByDate"
+        | "friendListTablePageSize"
+        | "localFavoriteFriendsGroups"
+        | "moderationTablePageSize"
+        | "myAvatarsTablePageSize"
+        | "navigationCollapsed"
+        | "notificationTablePageSize"
+        | "recentActionCooldownEnabled"
+        | "recentActionCooldownMinutes"
+        | "theme"
+    >
+>;
 type AvatarPurgeDays = 180 | 365 | 730 | "all";
 type LegacyImportState = { checked: boolean; completed: boolean; importing: boolean; payload: LegacyBrowserSettingsImport | null };
 type FavoriteGroupOption = { key: string; label: string; local: boolean };
@@ -20,6 +36,8 @@ const defaults: SettingsState = {
     navigationCollapsed: false,
     favoriteSortByDate: false,
     localFavoriteFriendsGroups: [],
+    recentActionCooldownEnabled: false,
+    recentActionCooldownMinutes: 60,
     activityTablePageSize: 20,
     friendListTablePageSize: 20,
     notificationTablePageSize: 20,
@@ -226,11 +244,35 @@ export function SettingsView({ version }: { version: string }) {
 
 function SocialSettings({ settings, options, change }: { settings: SettingsState; options: FavoriteGroupOption[]; change: (patch: Partial<SettingsState>) => Promise<void> }) {
     return (
-        <SettingsGroup title="Favorites">
-            <SettingsRow label="Favorite Groups Filter" description="Select which VRChat friend groups count as favorites in Feed and social views. When no VRChat group is selected, every VRChat friend favorite is included. Local favorites are always included.">
-                <FavoriteGroupSelector selected={settings.localFavoriteFriendsGroups} options={options} change={(localFavoriteFriendsGroups) => void change({ localFavoriteFriendsGroups })} />
-            </SettingsRow>
-        </SettingsGroup>
+        <>
+            <SettingsGroup title="Interaction">
+                <SettingsRow label="Recent Action Icon" description="Show a clock icon when a friend request was sent recently. Invite and request-invite actions remain excluded because they require the local VRChat client.">
+                    <Switch checked={settings.recentActionCooldownEnabled} label="Recent Action Icon" change={(recentActionCooldownEnabled) => void change({ recentActionCooldownEnabled })} />
+                </SettingsRow>
+                {settings.recentActionCooldownEnabled ? (
+                    <SettingsRow label="Cooldown (Minutes)">
+                        <input
+                            type="number"
+                            min={1}
+                            max={1440}
+                            step={1}
+                            value={settings.recentActionCooldownMinutes}
+                            onChange={(event) => {
+                                const value = Number(event.target.value);
+                                if (Number.isInteger(value) && value >= 1 && value <= 1440) void change({ recentActionCooldownMinutes: value });
+                            }}
+                            className="h-8 w-32 rounded-md border border-input bg-background px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label="Cooldown (Minutes)"
+                        />
+                    </SettingsRow>
+                ) : null}
+            </SettingsGroup>
+            <SettingsGroup title="Favorites">
+                <SettingsRow label="Favorite Groups Filter" description="Select which VRChat friend groups count as favorites in Feed and social views. When no VRChat group is selected, every VRChat friend favorite is included. Local favorites are always included.">
+                    <FavoriteGroupSelector selected={settings.localFavoriteFriendsGroups} options={options} change={(localFavoriteFriendsGroups) => void change({ localFavoriteFriendsGroups })} />
+                </SettingsRow>
+            </SettingsGroup>
+        </>
     );
 }
 

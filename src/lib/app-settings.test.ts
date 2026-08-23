@@ -9,6 +9,8 @@ describe("application settings boundary", () => {
             navigationCollapsed: false,
             favoriteSortByDate: false,
             localFavoriteFriendsGroups: [],
+            recentActionCooldownEnabled: false,
+            recentActionCooldownMinutes: 60,
             activityTablePageSize: 20,
             avatarAutoCleanupDays: 0,
             mutualGraphLayoutIterations: 800,
@@ -23,6 +25,8 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "friend:group_0"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["world:group_0"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: [`friend:${"a".repeat(81)}`] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ recentActionCooldownMinutes: 0 }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ recentActionCooldownMinutes: 1_441 }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
     });
 

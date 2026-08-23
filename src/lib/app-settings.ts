@@ -48,6 +48,8 @@ export const appSettingsUpdateSchema = z
             .max(200)
             .refine((values) => new Set(values).size === values.length)
             .optional(),
+        recentActionCooldownEnabled: z.boolean().optional(),
+        recentActionCooldownMinutes: z.number().int().min(1).max(1_440).optional(),
         favoriteCardScale: z.object({ avatar: z.number().min(0.6).max(1), friend: z.number().min(0.6).max(1), world: z.number().min(0.6).max(1) }).optional(),
         favoriteCardSpacing: z.object({ avatar: z.number().min(0.5).max(1.5), friend: z.number().min(0.5).max(1.5), world: z.number().min(0.5).max(1.5) }).optional(),
         moderationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
@@ -98,6 +100,8 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         notificationTablePageSize: settings?.notificationTablePageSize ?? 20,
         favoriteSortByDate: settings?.favoriteSortByDate ?? false,
         localFavoriteFriendsGroups: settings?.localFavoriteFriendsGroups ?? [],
+        recentActionCooldownEnabled: settings?.recentActionCooldownEnabled ?? false,
+        recentActionCooldownMinutes: settings?.recentActionCooldownMinutes ?? 60,
         favoriteCardScale: settings?.favoriteCardScale ?? { avatar: 1, friend: 1, world: 1 },
         favoriteCardSpacing: settings?.favoriteCardSpacing ?? { avatar: 1, friend: 1, world: 1 },
         moderationFilters: settings?.moderationFilters ?? [],

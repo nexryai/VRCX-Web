@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { z } from "zod";
 
+import { recordRecentAction } from "@/lib/mongodb/recent-actions-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
 import { patchCachedUser } from "@/lib/mongodb/user-repository";
 import { isMutationOriginAllowed } from "@/lib/request-security";
@@ -18,11 +19,36 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/fri
     try {
         const cookies = await requireVrchatCookies();
         expectedAuthCookie = cookies.auth;
+        const ownerId = await requireActiveUserId();
         const upstream = await requestVrchat<unknown>(`user/${userId.data}/friendRequest`, { method: "POST", cookies });
         const payload = z.object({ success: z.boolean().optional() }).passthrough().parse(upstream.data);
-        await patchCachedUser(await requireActiveUserId(), userId.data, payload.success ? { isFriend: true, friendRequestStatus: "" } : { friendRequestStatus: "outgoing" });
-        const response = NextResponse.json({ success: payload.success === true, outgoing: payload.success !== true });
-        await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
+        let reconciliationRequired = false;
+        let recentFriendRequestAt: Date | null = null;
+        try {
+            await patchCachedUser(ownerId, userId.data, payload.success ? { isFriend: true, friendRequestStatus: "" } : { friendRequestStatus: "outgoing" });
+        } catch {
+            // The upstream request is non-idempotent. Report its success and
+            // repair MongoDB through normal reconciliation instead of asking
+            // the browser to repeat a friend request VRChat already accepted.
+            reconciliationRequired = true;
+        }
+        if (payload.success !== true) {
+            recentFriendRequestAt = new Date();
+            try {
+                await recordRecentAction(ownerId, userId.data, "friend-request", recentFriendRequestAt);
+            } catch {
+                // The current browser can still show the upstream-successful
+                // action. A database outage may prevent restart recovery, but
+                // must never invite a duplicate friend request.
+                reconciliationRequired = true;
+            }
+        }
+        try {
+            await persistRotatedVrchatCookies(upstream.cookies, cookies.auth);
+        } catch {
+            reconciliationRequired = true;
+        }
+        const response = NextResponse.json({ success: payload.success === true, outgoing: payload.success !== true, recentFriendRequestAt: recentFriendRequestAt?.toISOString(), reconciliationRequired });
         response.headers.set("Cache-Control", "private, no-store");
         return response;
     } catch (error) {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { CalendarDays, Clipboard, ExternalLink, History, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
+import { CalendarDays, Clipboard, Clock, ExternalLink, History, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
@@ -48,6 +48,8 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
     const [tabLoaded, setTabLoaded] = useState<Set<UserTab>>(new Set(["Info", "JSON"]));
     const [tabSearch, setTabSearch] = useState("");
     const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
+    const [recentFriendRequestAt, setRecentFriendRequestAt] = useState("");
+    const [recentActionSettings, setRecentActionSettings] = useState({ enabled: false, minutes: 60 });
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
     const friendsRef = useRef(friends);
@@ -66,13 +68,16 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
         setWorlds([]);
         setActivity([]);
         setPreviousInstancesOpen(false);
+        setRecentFriendRequestAt("");
         fetch(`/api/users/${encodeURIComponent(userId)}`, { cache: "no-store", signal: controller.signal })
             .then(async (response) => {
-                const payload = (await response.json()) as { error?: string; user?: VrchatUser };
+                const payload = (await response.json()) as { error?: string; recentFriendRequestAt?: string; user?: VrchatUser };
                 if (!response.ok || !payload.user) throw new Error(payload.error || "The user could not be loaded.");
                 setUser(payload.user);
+                setRecentFriendRequestAt(payload.recentFriendRequestAt || "");
                 const settingsResponse = await fetch("/api/settings", { cache: "no-store", signal: controller.signal });
-                const settings = (await settingsResponse.json()) as { userDialogLastTab?: UserTab };
+                const settings = (await settingsResponse.json()) as { recentActionCooldownEnabled?: boolean; recentActionCooldownMinutes?: number; userDialogLastTab?: UserTab };
+                setRecentActionSettings({ enabled: settings.recentActionCooldownEnabled === true, minutes: settings.recentActionCooldownMinutes ?? 60 });
                 const requestedTab = settings.userDialogLastTab;
                 const friend = payload.user.isFriend === true || friendsRef.current.some((item) => item.id === userId);
                 if (requestedTab && tabs.includes(requestedTab) && (requestedTab !== "Mutual" || friend)) setActiveTab(requestedTab);
@@ -95,6 +100,17 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
     }, [onClose]);
+
+    useEffect(() => {
+        if (!recentActionSettings.enabled || !recentFriendRequestAt) return;
+        const remaining = Date.parse(recentFriendRequestAt) + recentActionSettings.minutes * 60_000 - Date.now();
+        if (remaining <= 0) {
+            setRecentFriendRequestAt("");
+            return;
+        }
+        const timeout = window.setTimeout(() => setRecentFriendRequestAt(""), remaining + 25);
+        return () => window.clearTimeout(timeout);
+    }, [recentActionSettings, recentFriendRequestAt]);
 
     const loadTab = useCallback(
         async (tab: UserTab, force = false) => {
@@ -177,9 +193,10 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
         setError("");
         try {
             const response = await fetch(`/api/friends/${encodeURIComponent(user.id)}`, { method: "POST" });
-            const payload = (await response.json()) as { error?: string; outgoing?: boolean; success?: boolean };
+            const payload = (await response.json()) as { error?: string; outgoing?: boolean; recentFriendRequestAt?: string; success?: boolean };
             if (!response.ok) throw new Error(payload.error || "The friend request could not be sent.");
             setUser((current) => (current ? { ...current, isFriend: payload.success === true, friendRequestStatus: payload.outgoing ? "outgoing" : "" } : current));
+            if (payload.recentFriendRequestAt) setRecentFriendRequestAt(payload.recentFriendRequestAt);
             if (payload.success) await refreshFriends();
             setConfirming(false);
         } catch (requestError) {
@@ -240,6 +257,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                 unfriend={unfriend}
                                 sendFriendRequest={sendFriendRequest}
                                 cancelFriendRequest={cancelFriendRequest}
+                                recentFriendRequest={recentActionSettings.enabled && Date.parse(recentFriendRequestAt) + recentActionSettings.minutes * 60_000 > Date.now()}
                             />
                         </aside>
                         <div className="flex min-h-[28rem] min-w-0 flex-1 flex-col md:min-h-0">
@@ -308,9 +326,10 @@ type SummaryProps = {
     unfriend: () => Promise<void>;
     sendFriendRequest: () => Promise<void>;
     cancelFriendRequest: () => Promise<void>;
+    recentFriendRequest: boolean;
 };
 
-function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removing, copyUserId, setConfirming, unfriend, sendFriendRequest, cancelFriendRequest }: SummaryProps) {
+function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removing, copyUserId, setConfirming, unfriend, sendFriendRequest, cancelFriendRequest, recentFriendRequest }: SummaryProps) {
     const image = friendImage(user);
     const bannerColor = user.bannerColor && /^[0-9a-f]{6}$/i.test(user.bannerColor) ? `#${user.bannerColor}` : undefined;
     return (
@@ -430,6 +449,7 @@ function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removi
                     ) : (
                         <button type="button" onClick={() => setConfirming(true)} className="inline-flex h-8 items-center justify-center gap-1 text-xs text-primary hover:bg-primary/10">
                             <UserRound className="size-3.5" /> {user.friendRequestStatus === "incoming" ? "Accept Friend Request" : "Add Friend"}
+                            {user.friendRequestStatus !== "incoming" && recentFriendRequest ? <Clock className="ml-auto size-3.5 text-muted-foreground" aria-label="Friend request sent recently" /> : null}
                         </button>
                     )
                 ) : null}

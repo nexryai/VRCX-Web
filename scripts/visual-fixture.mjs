@@ -207,6 +207,8 @@ await database.collection("app_settings").insertOne({
     notificationTablePageSize: 20,
     favoriteSortByDate: false,
     localFavoriteFriendsGroups: [],
+    recentActionCooldownEnabled: true,
+    recentActionCooldownMinutes: 60,
     favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
     favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
     moderationFilters: [],
