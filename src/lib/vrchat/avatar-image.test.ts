@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { uploadedAvatarImageUrl } from "./avatar-image";
+import { uploadedAvatarImageUrl, uploadedEntityImageUrl } from "./avatar-image";
 import type { VrchatFile } from "./types";
 
 const file: VrchatFile = {
@@ -22,5 +22,10 @@ describe("uploadedAvatarImageUrl", () => {
         expect(uploadedAvatarImageUrl(file, "usr_00000000-0000-0000-0000-000000000002")).toBe("");
         expect(uploadedAvatarImageUrl({ ...file, tags: ["gallery"] }, file.ownerId)).toBe("");
         expect(uploadedAvatarImageUrl({ ...file, versions: [...file.versions, { version: 2, status: "waiting" }] }, file.ownerId)).toBe("");
+    });
+
+    it("accepts only the fixed worldimage tag for world uploads", () => {
+        expect(uploadedEntityImageUrl({ ...file, tags: ["worldimage"] }, file.ownerId, "worldimage")).toBe("https://files.vrchat.cloud/avatar.png");
+        expect(uploadedEntityImageUrl(file, file.ownerId, "worldimage")).toBe("");
     });
 });

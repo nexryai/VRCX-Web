@@ -9,7 +9,7 @@ const MAX_ZOOM = 5;
 const OUTPUT_WIDTH = 1200;
 const OUTPUT_HEIGHT = 900;
 
-export function AvatarImageCropDialog({ file, uploading, error, cancel, confirm }: { file: File; uploading: boolean; error: string; cancel: () => void; confirm: (blob: Blob) => void }) {
+export function AvatarImageCropDialog({ file, uploading, error, cancel, confirm, title = "Change Avatar Image" }: { file: File; uploading: boolean; error: string; cancel: () => void; confirm: (blob: Blob) => void; title?: string }) {
     const [source, setSource] = useState("");
     const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
     const [rotation, setRotation] = useState(0);
@@ -107,7 +107,7 @@ export function AvatarImageCropDialog({ file, uploading, error, cancel, confirm 
         <div className="absolute inset-0 z-[75] flex items-center justify-center bg-black/70 p-3">
             <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="avatar-image-crop-title" onKeyDown={trapFocus} className="flex max-h-[calc(100dvh-24px)] w-full max-w-[850px] flex-col rounded-xl border border-border bg-popover p-4 shadow-2xl">
                 <h3 id="avatar-image-crop-title" className="shrink-0 text-sm font-semibold">
-                    Change Avatar Image
+                    {title}
                 </h3>
                 <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
                     <div

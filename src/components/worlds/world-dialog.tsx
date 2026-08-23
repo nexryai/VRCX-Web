@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Apple, Clipboard, Ellipsis, ExternalLink, History, ImageIcon, Loader2, Monitor, Pencil, Plus, RefreshCw, Smartphone, Trash2, User, X } from "lucide-react";
 
+import { AvatarImageCropDialog } from "@/components/avatars/avatar-image-crop-dialog";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
@@ -35,6 +36,9 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     const [authorTags, setAuthorTags] = useState("");
     const [domainList, setDomainList] = useState<WorldDomainInput[]>([]);
     const [manageSaving, setManageSaving] = useState(false);
+    const [cropFile, setCropFile] = useState<File | null>(null);
+    const [imageUploading, setImageUploading] = useState(false);
+    const [cropError, setCropError] = useState("");
     const [status, setStatus] = useState("");
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
@@ -47,6 +51,8 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     const manageInitialFocus = useRef<HTMLElement>(null);
     const previousManageDialog = useRef<WorldManageDialog | null>(null);
     const nextDomainId = useRef(1);
+    const worldImageInput = useRef<HTMLInputElement>(null);
+    const previousCropFile = useRef<File | null>(null);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -74,6 +80,8 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         setMenuOpen(false);
         setEditField(null);
         setManageDialog(null);
+        setCropFile(null);
+        setCropError("");
         setStatus("");
         void load();
         closeButton.current?.focus();
@@ -82,6 +90,10 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     useEffect(() => {
         function closeOnEscape(event: KeyboardEvent) {
             if (event.key !== "Escape") return;
+            if (cropFile) {
+                if (!imageUploading) setCropFile(null);
+                return;
+            }
             if (editField) {
                 if (!editSaving) setEditField(null);
                 return;
@@ -98,7 +110,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         }
         window.addEventListener("keydown", closeOnEscape);
         return () => window.removeEventListener("keydown", closeOnEscape);
-    }, [editField, editSaving, manageDialog, manageSaving, menuOpen, onClose]);
+    }, [cropFile, editField, editSaving, imageUploading, manageDialog, manageSaving, menuOpen, onClose]);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -120,6 +132,11 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         else if (previousManageDialog.current) manageButton.current?.focus();
         previousManageDialog.current = manageDialog;
     }, [manageDialog]);
+
+    useEffect(() => {
+        if (!cropFile && previousCropFile.current) manageButton.current?.focus();
+        previousCropFile.current = cropFile;
+    }, [cropFile]);
 
     async function copy(value: string, label: string) {
         await navigator.clipboard.writeText(value);
@@ -260,6 +277,39 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         }
     }
 
+    function chooseWorldImage(file?: File) {
+        if (worldImageInput.current) worldImageInput.current.value = "";
+        if (!file) return;
+        if (file.size >= 20_000_000 || !["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+            setError("Choose a PNG, JPEG, or WebP image smaller than 20 MB.");
+            return;
+        }
+        setCropError("");
+        setCropFile(file);
+    }
+
+    async function uploadWorldImage(blob: Blob) {
+        if (!world) return;
+        setImageUploading(true);
+        setCropError("");
+        setStatus("");
+        try {
+            const body = new FormData();
+            body.set("file", blob, "world-image.png");
+            const response = await fetch(`/api/worlds/${encodeURIComponent(world.id)}/image`, { method: "POST", body });
+            const payload = (await response.json()) as { world?: VrchatWorld; error?: string };
+            if (response.status === 401) window.location.assign("/login");
+            if (!response.ok || !payload.world) throw new Error(payload.error || "The world image could not be changed.");
+            setWorld(payload.world);
+            setStatus("World image changed");
+            setCropFile(null);
+        } catch (uploadError) {
+            setCropError(uploadError instanceof Error ? uploadError.message : "The world image could not be changed.");
+        } finally {
+            setImageUploading(false);
+        }
+    }
+
     const worldFriends = useMemo(() => friends.filter((friend) => friend.location?.startsWith(`${worldId}:`)), [friends, worldId]);
     return (
         <div className="fixed inset-0 z-[82] flex items-end justify-center sm:items-center sm:p-4" role="presentation">
@@ -341,10 +391,19 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                                                 <WorldEditMenuItem label="Change YouTube Preview" action={() => requestEdit("previewYoutubeId")} />
                                                 <WorldEditMenuItem label="Change Content Warnings, Settings and Tags" action={() => requestManageDialog("tags")} />
                                                 <WorldEditMenuItem label="Change Allowed Video Player Domains" action={() => requestManageDialog("domains")} />
+                                                <WorldEditMenuItem
+                                                    label="Change Image"
+                                                    icon={<ImageIcon className="size-4" />}
+                                                    action={() => {
+                                                        setMenuOpen(false);
+                                                        worldImageInput.current?.click();
+                                                    }}
+                                                />
                                             </div>
                                         ) : null}
                                     </div>
                                 ) : null}
+                                <input ref={worldImageInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => chooseWorldImage(event.target.files?.[0])} />
                             </div>
                         </header>
                         {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
@@ -468,6 +527,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                                 </form>
                             </div>
                         ) : null}
+                        {cropFile ? <AvatarImageCropDialog title="Change World Image" file={cropFile} uploading={imageUploading} error={cropError} cancel={() => setCropFile(null)} confirm={(blob) => void uploadWorldImage(blob)} /> : null}
                     </>
                 ) : null}
             </section>
@@ -600,10 +660,10 @@ function WorldDomainsEditor({ domains, initialFocus, setDomains }: { domains: Wo
     );
 }
 
-function WorldEditMenuItem({ label, action }: { label: string; action: () => void }) {
+function WorldEditMenuItem({ label, action, icon }: { label: string; action: () => void; icon?: React.ReactNode }) {
     return (
         <button type="button" role="menuitem" onClick={action} className="flex h-8 w-full items-center gap-2 rounded px-2 text-left hover:bg-muted">
-            <Pencil className="size-4" /> {label}
+            {icon || <Pencil className="size-4" />} {label}
         </button>
     );
 }

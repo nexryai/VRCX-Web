@@ -35,6 +35,7 @@ const captures = [
     { name: "world-dialog-youtube-preview", path: "/favorites/worlds", readyText: "Change YouTube Preview", favoriteKind: "world", worldDialog: true, worldOwner: true, worldEdit: "previewYoutubeId" },
     { name: "world-dialog-tags", path: "/favorites/worlds", readyText: "Set World Tags", favoriteKind: "world", worldDialog: true, worldOwner: true, worldManage: "tags" },
     { name: "world-dialog-domains", path: "/favorites/worlds", readyText: "Allowed Video Player Domains", favoriteKind: "world", worldDialog: true, worldOwner: true, worldManage: "domains" },
+    { name: "world-dialog-image", path: "/favorites/worlds", readyText: "Change World Image", favoriteKind: "world", worldDialog: true, worldOwner: true, worldImage: true },
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
@@ -386,7 +387,7 @@ for (const width of widths) {
         }
         if (capture.worldDialog) {
             await page.getByText("Favorite Moonlit World", { exact: true }).first().click();
-            if (capture.worldMenu || capture.worldEdit || capture.worldManage) await page.getByRole("button", { name: "Manage world", exact: true }).click();
+            if (capture.worldMenu || capture.worldEdit || capture.worldManage || capture.worldImage) await page.getByRole("button", { name: "Manage world", exact: true }).click();
             if (capture.worldEdit) {
                 const labels = {
                     capacity: "Change Capacity",
@@ -428,6 +429,27 @@ for (const width of widths) {
                 if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("World management editor did not restore focus.");
                 await manage.click();
                 await page.getByRole("menuitem", { name: label, exact: true }).click();
+            }
+            if (capture.worldImage) {
+                const openCropper = async () => {
+                    const chooserPromise = page.waitForEvent("filechooser");
+                    await page.getByRole("menuitem", { name: "Change Image", exact: true }).click();
+                    const chooser = await chooserPromise;
+                    await chooser.setFiles("public/vrcx.png");
+                };
+                await openCropper();
+                const cropper = page.getByRole("dialog", { name: "Change World Image", exact: true });
+                await cropper.waitFor();
+                const rotateLeft = cropper.getByRole("button", { name: "Rotate Left", exact: true });
+                if (!(await rotateLeft.evaluate((element) => document.activeElement === element))) throw new Error("World image cropper did not focus its first control.");
+                await page.keyboard.press("Shift+Tab");
+                if (!(await cropper.getByRole("button", { name: "Crop Image", exact: true }).evaluate((element) => document.activeElement === element))) throw new Error("World image cropper did not trap focus.");
+                await page.keyboard.press("Escape");
+                await cropper.waitFor({ state: "detached" });
+                const manage = page.getByRole("button", { name: "Manage world", exact: true });
+                if (!(await manage.evaluate((element) => document.activeElement === element))) throw new Error("World image cropper did not restore focus.");
+                await manage.click();
+                await openCropper();
             }
         }
         if (capture.groupDialog) {
