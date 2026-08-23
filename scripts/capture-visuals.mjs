@@ -94,6 +94,7 @@ const captures = [
     { name: "settings-interface", path: "/settings", readyText: "Sort favorites by", clickText: "Interface" },
     { name: "settings-social", path: "/settings", readyText: "Favorite Groups Filter", settingsTab: "Social" },
     { name: "settings-social-groups", path: "/settings", readyText: "Event Crew", settingsTab: "Social", settingsFavoriteGroups: true },
+    { name: "settings-notifications", path: "/settings", readyText: "Send Test Notification", settingsTab: "Notifications", notificationsSettings: true },
 ];
 
 const searchFixture = [
@@ -138,6 +139,21 @@ for (const width of widths) {
         const navigationWidth = (capture.groupDialog || capture.myAvatarMetadata) && width < 1280 ? 1280 : width;
         const page = await browser.newPage({ viewport: { width: navigationWidth, height: 800 }, deviceScaleFactor: 1 });
         page.setDefaultNavigationTimeout(60_000);
+        if (capture.notificationsSettings) {
+            await page.addInitScript(() => {
+                class MockNotification {
+                    static permission = "granted";
+                    static requestPermission() {
+                        return Promise.resolve("granted");
+                    }
+                    constructor(title, options) {
+                        window.__vrcxTestNotification = { title, options };
+                    }
+                    close() {}
+                }
+                Object.defineProperty(window, "Notification", { configurable: true, value: MockNotification });
+            });
+        }
         if (capture.searchQuery) {
             await page.route("**/api/search/config", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ worldRows: [{ index: 0, name: "Featured", sortHeading: "featured" }] }) }));
             await page.route("**/api/search?*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ type: "users", results: searchFixture, offset: 0, pageSize: 10 }) }));
@@ -823,6 +839,12 @@ for (const width of widths) {
             if (await page.getByRole("menu", { name: "Favorite Groups Filter", exact: true }).isVisible()) throw new Error("Favorite group selector did not close with Escape.");
             if (!(await trigger.evaluate((element) => document.activeElement === element.closest("summary")))) throw new Error("Favorite group selector did not restore focus after Escape.");
             await trigger.click();
+        }
+        if (capture.notificationsSettings) {
+            const testButton = page.getByRole("button", { name: "Send Test Notification", exact: true });
+            await testButton.click();
+            const notification = await page.evaluate(() => window.__vrcxTestNotification);
+            if (notification?.title !== "VRCX" || notification?.options?.body !== "Test notification.") throw new Error("Settings test notification did not use the VRCX test message.");
         }
         if (capture.previousInstances) {
             const trigger = page.getByRole("button", { name: "Previous Instances", exact: true });

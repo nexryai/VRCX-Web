@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { ChevronRight, ExternalLink, LogOut, Menu, X } from "lucide-react";
 
 import type { VrchatUser } from "@/lib/vrchat/types";
+import { BrowserNotificationBridge } from "./browser-notification-bridge";
 import { MonitorStatusBar } from "./monitor-status-bar";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -120,6 +121,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
 
     return (
         <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-sidebar text-foreground">
+            <BrowserNotificationBridge />
             <div className="flex min-h-0 flex-1 overflow-hidden">
                 {mobileOpen ? <button type="button" className="fixed inset-0 z-40 bg-black/55 md:hidden" aria-label="Close navigation" onClick={() => setMobileOpen(false)} /> : null}
                 <aside

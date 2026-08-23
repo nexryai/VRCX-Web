@@ -2,19 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { AlertCircle, Check, CheckCircle2, ChevronDown, Download, ExternalLink, Trash2, TriangleAlert, Upload } from "lucide-react";
+import { AlertCircle, Check, CheckCircle2, ChevronDown, Download, ExternalLink, Play, Trash2, TriangleAlert, Upload } from "lucide-react";
 
 import type { AppSettingsPayload } from "@/lib/app-settings";
 import { clearImportedLegacyBrowserSettings, type LegacyBrowserSettingsImport, readLegacyBrowserSettings } from "@/lib/legacy-browser-settings";
 import type { VrchatFavoriteGroup } from "@/lib/vrchat/types";
 
-type Tab = "Interface" | "Social" | "System";
+type Tab = "Interface" | "Notifications" | "Social" | "System";
 type PageSizeKey = "activityTablePageSize" | "friendListTablePageSize" | "moderationTablePageSize" | "myAvatarsTablePageSize" | "notificationTablePageSize";
 type SettingsState = Required<
     Pick<
         AppSettingsPayload,
         | "activityTablePageSize"
         | "avatarAutoCleanupDays"
+        | "browserNotificationsEnabled"
         | "favoriteSortByDate"
         | "friendListTablePageSize"
         | "localFavoriteFriendsGroups"
@@ -44,6 +45,7 @@ const defaults: SettingsState = {
     moderationTablePageSize: 20,
     myAvatarsTablePageSize: 20,
     avatarAutoCleanupDays: 0,
+    browserNotificationsEnabled: false,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -213,7 +215,7 @@ export function SettingsView({ version }: { version: string }) {
                 Settings
             </h1>
             <div className="flex shrink-0 gap-5 overflow-x-auto border-b border-border px-1" role="tablist" aria-label="Settings categories">
-                {(["System", "Interface", "Social"] as const).map((item) => (
+                {(["System", "Interface", "Social", "Notifications"] as const).map((item) => (
                     <button key={item} type="button" role="tab" aria-selected={tab === item} onClick={() => setTab(item)} className={`h-10 shrink-0 border-b-2 px-2 text-sm ${tab === item ? "border-primary font-medium text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                         {item}
                     </button>
@@ -233,12 +235,75 @@ export function SettingsView({ version }: { version: string }) {
                         <SystemSettings version={version} fileInput={fileInput} importSettings={importSettings} legacyImport={legacyImport} importLegacySettings={importLegacySettings} settings={settings} change={change} purgeAvatarFeed={purgeAvatarFeed} />
                     ) : tab === "Interface" ? (
                         <InterfaceSettings settings={settings} change={change} />
-                    ) : (
+                    ) : tab === "Social" ? (
                         <SocialSettings settings={settings} options={favoriteGroupOptions} change={change} />
+                    ) : (
+                        <NotificationSettings settings={settings} change={change} setMessage={setMessage} />
                     )}
                 </div>
             </div>
         </section>
+    );
+}
+
+function NotificationSettings({ settings, change, setMessage }: { settings: SettingsState; change: (patch: Partial<SettingsState>) => Promise<void>; setMessage: (message: { error: boolean; text: string } | null) => void }) {
+    const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+
+    useEffect(() => {
+        setPermission("Notification" in window ? Notification.permission : "unsupported");
+    }, []);
+
+    async function setDesktopNotifications(value: "Never" | "Always") {
+        if (value === "Never") {
+            await change({ browserNotificationsEnabled: false });
+            return;
+        }
+        if (!("Notification" in window)) {
+            setPermission("unsupported");
+            setMessage({ error: true, text: "This browser does not support desktop notifications." });
+            return;
+        }
+        const nextPermission = Notification.permission === "default" ? await Notification.requestPermission() : Notification.permission;
+        setPermission(nextPermission);
+        if (nextPermission !== "granted") {
+            await change({ browserNotificationsEnabled: false });
+            setMessage({ error: true, text: "Desktop notification permission was not granted by the browser." });
+            return;
+        }
+        await change({ browserNotificationsEnabled: true });
+    }
+
+    function testNotification() {
+        if (!("Notification" in window) || Notification.permission !== "granted") return;
+        new Notification("VRCX", { body: "Test notification.", icon: "/vrcx.png", tag: "vrcx:test" });
+    }
+
+    const permissionLabel = permission === "granted" ? "Granted" : permission === "denied" ? "Blocked" : permission === "unsupported" ? "Unsupported" : "Not requested";
+    return (
+        <>
+            <SettingsGroup title="Notifications">
+                <SettingsRow label="Send Test Notification">
+                    <button type="button" disabled={permission !== "granted"} onClick={testNotification} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
+                        <Play className="size-3.5" /> Send Test Notification
+                    </button>
+                </SettingsRow>
+            </SettingsGroup>
+            <SettingsGroup title="Desktop Notifications">
+                <SettingsRow label="Show Desktop Notifications" description="The server keeps collecting remote VRChat notifications continuously. Browser notifications appear while this app is open; queued events observed after enabling are delivered when it is opened again.">
+                    <Segmented
+                        value={settings.browserNotificationsEnabled ? "Always" : "Never"}
+                        options={[
+                            { value: "Never", label: "Never" },
+                            { value: "Always", label: "Always" },
+                        ]}
+                        change={(value) => void setDesktopNotifications(value)}
+                    />
+                </SettingsRow>
+                <SettingsRow label="Browser Permission" description="Permission is controlled separately by this browser and is not transferred in settings backups.">
+                    <span className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs text-muted-foreground">{permissionLabel}</span>
+                </SettingsRow>
+            </SettingsGroup>
+        </>
     );
 }
 

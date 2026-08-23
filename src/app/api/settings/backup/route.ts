@@ -13,7 +13,7 @@ export async function GET() {
         format: "vrcx-web-settings" as const,
         version: 1 as const,
         exportedAt: new Date().toISOString(),
-        settings: serializeAppSettings(settings),
+        settings: { ...serializeAppSettings(settings), browserNotificationsEnabled: false },
     };
     const response = NextResponse.json(backup);
     response.headers.set("Cache-Control", "private, no-store");
@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
     const backup = appSettingsBackupSchema.safeParse(await request.json().catch(() => null));
     if (!backup.success) return NextResponse.json({ error: "The settings backup is invalid or unsupported." }, { status: 400 });
     await ensureMongoSchema();
-    await collections(await getMongoDatabase()).appSettings.updateOne({ _id: "singleton" }, { $set: { ...backup.data.settings, updatedAt: new Date() } });
-    return NextResponse.json({ settings: backup.data.settings });
+    const importedSettings = { ...backup.data.settings, browserNotificationsEnabled: false };
+    await collections(await getMongoDatabase()).appSettings.updateOne({ _id: "singleton" }, { $set: { ...importedSettings, updatedAt: new Date() }, $unset: { browserNotificationsEnabledAt: "" } });
+    return NextResponse.json({ settings: importedSettings });
 }

@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -41,6 +41,7 @@ describe("MongoDB application repositories", () => {
             localFavoriteFriendsGroups: [],
             recentActionCooldownEnabled: false,
             recentActionCooldownMinutes: 60,
+            browserNotificationsEnabled: false,
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
             favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
             moderationFilters: [],
@@ -71,6 +72,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
         expect(await database.collection("recent_actions").indexExists(["owner_user_action_unique", "expires_at_ttl"])).toBe(true);
+        expect(await database.collection("notifications").indexExists("owner_browser_delivery")).toBe(true);
         expect(await databaseCollections.monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
     });
@@ -282,6 +284,39 @@ describe("MongoDB application repositories", () => {
         const retained = await (await getMongoDatabase()).collection("notifications").find({ ownerId }).toArray();
         expect(retained).toHaveLength(2);
         expect(retained.find((document) => document.notificationId === "not_first")?.active).toBe(false);
+    });
+
+    test("claims browser notifications once after activation and only for the active owner", async () => {
+        const { claimBrowserNotifications } = await import("./browser-notifications-repository");
+        const { collections } = await import("./collections");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000181";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000182";
+        const enabledAt = new Date("2026-08-23T12:00:00.000Z");
+        const observedBefore = new Date(enabledAt.getTime() - 1_000);
+        const observedAfter = new Date(enabledAt.getTime() + 1_000);
+        const c = collections(await getMongoDatabase());
+        await c.appSettings.updateOne({ _id: "singleton" }, { $set: { activeUserId: ownerId, browserNotificationsEnabled: true, browserNotificationsEnabledAt: enabledAt } });
+        await c.notifications.insertMany([
+            { _id: `${ownerId}:legacy:not_before`, ownerId, notificationId: "not_before", source: "legacy", notification: { id: "not_before", type: "invite" }, active: true, firstObservedAt: observedBefore, lastObservedAt: observedBefore, updatedAt: observedBefore },
+            { _id: `${ownerId}:legacy:not_legacy`, ownerId, notificationId: "not_legacy", source: "legacy", notification: { id: "not_legacy", type: "friendRequest" }, active: true, firstObservedAt: observedAfter, lastObservedAt: observedAfter, updatedAt: observedAfter },
+            { _id: `${ownerId}:v2:not_v2`, ownerId, notificationId: "not_v2", source: "v2", notification: { id: "not_v2", type: "group.announcement" }, active: true, firstObservedAt: observedAfter, lastObservedAt: observedAfter, updatedAt: observedAfter },
+            { _id: `${ownerId}:hidden:not_hidden`, ownerId, notificationId: "not_hidden", source: "hidden", notification: { id: "not_hidden", type: "invite" }, active: true, firstObservedAt: observedAfter, lastObservedAt: observedAfter, updatedAt: observedAfter },
+            { _id: `${otherOwnerId}:legacy:not_other`, ownerId: otherOwnerId, notificationId: "not_other", source: "legacy", notification: { id: "not_other", type: "invite" }, active: true, firstObservedAt: observedAfter, lastObservedAt: observedAfter, updatedAt: observedAfter },
+        ]);
+
+        const deliveredAt = new Date("2026-08-23T12:05:00.000Z");
+        const claims = (await Promise.all([claimBrowserNotifications(ownerId, deliveredAt, 1), claimBrowserNotifications(ownerId, deliveredAt, 10)])).flat();
+        expect(claims.map((notification) => notification.id).sort()).toEqual(["not_legacy", "not_v2"]);
+        expect(new Set(claims.map((notification) => notification.id)).size).toBe(2);
+        expect(await claimBrowserNotifications(ownerId, deliveredAt, 10)).toEqual([]);
+        expect(await claimBrowserNotifications(otherOwnerId, deliveredAt, 10)).toEqual([]);
+        expect((await c.notifications.findOne({ _id: `${ownerId}:legacy:not_legacy` }))?.browserDeliveredAt).toEqual(deliveredAt);
+        expect((await c.notifications.findOne({ _id: `${ownerId}:legacy:not_before` }))?.browserDeliveredAt).toBeUndefined();
+        expect((await c.notifications.findOne({ _id: `${ownerId}:hidden:not_hidden` }))?.browserDeliveredAt).toBeUndefined();
+
+        await c.appSettings.updateOne({ _id: "singleton" }, { $set: { browserNotificationsEnabled: false } });
+        expect(await claimBrowserNotifications(ownerId, deliveredAt, 10)).toEqual([]);
     });
 
     test("keeps VRCX-local favorite groups owner scoped in MongoDB", async () => {

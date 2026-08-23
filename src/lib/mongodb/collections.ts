@@ -70,6 +70,8 @@ export type AppSettingsDocument = {
     localFavoriteFriendsGroups: string[];
     recentActionCooldownEnabled: boolean;
     recentActionCooldownMinutes: number;
+    browserNotificationsEnabled: boolean;
+    browserNotificationsEnabledAt?: Date;
     favoriteCardScale: Record<"avatar" | "friend" | "world", number>;
     favoriteCardSpacing: Record<"avatar" | "friend" | "world", number>;
     moderationFilters: string[];
@@ -388,6 +390,7 @@ export type NotificationDocument = {
     firstObservedAt: Date;
     lastObservedAt: Date;
     updatedAt: Date;
+    browserDeliveredAt?: Date;
 };
 
 export type FavoriteDocument = {

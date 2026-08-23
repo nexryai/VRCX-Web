@@ -454,6 +454,14 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 42,
+        name: "add-browser-notification-delivery",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([c.appSettings.updateMany({ browserNotificationsEnabled: { $exists: false } }, { $set: { browserNotificationsEnabled: false, updatedAt } }), c.notifications.createIndex({ ownerId: 1, source: 1, browserDeliveredAt: 1, firstObservedAt: 1 }, { name: "owner_browser_delivery" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {
