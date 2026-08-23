@@ -46,6 +46,12 @@ describe("VRChat response decoding", () => {
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}/publish/other`)).toBe(false);
     });
 
+    it("allowlists only the active-user/world persistence resources", () => {
+        expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/wrld_${uuid}/persist`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/wrld_${uuid}/persist/exists`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/wrld_${uuid}/persist/export`)).toBe(false);
+    });
+
     it("forwards multipart gallery uploads without overriding the boundary header", async () => {
         const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
             expect(init?.body).toBeInstanceOf(FormData);

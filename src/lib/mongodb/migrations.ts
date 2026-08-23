@@ -427,6 +427,13 @@ const migrations: Migration[] = [
             await Promise.all([c.avatarStyleSnapshots.createIndex({ ownerId: 1 }, { unique: true, name: "owner_unique" }), c.avatarStyleSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
         },
     },
+    {
+        version: 39,
+        name: "add-world-persist-snapshot-indexes",
+        async apply(c) {
+            await Promise.all([c.worldPersistSnapshots.createIndex({ ownerId: 1, worldId: 1 }, { unique: true, name: "owner_world_unique" }), c.worldPersistSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

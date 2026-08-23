@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Apple, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, Monitor, Pencil, Plus, RefreshCw, Smartphone, Trash2, User, X } from "lucide-react";
+import { Apple, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, Monitor, Pencil, Plus, RefreshCw, Smartphone, Trash2, Upload, User, X } from "lucide-react";
 
 import { AvatarImageCropDialog } from "@/components/avatars/avatar-image-crop-dialog";
 import { useCurrentUser } from "@/components/current-user-provider";
@@ -19,6 +19,7 @@ type WorldTab = "Info" | "Instances" | "JSON";
 type WorldEditField = "capacity" | "description" | "name" | "previewYoutubeId" | "recommendedCapacity";
 type WorldManageDialog = "domains" | "tags";
 type WorldDomainInput = { id: number; value: string };
+type WorldConfirmationAction = WorldAction | "delete-persist";
 
 export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: string; friends: VrchatUser[]; openUser: (userId: string) => void; onClose: () => void }) {
     const currentUser = useCurrentUser();
@@ -40,8 +41,9 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     const [cropFile, setCropFile] = useState<File | null>(null);
     const [imageUploading, setImageUploading] = useState(false);
     const [cropError, setCropError] = useState("");
-    const [confirmAction, setConfirmAction] = useState<WorldAction | null>(null);
+    const [confirmAction, setConfirmAction] = useState<WorldConfirmationAction | null>(null);
     const [actionSaving, setActionSaving] = useState(false);
+    const [hasPersistData, setHasPersistData] = useState<boolean | null>(null);
     const [status, setStatus] = useState("");
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
@@ -57,7 +59,18 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
     const worldImageInput = useRef<HTMLInputElement>(null);
     const previousCropFile = useRef<File | null>(null);
     const confirmationCancel = useRef<HTMLButtonElement>(null);
-    const previousConfirmAction = useRef<WorldAction | null>(null);
+    const previousConfirmAction = useRef<WorldConfirmationAction | null>(null);
+
+    const loadPersistState = useCallback(async (id: string) => {
+        try {
+            const response = await fetch(`/api/worlds/${encodeURIComponent(id)}/persist`, { cache: "no-store" });
+            const payload = (await response.json()) as { hasPersistData?: boolean };
+            if (response.status === 401) window.location.assign("/login");
+            setHasPersistData(response.ok && typeof payload.hasPersistData === "boolean" ? payload.hasPersistData : null);
+        } catch {
+            setHasPersistData(null);
+        }
+    }, []);
 
     const load = useCallback(
         async (refresh = false) => {
@@ -69,13 +82,14 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                 if (response.status === 401) window.location.assign("/login");
                 if (!response.ok || !payload.world) throw new Error(payload.error || "The world could not be loaded.");
                 setWorld(payload.world);
+                void loadPersistState(payload.world.id);
             } catch (loadError) {
                 setError(loadError instanceof Error ? loadError.message : "The world could not be loaded.");
             } finally {
                 setLoading(false);
             }
         },
-        [worldId],
+        [loadPersistState, worldId],
     );
 
     useEffect(() => {
@@ -88,6 +102,7 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         setCropFile(null);
         setCropError("");
         setConfirmAction(null);
+        setHasPersistData(null);
         setStatus("");
         void load();
         closeButton.current?.focus();
@@ -332,6 +347,16 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
         setError("");
         try {
             const action = confirmAction;
+            if (action === "delete-persist") {
+                const response = await fetch(`/api/worlds/${encodeURIComponent(world.id)}/persist`, { method: "DELETE" });
+                const payload = (await response.json()) as { deleted?: boolean; error?: string };
+                if (response.status === 401) window.location.assign("/login");
+                if (!response.ok || !payload.deleted) throw new Error(payload.error || "Persistent data could not be deleted.");
+                setHasPersistData(false);
+                setStatus("Persistent data has been deleted");
+                setConfirmAction(null);
+                return;
+            }
             const response = await fetch(`/api/worlds/${encodeURIComponent(world.id)}/actions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) });
             const payload = (await response.json()) as { deleted?: boolean; world?: VrchatWorld; error?: string };
             if (response.status === 401) window.location.assign("/login");
@@ -417,57 +442,73 @@ export function WorldDialog({ worldId, friends, openUser, onClose }: { worldId: 
                                 <a href={`https://vrchat.com/home/world/${encodeURIComponent(world.id)}`} target="_blank" rel="noreferrer" className="inline-flex size-9 items-center justify-center rounded-full border border-input" aria-label="Open on VRChat">
                                     <ExternalLink className="size-4" />
                                 </a>
-                                {world.authorId === currentUser.id ? (
+                                {world.authorId === currentUser.id || hasPersistData ? (
                                     <div ref={menu} className="relative">
                                         <button ref={manageButton} type="button" onClick={() => setMenuOpen((value) => !value)} className="inline-flex size-9 items-center justify-center rounded-full border border-input hover:bg-muted" aria-label="Manage world" aria-haspopup="menu" aria-expanded={menuOpen}>
                                             <Ellipsis className="size-4" />
                                         </button>
                                         {menuOpen ? (
                                             <div role="menu" className="absolute top-11 right-0 z-50 min-w-60 rounded-md border border-border bg-popover p-1 text-xs shadow-xl">
-                                                <WorldEditMenuItem label="Rename" action={() => requestEdit("name")} />
-                                                <WorldEditMenuItem label="Change Description" action={() => requestEdit("description")} />
-                                                <WorldEditMenuItem label="Change Capacity" action={() => requestEdit("capacity")} />
-                                                <WorldEditMenuItem label="Change Recommended Capacity" action={() => requestEdit("recommendedCapacity")} />
-                                                <WorldEditMenuItem label="Change YouTube Preview" action={() => requestEdit("previewYoutubeId")} />
-                                                <WorldEditMenuItem label="Change Content Warnings, Settings and Tags" action={() => requestManageDialog("tags")} />
-                                                <WorldEditMenuItem label="Change Allowed Video Player Domains" action={() => requestManageDialog("domains")} />
-                                                <WorldEditMenuItem
-                                                    label="Change Image"
-                                                    icon={<ImageIcon className="size-4" />}
-                                                    action={() => {
-                                                        setMenuOpen(false);
-                                                        worldImageInput.current?.click();
-                                                    }}
-                                                />
-                                                <div className="my-1 h-px bg-border" role="separator" />
-                                                {(world.tags || []).some((tag) => tag === "system_approved" || tag === "system_labs") ? (
+                                                {world.authorId === currentUser.id ? (
+                                                    <>
+                                                        <WorldEditMenuItem label="Rename" action={() => requestEdit("name")} />
+                                                        <WorldEditMenuItem label="Change Description" action={() => requestEdit("description")} />
+                                                        <WorldEditMenuItem label="Change Capacity" action={() => requestEdit("capacity")} />
+                                                        <WorldEditMenuItem label="Change Recommended Capacity" action={() => requestEdit("recommendedCapacity")} />
+                                                        <WorldEditMenuItem label="Change YouTube Preview" action={() => requestEdit("previewYoutubeId")} />
+                                                        <WorldEditMenuItem label="Change Content Warnings, Settings and Tags" action={() => requestManageDialog("tags")} />
+                                                        <WorldEditMenuItem label="Change Allowed Video Player Domains" action={() => requestManageDialog("domains")} />
+                                                        <WorldEditMenuItem
+                                                            label="Change Image"
+                                                            icon={<ImageIcon className="size-4" />}
+                                                            action={() => {
+                                                                setMenuOpen(false);
+                                                                worldImageInput.current?.click();
+                                                            }}
+                                                        />
+                                                        <div className="my-1 h-px bg-border" role="separator" />
+                                                        {(world.tags || []).some((tag) => tag === "system_approved" || tag === "system_labs") ? (
+                                                            <WorldEditMenuItem
+                                                                label="Unpublish"
+                                                                icon={<Eye className="size-4" />}
+                                                                action={() => {
+                                                                    setMenuOpen(false);
+                                                                    setConfirmAction("unpublish");
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <WorldEditMenuItem
+                                                                label="Publish To Labs. You can only publish once per week (7 days)."
+                                                                icon={<Eye className="size-4" />}
+                                                                action={() => {
+                                                                    setMenuOpen(false);
+                                                                    setConfirmAction("publish");
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </>
+                                                ) : null}
+                                                {hasPersistData ? (
                                                     <WorldEditMenuItem
-                                                        label="Unpublish"
-                                                        icon={<Eye className="size-4" />}
+                                                        label="Delete Persistent Data"
+                                                        icon={<Upload className="size-4" />}
                                                         action={() => {
                                                             setMenuOpen(false);
-                                                            setConfirmAction("unpublish");
+                                                            setConfirmAction("delete-persist");
                                                         }}
                                                     />
-                                                ) : (
+                                                ) : null}
+                                                {world.authorId === currentUser.id ? (
                                                     <WorldEditMenuItem
-                                                        label="Publish To Labs. You can only publish once per week (7 days)."
-                                                        icon={<Eye className="size-4" />}
+                                                        label="Delete"
+                                                        destructive
+                                                        icon={<Trash2 className="size-4" />}
                                                         action={() => {
                                                             setMenuOpen(false);
-                                                            setConfirmAction("publish");
+                                                            setConfirmAction("delete");
                                                         }}
                                                     />
-                                                )}
-                                                <WorldEditMenuItem
-                                                    label="Delete"
-                                                    destructive
-                                                    icon={<Trash2 className="size-4" />}
-                                                    action={() => {
-                                                        setMenuOpen(false);
-                                                        setConfirmAction("delete");
-                                                    }}
-                                                />
+                                                ) : null}
                                             </div>
                                         ) : null}
                                     </div>
@@ -769,9 +810,10 @@ function trapConfirmationFocus(event: React.KeyboardEvent<HTMLDivElement>) {
     }
 }
 
-function worldActionLabel(action: WorldAction) {
+function worldActionLabel(action: WorldConfirmationAction) {
     if (action === "publish") return "Publish To Labs. You can only publish once per week (7 days).";
     if (action === "unpublish") return "Unpublish";
+    if (action === "delete-persist") return "Delete Persistent Data";
     return "Delete";
 }
 

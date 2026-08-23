@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -305,6 +305,21 @@ describe("MongoDB application repositories", () => {
         await removeCachedWorld(ownerId, world.id);
         expect(await getCachedWorld(ownerId, world.id)).toBeNull();
         expect(await getCachedWorld(otherOwnerId, world.id)).toEqual(world);
+    });
+
+    test("persists world persistence existence per owner and world", async () => {
+        const { getWorldPersistSnapshot, setWorldPersistSnapshot } = await import("./world-persist-repository");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000084";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000085";
+        const worldId = "wrld_00000000-0000-0000-0000-000000000086";
+        await setWorldPersistSnapshot(ownerId, worldId, true, new Date("2026-08-23T00:00:00.000Z"));
+        await setWorldPersistSnapshot(otherOwnerId, worldId, false);
+        await setWorldPersistSnapshot(ownerId, worldId, false, new Date("2026-08-23T00:05:00.000Z"));
+        expect(await getWorldPersistSnapshot(ownerId, worldId)).toMatchObject({ ownerId, worldId, hasPersistData: false, observedAt: new Date("2026-08-23T00:05:00.000Z") });
+        expect(await getWorldPersistSnapshot(otherOwnerId, worldId)).toMatchObject({ ownerId: otherOwnerId, hasPersistData: false });
+        const indexes = await (await getMongoDatabase()).collection("world_persist_snapshots").indexes();
+        expect(indexes.map((index) => index.name)).toEqual(expect.arrayContaining(["owner_world_unique", "owner_observed"]));
     });
 
     test("replaces owner-scoped avatar tags in MongoDB", async () => {

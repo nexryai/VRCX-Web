@@ -146,6 +146,15 @@ export type WorldDocument = {
     updatedAt: Date;
 };
 
+export type WorldPersistSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    worldId: string;
+    hasPersistData: boolean;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
 export type GroupDocument = {
     _id: string;
     ownerId: string;
@@ -458,6 +467,7 @@ export type Collections = {
     monitorState: Collection<MonitorStateDocument>;
     users: Collection<UserDocument>;
     worlds: Collection<WorldDocument>;
+    worldPersistSnapshots: Collection<WorldPersistSnapshotDocument>;
     groups: Collection<GroupDocument>;
     groupPosts: Collection<GroupPostDocument>;
     groupPostSnapshots: Collection<GroupPostSnapshotDocument>;
@@ -496,6 +506,7 @@ export function collections(db: Db): Collections {
         monitorState: db.collection<MonitorStateDocument>("monitor_state"),
         users: db.collection<UserDocument>("users"),
         worlds: db.collection<WorldDocument>("worlds"),
+        worldPersistSnapshots: db.collection<WorldPersistSnapshotDocument>("world_persist_snapshots"),
         groups: db.collection<GroupDocument>("groups"),
         groupPosts: db.collection<GroupPostDocument>("group_posts"),
         groupPostSnapshots: db.collection<GroupPostSnapshotDocument>("group_post_snapshots"),

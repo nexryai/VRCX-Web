@@ -39,6 +39,8 @@ const captures = [
     { name: "world-dialog-publish", path: "/favorites/worlds", readyText: "Continue Publish To Labs. You can only publish once per week (7 days).?", favoriteKind: "world", worldDialog: true, worldOwner: true, worldConfirm: "publish" },
     { name: "world-dialog-unpublish", path: "/favorites/worlds", readyText: "Continue Unpublish?", favoriteKind: "world", worldDialog: true, worldOwner: true, worldPublished: true, worldConfirm: "unpublish" },
     { name: "world-dialog-delete", path: "/favorites/worlds", readyText: "Continue Delete?", favoriteKind: "world", worldDialog: true, worldOwner: true, worldConfirm: "delete" },
+    { name: "world-dialog-persist-delete", path: "/favorites/worlds", readyText: "Continue Delete Persistent Data?", favoriteKind: "world", worldDialog: true, worldOwner: true, worldPersist: true, worldConfirm: "delete-persist" },
+    { name: "world-dialog-persist-non-owner", path: "/favorites/worlds", readyText: "Continue Delete Persistent Data?", favoriteKind: "world", worldDialog: true, worldPersist: true, worldConfirm: "delete-persist" },
     { name: "previous-instances-world", path: "/favorites/worlds", readyText: "You", favoriteKind: "world", worldDialog: true, previousInstances: "world" },
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
@@ -169,6 +171,9 @@ for (const width of widths) {
                     }),
                 });
             });
+        }
+        if (capture.worldDialog) {
+            await page.route("**/api/worlds/wrld_00000000-0000-0000-0000-000000000051/persist", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ hasPersistData: capture.worldPersist === true, stale: false }) }));
         }
         if (capture.avatarModerationState !== undefined || capture.avatarOwner || capture.avatarWithoutImpostor) {
             await page.route("**/api/avatars/**", async (route) => {
@@ -457,6 +462,7 @@ for (const width of widths) {
             if (capture.worldConfirm) {
                 const labels = {
                     delete: "Delete",
+                    "delete-persist": "Delete Persistent Data",
                     publish: "Publish To Labs. You can only publish once per week (7 days).",
                     unpublish: "Unpublish",
                 };
