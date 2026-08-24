@@ -3,6 +3,7 @@ import "server-only";
 import type { Collection, Db } from "mongodb";
 
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
+import type { NotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
 import type {
     VrchatAvatar,
     VrchatAvatarModeration,
@@ -67,6 +68,7 @@ export type AppSettingsDocument = {
     notificationFilters: string[];
     notificationTablePageSize: 20 | 50 | 100;
     notificationLayout: "notification-center" | "table";
+    notificationDeliveryFilters: NotificationDeliveryFilters;
     favoriteSortByDate: boolean;
     localFavoriteFriendsGroups: string[];
     recentActionCooldownEnabled: boolean;
@@ -338,6 +340,7 @@ export type ActivityEventDocument = {
     occurredAt: Date;
     observedAt: Date;
     provenance: "pipeline" | "reconciliation";
+    browserDeliveredAt?: Date;
 };
 
 export type GameSessionDocument = {

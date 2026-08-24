@@ -1,5 +1,6 @@
 import "server-only";
 
+import { defaultNotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
 import { getMongoDatabase } from "./client";
 import type { Collections } from "./collections";
 import { collections } from "./collections";
@@ -467,6 +468,17 @@ const migrations: Migration[] = [
         name: "add-notification-center-layout",
         async apply(c) {
             await Promise.all([c.appSettings.updateMany({ notificationLayout: { $exists: false } }, { $set: { notificationLayout: "notification-center", updatedAt: new Date() } }), c.notifications.createIndex({ ownerId: 1, source: 1, firstObservedAt: -1 }, { name: "owner_source_first_observed" })]);
+        },
+    },
+    {
+        version: 44,
+        name: "add-notification-delivery-filters",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ notificationDeliveryFilters: { $exists: false } }, { $set: { notificationDeliveryFilters: defaultNotificationDeliveryFilters, updatedAt } }),
+                c.activityEvents.createIndex({ ownerId: 1, browserDeliveredAt: 1, observedAt: 1 }, { name: "owner_browser_delivery" }),
+            ]);
         },
     },
 ];

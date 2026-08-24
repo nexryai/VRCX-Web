@@ -3,21 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { AppSettingsPayload } from "@/lib/app-settings";
-import { browserNotificationMessage } from "@/lib/browser-notifications";
-import type { VrchatNotification } from "@/lib/vrchat/types";
+import type { BrowserNotificationDelivery } from "@/lib/browser-notifications";
 
 const POLL_INTERVAL_MS = 5_000;
 
-function showBrowserNotification(notification: VrchatNotification) {
-    const { title, body } = browserNotificationMessage(notification);
-    const toast = new Notification(title, {
-        body,
+function showBrowserNotification(delivery: BrowserNotificationDelivery) {
+    const toast = new Notification(delivery.title, {
+        body: delivery.body,
         icon: "/vrcx.png",
-        tag: `vrcx:${notification.id}`,
+        tag: delivery.tag,
     });
     toast.onclick = () => {
         window.focus();
-        window.location.assign("/notification");
+        window.location.assign(delivery.href);
         toast.close();
     };
 }
@@ -54,7 +52,7 @@ export function BrowserNotificationBridge() {
             try {
                 const response = await fetch("/api/browser-notifications", { method: "POST", signal: controller.signal });
                 if (!response.ok) return;
-                const payload = (await response.json()) as { notifications?: VrchatNotification[] };
+                const payload = (await response.json()) as { notifications?: BrowserNotificationDelivery[] };
                 for (const notification of payload.notifications || []) showBrowserNotification(notification);
             } catch {
                 // Delivery is opportunistic. A later poll retries records that

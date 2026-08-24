@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { browserNotificationMessage } from "./browser-notifications";
+import { browserActivityMessage, browserNotificationMessage } from "./browser-notifications";
 
 describe("browser notification messages", () => {
     test("matches VRCX's remote friend-request title and body", () => {
@@ -16,5 +16,10 @@ describe("browser notification messages", () => {
 
     test("uses upstream group titles and messages without rendering HTML", () => {
         expect(browserNotificationMessage({ id: "not_two", type: "group.announcement", title: "Meetup", message: "Starts soon <b>now</b>" })).toEqual({ title: "Meetup", body: "Starts soon <b>now</b>" });
+    });
+
+    test("formats remotely observed friend activity with VRCX wording", () => {
+        expect(browserActivityMessage({ id: "event_online", type: "Online", displayName: "Aoi", current: "Moonlit World" })).toEqual({ title: "Aoi", body: "has logged in to Moonlit World" });
+        expect(browserActivityMessage({ id: "event_name", type: "DisplayName", displayName: "Aoi New", previous: "Aoi Old" })).toEqual({ title: "Aoi Old", body: "changed their name to Aoi New" });
     });
 });

@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Download, ExternalLink, Play, Trash2, TriangleAlert, Upload } from "lucide-react";
 
+import { NotificationFiltersDialog } from "@/components/settings/notification-filters-dialog";
 import type { AppSettingsPayload } from "@/lib/app-settings";
 import { clearImportedLegacyBrowserSettings, type LegacyBrowserSettingsImport, readLegacyBrowserSettings } from "@/lib/legacy-browser-settings";
+import { defaultNotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
 import type { VrchatFavoriteGroup } from "@/lib/vrchat/types";
 
 type Tab = "Interface" | "Notifications" | "Social" | "System";
@@ -24,6 +26,7 @@ type SettingsState = Required<
         | "navigationCollapsed"
         | "notificationTablePageSize"
         | "notificationLayout"
+        | "notificationDeliveryFilters"
         | "recentActionCooldownEnabled"
         | "recentActionCooldownMinutes"
         | "theme"
@@ -44,6 +47,7 @@ const defaults: SettingsState = {
     friendListTablePageSize: 20,
     notificationTablePageSize: 20,
     notificationLayout: "notification-center",
+    notificationDeliveryFilters: defaultNotificationDeliveryFilters,
     moderationTablePageSize: 20,
     myAvatarsTablePageSize: 20,
     avatarAutoCleanupDays: 0,
@@ -250,6 +254,7 @@ export function SettingsView({ version }: { version: string }) {
 
 function NotificationSettings({ settings, change, setMessage }: { settings: SettingsState; change: (patch: Partial<SettingsState>) => Promise<void>; setMessage: (message: { error: boolean; text: string } | null) => void }) {
     const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+    const [filtersOpen, setFiltersOpen] = useState(false);
 
     useEffect(() => {
         setPermission("Notification" in window ? Notification.permission : "unsupported");
@@ -290,6 +295,11 @@ function NotificationSettings({ settings, change, setMessage }: { settings: Sett
                         <option value="table">Notifications Page</option>
                     </select>
                 </SettingsRow>
+                <SettingsRow label="Notification Filters">
+                    <button type="button" onClick={() => setFiltersOpen(true)} className="inline-flex h-8 items-center rounded-md border border-input bg-background px-3 text-xs hover:bg-muted">
+                        Notification Filters
+                    </button>
+                </SettingsRow>
                 <SettingsRow label="Send Test Notification">
                     <button type="button" disabled={permission !== "granted"} onClick={testNotification} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
                         <Play className="size-3.5" /> Send Test Notification
@@ -311,6 +321,7 @@ function NotificationSettings({ settings, change, setMessage }: { settings: Sett
                     <span className="rounded-md border border-input bg-background px-2.5 py-1.5 text-xs text-muted-foreground">{permissionLabel}</span>
                 </SettingsRow>
             </SettingsGroup>
+            {filtersOpen ? <NotificationFiltersDialog filters={settings.notificationDeliveryFilters} close={() => setFiltersOpen(false)} change={(notificationDeliveryFilters) => void change({ notificationDeliveryFilters })} /> : null}
         </>
     );
 }

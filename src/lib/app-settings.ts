@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defaultNotificationDeliveryFilters, notificationDeliveryFiltersSchema } from "@/lib/notification-delivery-filters";
 import { userIdSchema } from "@/lib/vrchat/ids";
 
 const remoteFavoriteFriendGroupKeySchema = z
@@ -43,6 +44,7 @@ export const appSettingsUpdateSchema = z
         notificationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
         notificationTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
         notificationLayout: z.enum(["notification-center", "table"]).optional(),
+        notificationDeliveryFilters: notificationDeliveryFiltersSchema.optional(),
         favoriteSortByDate: z.boolean().optional(),
         localFavoriteFriendsGroups: z
             .array(favoriteFriendGroupKeySchema)
@@ -101,6 +103,7 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         notificationFilters: settings?.notificationFilters ?? [],
         notificationTablePageSize: settings?.notificationTablePageSize ?? 20,
         notificationLayout: settings?.notificationLayout ?? "notification-center",
+        notificationDeliveryFilters: settings?.notificationDeliveryFilters ?? defaultNotificationDeliveryFilters,
         favoriteSortByDate: settings?.favoriteSortByDate ?? false,
         localFavoriteFriendsGroups: settings?.localFavoriteFriendsGroups ?? [],
         recentActionCooldownEnabled: settings?.recentActionCooldownEnabled ?? false,

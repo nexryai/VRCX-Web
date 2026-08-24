@@ -97,6 +97,7 @@ const captures = [
     { name: "settings-social", path: "/settings", readyText: "Favorite Groups Filter", settingsTab: "Social" },
     { name: "settings-social-groups", path: "/settings", readyText: "Event Crew", settingsTab: "Social", settingsFavoriteGroups: true },
     { name: "settings-notifications", path: "/settings", readyText: "Send Test Notification", settingsTab: "Notifications", notificationsSettings: true },
+    { name: "settings-notification-filters", path: "/settings", readyText: "Notification Filters", settingsTab: "Notifications", notificationFiltersDialog: true },
 ];
 
 const searchFixture = [
@@ -851,6 +852,25 @@ for (const width of widths) {
             await testButton.click();
             const notification = await page.evaluate(() => window.__vrcxTestNotification);
             if (notification?.title !== "VRCX" || notification?.options?.body !== "Test notification.") throw new Error("Settings test notification did not use the VRCX test message.");
+        }
+        if (capture.notificationFiltersDialog) {
+            const trigger = page.getByRole("button", { name: "Notification Filters", exact: true });
+            await trigger.click();
+            const dialog = page.getByRole("dialog", { name: "Notification Filters", exact: true });
+            await dialog.waitFor();
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await dialog.getByRole("group", { name: "GPS", exact: true }).getByRole("button", { name: "Favorites", exact: true }).click();
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.notificationDeliveryFilters?.GPS !== "VIP") throw new Error("Notification Filters did not persist the GPS selection in MongoDB.");
+            const reset = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await dialog.getByRole("button", { name: "Reset", exact: true }).click();
+            await reset;
+            await page.keyboard.press("Escape");
+            await dialog.waitFor({ state: "detached" });
+            if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Notification Filters did not restore focus after Escape.");
+            await trigger.click();
+            await dialog.waitFor();
         }
         if (capture.previousInstances) {
             const trigger = page.getByRole("button", { name: "Previous Instances", exact: true });
