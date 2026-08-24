@@ -488,6 +488,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ toolsCollapsedCategories: { $exists: false } }, { $set: { toolsCollapsedCategories: [], updatedAt: new Date() } });
         },
     },
+    {
+        version: 46,
+        name: "add-note-export-jobs",
+        async apply(c) {
+            await Promise.all([c.noteExportJobs.createIndex({ ownerId: 1 }, { unique: true, name: "owner_unique" }), c.noteExportJobs.createIndex({ status: 1, heartbeatAt: 1 }, { name: "status_heartbeat" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

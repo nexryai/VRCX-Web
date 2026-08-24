@@ -100,6 +100,7 @@ const captures = [
     { name: "settings-notification-filters", path: "/settings", readyText: "Notification Filters", settingsTab: "Notifications", notificationFiltersDialog: true },
     { name: "tools", path: "/tools", readyText: "Export Own Avatars", toolsReady: true },
     { name: "tools-discord-names", path: "/tools", readyText: "Discord Names", toolDialog: "discord" },
+    { name: "tools-note-export", path: "/tools", readyText: "Note Export", toolDialog: "notes" },
     { name: "tools-friends-export", path: "/tools", readyText: "Export Friends List", toolDialog: "friends" },
     { name: "tools-avatars-export", path: "/tools", readyText: "Export Own Avatars", toolDialog: "avatars", avatars: true },
 ];
@@ -885,8 +886,9 @@ for (const width of widths) {
             await dialog.waitFor();
         }
         if (capture.toolDialog) {
-            const labels = { avatars: "Export Own Avatars", discord: "Discord Names", friends: "Export Friends List" };
+            const labels = { avatars: "Export Own Avatars", discord: "Discord Names", friends: "Export Friends List", notes: "Export User Memos" };
             const label = labels[capture.toolDialog];
+            const dialogName = capture.toolDialog === "notes" ? "Note Export" : label;
             const trigger = page.getByRole("button", { name: new RegExp(`^${label}`) });
             await trigger.waitFor({ state: "visible" });
             await trigger.evaluate(
@@ -903,12 +905,23 @@ for (const width of widths) {
                     ),
             );
             await trigger.click();
-            const dialog = page.getByRole("dialog", { name: label, exact: true });
+            const dialog = page.getByRole("dialog", { name: dialogName, exact: true });
             await dialog.waitFor();
-            const close = dialog.getByRole("button", { name: `Close ${label}`, exact: true });
+            const close = dialog.getByRole("button", { name: `Close ${dialogName}`, exact: true });
             if (!(await close.evaluate((element) => document.activeElement === element))) throw new Error(`${label} did not focus its Close button.`);
             if (capture.toolDialog === "discord" && !(await dialog.getByRole("textbox", { name: "Discord Names export", exact: true }).inputValue()).includes("aoi_sample")) throw new Error("Discord Names did not render the remotely visible name.");
             if (capture.toolDialog === "friends" && !(await dialog.getByRole("textbox", { name: "CSV friends export", exact: true }).inputValue()).includes("Aoi Sample")) throw new Error("Export Friends List did not render the MongoDB friend projection.");
+            if (capture.toolDialog === "notes") {
+                const note = dialog.getByRole("textbox", { name: "Note for Aoi Sample", exact: true });
+                await note.waitFor();
+                if (!(await note.inputValue()).includes("browser-port test crew")) throw new Error("Note Export did not render the MongoDB user memo.");
+                await note.fill("Edited preview note");
+                if ((await note.inputValue()) !== "Edited preview note") throw new Error("Note Export did not retain a preview edit.");
+                await dialog.getByRole("button", { name: "Skip Aoi Sample", exact: true }).click();
+                await dialog.getByText("No user memos need to be exported.", { exact: true }).waitFor();
+                await dialog.getByRole("button", { name: "Refresh", exact: true }).click();
+                await dialog.getByRole("textbox", { name: "Note for Aoi Sample", exact: true }).waitFor();
+            }
             if (capture.toolDialog === "avatars") {
                 const output = dialog.getByRole("textbox", { name: "Export Own Avatars export", exact: true });
                 await output.waitFor();

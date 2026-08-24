@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -72,6 +72,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
+        expect(await database.collection("note_export_jobs").indexExists(["owner_unique", "status_heartbeat"])).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_type_occurred")).toBe(true);
         expect(await database.collection("activity_events").indexExists("owner_browser_delivery")).toBe(true);
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
@@ -174,6 +175,12 @@ describe("MongoDB application repositories", () => {
             { _id: "singleton" },
             { $set: { ownerId: firstOwnerId, pipelineSequence: 7, lastPipelineEventKey: "first-event", lastPipelineEventType: "friend-online", lastPipelineEventAt: new Date(), lastAvatarCleanupAt: new Date(), lastAvatarAutoCleanupAt: new Date(), lastAvatarCleanupDeleted: 4 } },
         );
+        const jobNow = new Date();
+        await collections(await getMongoDatabase()).noteExportJobs.updateOne(
+            { _id: firstOwnerId },
+            { $set: { ownerId: firstOwnerId, jobId: "old-account-job", executionId: "old-account-execution", status: "running", items: [], processed: 0, total: 0, cancelRequested: false, heartbeatAt: jobNow, createdAt: jobNow, updatedAt: jobNow } },
+            { upsert: true },
+        );
         await saveAuthenticatedVrchatSession({ auth: "second-auth" }, secondOwnerId);
 
         expect(await updateStoredVrchatCookies({ twoFactorAuth: "stale-cookie" }, { activeUserId: firstOwnerId, authCookie: "first-auth" })).toBe(false);
@@ -184,6 +191,8 @@ describe("MongoDB application repositories", () => {
         expect((await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }))?.lastPipelineEventKey).toBeUndefined();
         expect((await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }))?.lastAvatarCleanupAt).toBeUndefined();
         expect((await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }))?.lastAvatarAutoCleanupAt).toBeUndefined();
+        expect(await collections(await getMongoDatabase()).noteExportJobs.findOne({ _id: firstOwnerId })).toMatchObject({ status: "cancelled", cancelRequested: true });
+        expect((await collections(await getMongoDatabase()).noteExportJobs.findOne({ _id: firstOwnerId }))?.executionId).toBeUndefined();
     });
 
     test("serializes reconciliation across server processes", async () => {
@@ -691,6 +700,44 @@ describe("MongoDB application repositories", () => {
         expect(await listEntityMemos(ownerId, "world", [userId])).toEqual(new Map());
         expect(await saveEntityMemo(ownerId, "world", worldId, "")).toBe("");
         expect(await getEntityMemo(ownerId, "world", worldId)).toBe("");
+    });
+
+    test("creates owner-scoped recoverable note-export jobs from current friend memos", async () => {
+        const { cancelNoteExportJob, claimNoteExportJob, getNoteExportJob, listNoteExportCandidates, NoteExportValidationError, startNoteExportJob } = await import("@/lib/note-export-job");
+        const { saveEntityMemo } = await import("./memo-repository");
+        const { collections } = await import("./collections");
+        const { getMongoDatabase } = await import("./client");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000241";
+        const friendA = "usr_00000000-0000-0000-0000-000000000242";
+        const friendB = "usr_00000000-0000-0000-0000-000000000243";
+        const now = new Date("2026-08-24T01:00:00.000Z");
+        const c = collections(await getMongoDatabase());
+        await c.friendSnapshots.insertMany([
+            { _id: `${ownerId}:${friendA}`, ownerId, friendId: friendA, online: true, user: { id: friendA, displayName: "Zulu", note: "old" }, observedAt: now, updatedAt: now },
+            { _id: `${ownerId}:${friendB}`, ownerId, friendId: friendB, online: false, user: { id: friendB, displayName: "Alpha", note: "Already current" }, observedAt: now, updatedAt: now },
+        ]);
+        await saveEntityMemo(ownerId, "user", friendA, "line one\nline two");
+        await saveEntityMemo(ownerId, "user", friendB, "Already current");
+
+        expect(await listNoteExportCandidates(ownerId)).toEqual([{ userId: friendA, displayName: "Zulu", note: "line one line two", imageUrl: undefined }]);
+        expect(await startNoteExportJob(ownerId, [{ userId: friendA, note: "edited" }])).toBe(true);
+        expect(await startNoteExportJob(ownerId, [{ userId: friendA, note: "duplicate" }])).toBe(false);
+        expect(await getNoteExportJob(ownerId)).toMatchObject({ status: "queued", processed: 0, total: 1, items: [{ userId: friendA, note: "edited", status: "pending" }] });
+        await expect(startNoteExportJob(ownerId, [{ userId: "usr_00000000-0000-0000-0000-000000000244", note: "not a friend memo" }])).rejects.toBeInstanceOf(NoteExportValidationError);
+        expect(await cancelNoteExportJob(ownerId)).toBe(true);
+        expect(await getNoteExportJob(ownerId)).toMatchObject({ status: "cancelled", cancelRequested: true });
+
+        expect(await startNoteExportJob(ownerId, [{ userId: friendA, note: "restart-safe" }])).toBe(true);
+        const concurrentClaims = await Promise.all([claimNoteExportJob(ownerId, now), claimNoteExportJob(ownerId, now)]);
+        expect(concurrentClaims.filter(Boolean)).toHaveLength(1);
+        const firstClaim = concurrentClaims.find(Boolean);
+        expect(firstClaim).toEqual({ executionId: expect.any(String) });
+        expect(await claimNoteExportJob(ownerId, new Date(now.getTime() + 10_000))).toBeNull();
+        await c.noteExportJobs.updateOne({ _id: ownerId }, { $set: { heartbeatAt: new Date(now.getTime() - 31_000) } });
+        const recoveryClaim = await claimNoteExportJob(ownerId, now);
+        expect(recoveryClaim?.executionId).not.toBe(firstClaim?.executionId);
+        expect(await claimNoteExportJob("usr_00000000-0000-0000-0000-000000000245", now)).toBeNull();
+        expect(await cancelNoteExportJob(ownerId)).toBe(true);
     });
 
     test("projects remotely observed friend-request notifications into Friend Log once", async () => {

@@ -76,19 +76,22 @@ export async function saveAuthenticatedVrchatSession(cookies: VrchatCookies, use
     const previous = await c.appSettings.findOne({ _id: "singleton" }, { projection: { activeUserId: 1 } });
     const identityChanged = previous?.activeUserId !== userId;
     if (previous?.activeUserId && identityChanged) {
-        await c.gameSessions.updateMany(
-            { ownerId: previous.activeUserId, current: true },
-            {
-                $set: {
-                    current: false,
-                    endedAt: now,
-                    endPrecision: "observed",
-                    endSource: "reconciliation",
-                    closeReason: "identity-change",
-                    updatedAt: now,
+        await Promise.all([
+            c.gameSessions.updateMany(
+                { ownerId: previous.activeUserId, current: true },
+                {
+                    $set: {
+                        current: false,
+                        endedAt: now,
+                        endPrecision: "observed",
+                        endSource: "reconciliation",
+                        closeReason: "identity-change",
+                        updatedAt: now,
+                    },
                 },
-            },
-        );
+            ),
+            c.noteExportJobs.updateMany({ ownerId: previous.activeUserId, status: { $in: ["queued", "running"] } }, { $set: { status: "cancelled", cancelRequested: true, heartbeatAt: now, updatedAt: now }, $unset: { executionId: "", nextRunAt: "" } }),
+        ]);
     }
 
     await Promise.all([
@@ -178,6 +181,7 @@ export async function clearStoredVrchatSession(expected: { activeUserId?: string
                 $unset: { ownerId: "", lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastAvatarCleanupAt: "", lastAvatarAutoCleanupAt: "", lastAvatarCleanupDeleted: "", lastAvatarCleanupError: "", lastError: "" },
             },
         ),
+        ...(document.activeUserId ? [c.noteExportJobs.updateMany({ ownerId: document.activeUserId, status: { $in: ["queued", "running"] } }, { $set: { status: "cancelled", cancelRequested: true, heartbeatAt: new Date(), updatedAt: new Date() }, $unset: { executionId: "", nextRunAt: "" } })] : []),
     ]);
     return true;
 }

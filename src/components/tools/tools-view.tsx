@@ -2,17 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Loader2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
+import { NoteExportDialog } from "@/components/tools/note-export-dialog";
+import { ToolsDialogFrame } from "@/components/tools/tools-dialog-frame";
 import { formatDiscordNamesCsv, formatFriendsListExports, formatOwnedAvatarsCsv, ownedAvatarsPageSchema } from "@/lib/tools-exports";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
-type ToolDialog = "avatars" | "discord" | "friends";
+type ToolDialog = "avatars" | "discord" | "friends" | "notes";
 
 const tools: Array<{ key: ToolDialog; icon: string; title: string; description: string }> = [
     { key: "discord", icon: "ri-discord-line", title: "Discord Names", description: "Find the Discord usernames of your VRChat friends" },
+    { key: "notes", icon: "ri-file-list-3-line", title: "Export User Memos", description: "Export VRCX user memos to VRChat notes" },
     { key: "friends", icon: "ri-file-list-3-line", title: "Export Friends List", description: "Export your friends list from VRChat" },
     { key: "avatars", icon: "ri-file-list-3-line", title: "Export Own Avatars", description: "Export your personal avatars from VRChat" },
 ];
@@ -138,58 +141,14 @@ export function ToolsView() {
             {dialog === "discord" ? <ExportDialog title="Discord Names" description="Click load missing entries in the Friends List tab to search entire friends list" value={discordCsv} close={closeDialog} /> : null}
             {dialog === "friends" ? <FriendsExportDialog csv={friendExports.csv} json={friendExports.json} close={closeDialog} /> : null}
             {dialog === "avatars" ? <ExportDialog title="Export Own Avatars" value={formatOwnedAvatarsCsv(avatars)} loading={avatarsLoading} error={avatarError} close={closeDialog} /> : null}
+            {dialog === "notes" ? <NoteExportDialog close={closeDialog} /> : null}
         </section>
-    );
-}
-
-function DialogFrame({ title, description, close, children }: { title: string; description?: string; close: () => void; children: React.ReactNode }) {
-    const dialog = useRef<HTMLDivElement>(null);
-    const closeButton = useRef<HTMLButtonElement>(null);
-
-    useEffect(() => {
-        closeButton.current?.focus();
-    }, []);
-
-    function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-        if (event.key === "Escape") {
-            event.preventDefault();
-            close();
-            return;
-        }
-        if (event.key !== "Tab") return;
-        const focusable = Array.from(dialog.current?.querySelectorAll<HTMLElement>("button:not([disabled]), textarea:not([disabled])") ?? []);
-        const first = focusable[0];
-        const last = focusable.at(-1);
-        if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first?.focus();
-        }
-    }
-
-    return (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-3" onMouseDown={(event) => event.target === event.currentTarget && close()}>
-            <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="tools-dialog-title" onKeyDown={onKeyDown} className="w-full max-w-lg rounded-xl border border-border bg-popover p-4 shadow-2xl">
-                <div className="flex items-center gap-2">
-                    <h2 id="tools-dialog-title" className="text-base font-semibold">
-                        {title}
-                    </h2>
-                    <button ref={closeButton} type="button" onClick={close} className="ml-auto inline-flex size-8 items-center justify-center rounded-md hover:bg-muted" aria-label={`Close ${title}`}>
-                        <X className="size-4" aria-hidden="true" />
-                    </button>
-                </div>
-                {description ? <p className="mt-2 text-xs text-muted-foreground">{description}</p> : null}
-                {children}
-            </div>
-        </div>
     );
 }
 
 function ExportDialog({ title, description, value, loading = false, error = "", close }: { title: string; description?: string; value: string; loading?: boolean; error?: string; close: () => void }) {
     return (
-        <DialogFrame title={title} description={description} close={close}>
+        <ToolsDialogFrame title={title} description={description} close={close}>
             {loading ? (
                 <div className="mt-4 flex h-[324px] items-center justify-center text-sm text-muted-foreground">
                     <Loader2 className="mr-2 size-4 animate-spin" /> Loading
@@ -199,14 +158,14 @@ function ExportDialog({ title, description, value, loading = false, error = "", 
             ) : (
                 <textarea readOnly rows={15} value={value} onClick={(event) => event.currentTarget.select()} aria-label={`${title} export`} className="mt-4 h-[324px] w-full resize-none rounded-md border border-input bg-background p-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" />
             )}
-        </DialogFrame>
+        </ToolsDialogFrame>
     );
 }
 
 function FriendsExportDialog({ csv, json, close }: { csv: string; json: string; close: () => void }) {
     const [tab, setTab] = useState<"CSV" | "JSON">("CSV");
     return (
-        <DialogFrame title="Export Friends List" close={close}>
+        <ToolsDialogFrame title="Export Friends List" close={close}>
             <div className="mt-2.5 flex gap-5 border-b border-border" role="tablist" aria-label="Friends export format">
                 {(["CSV", "JSON"] as const).map((format) => (
                     <button key={format} type="button" role="tab" aria-selected={tab === format} onClick={() => setTab(format)} className={`h-9 border-b-2 px-2 text-xs ${tab === format ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>
@@ -222,7 +181,7 @@ function FriendsExportDialog({ csv, json, close }: { csv: string; json: string; 
                 aria-label={`${tab} friends export`}
                 className="mt-4 h-[324px] w-full resize-none rounded-md border border-input bg-background p-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-        </DialogFrame>
+        </ToolsDialogFrame>
     );
 }
 

@@ -329,6 +329,32 @@ export type EntityMemoDocument = {
     updatedAt: Date;
 };
 
+export type NoteExportJobItem = {
+    userId: string;
+    displayName: string;
+    imageUrl?: string;
+    note: string;
+    status: "complete" | "pending";
+    completedAt?: Date;
+};
+
+export type NoteExportJobDocument = {
+    _id: string;
+    ownerId: string;
+    jobId: string;
+    executionId?: string;
+    status: "cancelled" | "complete" | "error" | "queued" | "running";
+    items: NoteExportJobItem[];
+    processed: number;
+    total: number;
+    cancelRequested: boolean;
+    error?: string;
+    nextRunAt?: Date;
+    heartbeatAt: Date;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
 export type ActivityEventDocument = {
     _id: string;
     ownerId: string;
@@ -506,6 +532,7 @@ export type Collections = {
     avatars: Collection<AvatarDocument>;
     avatarTags: Collection<AvatarTagDocument>;
     entityMemos: Collection<EntityMemoDocument>;
+    noteExportJobs: Collection<NoteExportJobDocument>;
     friendSnapshots: Collection<FriendSnapshotDocument>;
     selfSnapshots: Collection<SelfSnapshotDocument>;
     activityEvents: Collection<ActivityEventDocument>;
@@ -546,6 +573,7 @@ export function collections(db: Db): Collections {
         avatars: db.collection<AvatarDocument>("avatars"),
         avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),
         entityMemos: db.collection<EntityMemoDocument>("entity_memos"),
+        noteExportJobs: db.collection<NoteExportJobDocument>("note_export_jobs"),
         friendSnapshots: db.collection<FriendSnapshotDocument>("friend_snapshots"),
         selfSnapshots: db.collection<SelfSnapshotDocument>("self_snapshots"),
         activityEvents: db.collection<ActivityEventDocument>("activity_events"),

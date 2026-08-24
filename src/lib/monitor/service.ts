@@ -6,6 +6,7 @@ import { z } from "zod";
 import { enrichGameSession, observeGameSession } from "@/lib/game-log/session-repository";
 import { clearStoredVrchatSession, getStoredVrchatSession, updateStoredVrchatCookies } from "@/lib/mongodb/session-repository";
 import { resumeStaleMutualGraphJob } from "@/lib/mutual-graph-job";
+import { resumeNoteExportJob } from "@/lib/note-export-job";
 import { applyPipelineNotificationState, upsertPipelineNotification } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import { vrchatNotificationSchema } from "@/lib/vrchat/types";
@@ -91,6 +92,7 @@ export class AlwaysOnMonitor {
             if (becameLeader || !this.cookies || this.ownerId !== stored.activeUserId) await this.loadSessionAndStart(stored);
             else if (!this.reconciliationPromise && !this.socket && !this.reconnectTimer) await this.connectPipeline();
             if (this.cookies && this.ownerId) await resumeStaleMutualGraphJob(this.ownerId, this.cookies);
+            if (this.cookies && this.ownerId) await resumeNoteExportJob(this.ownerId, this.cookies);
         } catch {
             // Fail closed when MongoDB cannot prove leadership. Continuing an
             // old socket could create duplicate ingestion after another
