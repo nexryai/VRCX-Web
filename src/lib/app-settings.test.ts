@@ -16,6 +16,7 @@ describe("application settings boundary", () => {
             notificationDeliveryFilters: expect.objectContaining({ invite: "Friends", Online: "VIP" }),
             activityTablePageSize: 20,
             avatarAutoCleanupDays: 0,
+            toolsCollapsedCategories: [],
             mutualGraphLayoutIterations: 800,
             mutualGraphExcludedFriendIds: [],
         });
@@ -35,6 +36,9 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ notificationLayout: "sheet" }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ notificationDeliveryFilters: serializeAppSettings().notificationDeliveryFilters }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ notificationDeliveryFilters: { invite: "Friends" } }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["user"] }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["user", "user"] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["system"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
     });
 

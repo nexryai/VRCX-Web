@@ -481,6 +481,13 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 45,
+        name: "add-tools-category-preferences",
+        async apply(c) {
+            await c.appSettings.updateMany({ toolsCollapsedCategories: { $exists: false } }, { $set: { toolsCollapsedCategories: [], updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

@@ -64,6 +64,11 @@ export const appSettingsUpdateSchema = z
         mutualGraphCommunitySeparation: z.number().min(0).max(3).optional(),
         mutualGraphExcludedFriendIds: z.array(userIdSchema).max(10_000).optional(),
         avatarAutoCleanupDays: z.union([z.literal(0), z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).optional(),
+        toolsCollapsedCategories: z
+            .array(z.literal("user"))
+            .max(1)
+            .refine((values) => new Set(values).size === values.length)
+            .optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -119,5 +124,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         mutualGraphCommunitySeparation: settings?.mutualGraphCommunitySeparation ?? 0,
         mutualGraphExcludedFriendIds: settings?.mutualGraphExcludedFriendIds ?? [],
         avatarAutoCleanupDays: settings?.avatarAutoCleanupDays ?? 0,
+        toolsCollapsedCategories: settings?.toolsCollapsedCategories ?? [],
     };
 }

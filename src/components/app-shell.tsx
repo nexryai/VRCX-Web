@@ -51,6 +51,7 @@ const navigation: NavigationEntry[] = [
             { href: "/charts/hot-worlds", label: "Hot Worlds", icon: "ri-fire-line" },
         ],
     },
+    { href: "/tools", label: "Tools", icon: "ri-tools-line" },
 ];
 
 function isItem(entry: NavigationEntry): entry is NavigationItem {

@@ -98,6 +98,10 @@ const captures = [
     { name: "settings-social-groups", path: "/settings", readyText: "Event Crew", settingsTab: "Social", settingsFavoriteGroups: true },
     { name: "settings-notifications", path: "/settings", readyText: "Send Test Notification", settingsTab: "Notifications", notificationsSettings: true },
     { name: "settings-notification-filters", path: "/settings", readyText: "Notification Filters", settingsTab: "Notifications", notificationFiltersDialog: true },
+    { name: "tools", path: "/tools", readyText: "Export Own Avatars", toolsReady: true },
+    { name: "tools-discord-names", path: "/tools", readyText: "Discord Names", toolDialog: "discord" },
+    { name: "tools-friends-export", path: "/tools", readyText: "Export Friends List", toolDialog: "friends" },
+    { name: "tools-avatars-export", path: "/tools", readyText: "Export Own Avatars", toolDialog: "avatars", avatars: true },
 ];
 
 const searchFixture = [
@@ -155,6 +159,14 @@ for (const width of widths) {
                     close() {}
                 }
                 Object.defineProperty(window, "Notification", { configurable: true, value: MockNotification });
+            });
+        }
+        if (capture.toolDialog === "discord") {
+            await page.route("**/api/friends?*", async (route) => {
+                const response = await route.fetch();
+                const payload = await response.json();
+                const friends = (payload.friends || []).map((friend) => (friend.displayName === "Aoi Sample" ? { ...friend, statusDescription: "Discord: aoi_sample" } : friend));
+                return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ friends }) });
             });
         }
         if (capture.searchQuery) {
@@ -871,6 +883,65 @@ for (const width of widths) {
             if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Notification Filters did not restore focus after Escape.");
             await trigger.click();
             await dialog.waitFor();
+        }
+        if (capture.toolDialog) {
+            const labels = { avatars: "Export Own Avatars", discord: "Discord Names", friends: "Export Friends List" };
+            const label = labels[capture.toolDialog];
+            const trigger = page.getByRole("button", { name: new RegExp(`^${label}`) });
+            await trigger.waitFor({ state: "visible" });
+            await trigger.evaluate(
+                (element) =>
+                    new Promise((resolve) =>
+                        element.disabled
+                            ? new MutationObserver((_mutations, observer) => {
+                                  if (!element.disabled) {
+                                      observer.disconnect();
+                                      resolve();
+                                  }
+                              }).observe(element, { attributes: true })
+                            : resolve(),
+                    ),
+            );
+            await trigger.click();
+            const dialog = page.getByRole("dialog", { name: label, exact: true });
+            await dialog.waitFor();
+            const close = dialog.getByRole("button", { name: `Close ${label}`, exact: true });
+            if (!(await close.evaluate((element) => document.activeElement === element))) throw new Error(`${label} did not focus its Close button.`);
+            if (capture.toolDialog === "discord" && !(await dialog.getByRole("textbox", { name: "Discord Names export", exact: true }).inputValue()).includes("aoi_sample")) throw new Error("Discord Names did not render the remotely visible name.");
+            if (capture.toolDialog === "friends" && !(await dialog.getByRole("textbox", { name: "CSV friends export", exact: true }).inputValue()).includes("Aoi Sample")) throw new Error("Export Friends List did not render the MongoDB friend projection.");
+            if (capture.toolDialog === "avatars") {
+                const output = dialog.getByRole("textbox", { name: "Export Own Avatars export", exact: true });
+                await output.waitFor();
+                if (!(await output.inputValue()).includes("Browser Dance Avatar")) throw new Error("Export Own Avatars did not render the remote avatar page.");
+            }
+            await page.keyboard.press("Escape");
+            await dialog.waitFor({ state: "detached" });
+            if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error(`${label} did not restore trigger focus.`);
+            await trigger.click();
+            await dialog.waitFor();
+            if (capture.toolDialog === "avatars") await dialog.getByRole("textbox", { name: "Export Own Avatars export", exact: true }).waitFor();
+        }
+        if (capture.toolsReady) {
+            const trigger = page.getByRole("button", { name: /^Export Friends List/ });
+            await trigger.waitFor({ state: "visible" });
+            await trigger.evaluate(
+                (element) =>
+                    new Promise((resolve) =>
+                        element.disabled
+                            ? new MutationObserver((_mutations, observer) => {
+                                  if (!element.disabled) {
+                                      observer.disconnect();
+                                      resolve();
+                                  }
+                              }).observe(element, { attributes: true })
+                            : resolve(),
+                    ),
+            );
+            const category = page.getByRole("button", { name: "Export", exact: true });
+            await Promise.all([page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH"), category.click()]);
+            if ((await category.getAttribute("aria-expanded")) !== "false" || (await trigger.isVisible())) throw new Error("Tools Export category did not collapse.");
+            await Promise.all([page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH"), category.click()]);
+            await trigger.waitFor({ state: "visible" });
         }
         if (capture.previousInstances) {
             const trigger = page.getByRole("button", { name: "Previous Instances", exact: true });

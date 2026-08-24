@@ -85,6 +85,7 @@ export type AppSettingsDocument = {
     mutualGraphCommunitySeparation: number;
     mutualGraphExcludedFriendIds: string[];
     avatarAutoCleanupDays: 0 | 30 | 90 | 180 | 365;
+    toolsCollapsedCategories: Array<"user">;
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];
