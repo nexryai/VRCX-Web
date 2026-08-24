@@ -42,6 +42,7 @@ export const appSettingsUpdateSchema = z
         userDialogLastTab: z.enum(["Info", "Mutual", "Groups", "Worlds", "Activity", "JSON"]).optional(),
         notificationFilters: z.array(z.string().min(1).max(64)).max(32).optional(),
         notificationTablePageSize: z.union([z.literal(20), z.literal(50), z.literal(100)]).optional(),
+        notificationLayout: z.enum(["notification-center", "table"]).optional(),
         favoriteSortByDate: z.boolean().optional(),
         localFavoriteFriendsGroups: z
             .array(favoriteFriendGroupKeySchema)
@@ -99,6 +100,7 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         userDialogLastTab: settings?.userDialogLastTab ?? "Info",
         notificationFilters: settings?.notificationFilters ?? [],
         notificationTablePageSize: settings?.notificationTablePageSize ?? 20,
+        notificationLayout: settings?.notificationLayout ?? "notification-center",
         favoriteSortByDate: settings?.favoriteSortByDate ?? false,
         localFavoriteFriendsGroups: settings?.localFavoriteFriendsGroups ?? [],
         recentActionCooldownEnabled: settings?.recentActionCooldownEnabled ?? false,

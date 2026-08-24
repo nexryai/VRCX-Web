@@ -66,6 +66,7 @@ export type AppSettingsDocument = {
     userDialogLastTab: "Info" | "Mutual" | "Groups" | "Worlds" | "Activity" | "JSON";
     notificationFilters: string[];
     notificationTablePageSize: 20 | 50 | 100;
+    notificationLayout: "notification-center" | "table";
     favoriteSortByDate: boolean;
     localFavoriteFriendsGroups: string[];
     recentActionCooldownEnabled: boolean;
@@ -391,6 +392,7 @@ export type NotificationDocument = {
     lastObservedAt: Date;
     updatedAt: Date;
     browserDeliveredAt?: Date;
+    seenAt?: Date;
 };
 
 export type FavoriteDocument = {

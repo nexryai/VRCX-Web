@@ -23,6 +23,7 @@ type SettingsState = Required<
         | "myAvatarsTablePageSize"
         | "navigationCollapsed"
         | "notificationTablePageSize"
+        | "notificationLayout"
         | "recentActionCooldownEnabled"
         | "recentActionCooldownMinutes"
         | "theme"
@@ -42,6 +43,7 @@ const defaults: SettingsState = {
     activityTablePageSize: 20,
     friendListTablePageSize: 20,
     notificationTablePageSize: 20,
+    notificationLayout: "notification-center",
     moderationTablePageSize: 20,
     myAvatarsTablePageSize: 20,
     avatarAutoCleanupDays: 0,
@@ -282,6 +284,12 @@ function NotificationSettings({ settings, change, setMessage }: { settings: Sett
     return (
         <>
             <SettingsGroup title="Notifications">
+                <SettingsRow label="Notification View">
+                    <select value={settings.notificationLayout} onChange={(event) => void change({ notificationLayout: event.target.value as SettingsState["notificationLayout"] })} className="h-8 rounded-md border border-input bg-background px-2 text-xs" aria-label="Notification View">
+                        <option value="notification-center">Notification Center</option>
+                        <option value="table">Notifications Page</option>
+                    </select>
+                </SettingsRow>
                 <SettingsRow label="Send Test Notification">
                     <button type="button" disabled={permission !== "granted"} onClick={testNotification} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">
                         <Play className="size-3.5" /> Send Test Notification

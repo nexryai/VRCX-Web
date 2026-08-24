@@ -21,6 +21,8 @@ const captures = [
     { name: "previous-instances-user", path: "/social/friend-list", readyText: "Remote user", clickText: "Aoi Sample", previousInstances: "user" },
     { name: "user-favorite-dialog", path: "/social/friend-list", readyText: "VRChat Favorites", clickText: "Aoi Sample", favoriteKind: "friend", favoriteActionLabel: "Manage favorites for Aoi Sample" },
     { name: "notifications", path: "/notification", readyText: "Group announcement, Community meetup starts in one hour." },
+    { name: "notification-center", path: "/feed", readyText: "Past Notifications", notificationCenter: true },
+    { name: "notification-center-menu", path: "/feed", readyText: "Mark all read", notificationCenterMenu: true },
     { name: "game-log", path: "/game-log", readyText: "Visual Operator: join me · Own status is now recorded" },
     { name: "search", path: "/search", readyText: "Found through the VRChat user search.", searchQuery: "sample creator" },
     { name: "favorite-friends", path: "/favorites/friends", readyText: "Building a new world", favoriteKind: "friend" },
@@ -160,6 +162,9 @@ for (const width of widths) {
         }
         if (capture.recentActionUser) {
             await page.route("**/api/users/usr_00000000-0000-0000-0000-000000000031", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user: searchFixture[0], recentFriendRequestAt: new Date().toISOString() }) }));
+        }
+        if (capture.notificationCenter || capture.notificationCenterMenu) {
+            await page.route("**/api/notifications/*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) }));
         }
         if (capture.favoriteKind) {
             await page.route("**/api/favorites?section=limits", (route) =>
@@ -841,6 +846,7 @@ for (const width of widths) {
             await trigger.click();
         }
         if (capture.notificationsSettings) {
+            await page.getByRole("button", { name: "Always", exact: true }).click();
             const testButton = page.getByRole("button", { name: "Send Test Notification", exact: true });
             await testButton.click();
             const notification = await page.evaluate(() => window.__vrcxTestNotification);
@@ -876,6 +882,25 @@ for (const width of widths) {
         if (capture.recentActionUser) {
             await page.getByText("Search Result Creator", { exact: true }).click();
             await page.getByRole("dialog", { name: "Search Result Creator", exact: true }).waitFor();
+        }
+        if (capture.notificationCenter) {
+            const trigger = page.getByRole("button", { name: "Notification Center", exact: true });
+            await trigger.click();
+            const dialog = page.getByRole("dialog", { name: "Notification Center", exact: true });
+            await dialog.waitFor();
+            await page.keyboard.press("Escape");
+            await dialog.waitFor({ state: "detached" });
+            if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Notification Center did not restore focus after Escape.");
+            await trigger.click();
+        }
+        if (capture.notificationCenterMenu) {
+            const trigger = page.getByRole("button", { name: "Notification Center", exact: true });
+            await trigger.click({ button: "right" });
+            const menu = page.getByRole("menu", { name: "Notification Center actions", exact: true });
+            await menu.waitFor();
+            await page.keyboard.press("Escape");
+            await menu.waitFor({ state: "detached" });
+            await trigger.click({ button: "right" });
         }
         await page.getByText(capture.readyText, { exact: true }).first().waitFor({ state: "attached" });
         await page.waitForTimeout(250);

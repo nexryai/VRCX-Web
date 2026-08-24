@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Bell, ChevronDown, RefreshCw, Search, Settings, User } from "lucide-react";
+import { ChevronDown, RefreshCw, Search, Settings, User } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
+import { NotificationCenter } from "@/components/notifications/notification-center";
 import { VrchatImage } from "@/components/vrchat-image";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { locationLabel } from "@/lib/friends";
@@ -27,22 +27,33 @@ export function FriendsSidebar() {
     const [tab, setTab] = useState<SidebarTab>("friends");
     const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
     const [groups, setGroups] = useState<VrchatGroup[]>([]);
+    const [notificationLayout, setNotificationLayout] = useState<"notification-center" | "table">("notification-center");
     const searchRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const controller = new AbortController();
         async function loadSidebarData() {
             const [settingsResponse, favoriteIds, groupsResponse] = await Promise.all([fetch("/api/settings", { cache: "no-store", signal: controller.signal }), loadFavoriteFriendIds(controller.signal), fetch("/api/groups", { cache: "no-store", signal: controller.signal })]);
-            const settings = (await settingsResponse.json()) as { sidebarGroupByInstance?: boolean; sidebarCollapsedSections?: SectionKey[]; sidebarTab?: SidebarTab };
+            const settings = (await settingsResponse.json()) as { sidebarGroupByInstance?: boolean; sidebarCollapsedSections?: SectionKey[]; sidebarTab?: SidebarTab; notificationLayout?: "notification-center" | "table" };
             const groupPayload = (await groupsResponse.json()) as { groups?: VrchatGroup[] };
             setGroupByInstance(settings.sidebarGroupByInstance === true);
             setCollapsed(new Set(settings.sidebarCollapsedSections ?? []));
             setTab(settings.sidebarTab ?? "friends");
+            setNotificationLayout(settings.notificationLayout ?? "notification-center");
             setFavoriteIds(favoriteIds);
             setGroups(groupPayload.groups ?? []);
         }
         void loadSidebarData().catch(() => undefined);
         return () => controller.abort();
+    }, []);
+
+    useEffect(() => {
+        function applySettings(event: Event) {
+            const value = (event as CustomEvent<{ notificationLayout?: "notification-center" | "table" }>).detail?.notificationLayout;
+            if (value) setNotificationLayout(value);
+        }
+        window.addEventListener("vrcx:settings-saved", applySettings);
+        return () => window.removeEventListener("vrcx:settings-saved", applySettings);
     }, []);
 
     useEffect(() => {
@@ -139,9 +150,7 @@ export function FriendsSidebar() {
                 <button type="button" onClick={() => void refresh()} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-accent disabled:opacity-50" disabled={loading} aria-label="Refresh friends">
                     <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                 </button>
-                <Link href="/notification" className="relative inline-flex size-8 items-center justify-center rounded-full hover:bg-accent" aria-label="Notification Center">
-                    <Bell className="size-4" />
-                </Link>
+                <NotificationCenter layout={notificationLayout} friends={allFriends} openUser={openUser} openGroup={openGroup} />
                 <div className="relative">
                     <button type="button" onClick={() => setSettingsOpen((value) => !value)} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-accent" aria-label="Sidebar settings">
                         <Settings className="size-4" />

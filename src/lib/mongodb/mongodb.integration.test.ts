@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -42,6 +42,7 @@ describe("MongoDB application repositories", () => {
             recentActionCooldownEnabled: false,
             recentActionCooldownMinutes: 60,
             browserNotificationsEnabled: false,
+            notificationLayout: "notification-center",
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
             favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
             moderationFilters: [],
@@ -73,6 +74,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("self_snapshots").indexExists("owner_unique")).toBe(true);
         expect(await database.collection("recent_actions").indexExists(["owner_user_action_unique", "expires_at_ttl"])).toBe(true);
         expect(await database.collection("notifications").indexExists("owner_browser_delivery")).toBe(true);
+        expect(await database.collection("notifications").indexExists("owner_source_first_observed")).toBe(true);
         expect(await databaseCollections.monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
     });
@@ -271,8 +273,9 @@ describe("MongoDB application repositories", () => {
     });
 
     test("keeps notification history while updating the active projection", async () => {
-        const { replaceActiveNotifications, listActiveNotifications } = await import("@/lib/notifications/repository");
+        const { replaceActiveNotifications, listActiveNotifications, listNotificationCenterNotifications } = await import("@/lib/notifications/repository");
         const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
         const ownerId = "usr_00000000-0000-0000-0000-000000000001";
         const first = new Date("2026-08-02T10:00:00.000Z");
         const second = new Date("2026-08-02T10:05:00.000Z");
@@ -284,6 +287,11 @@ describe("MongoDB application repositories", () => {
         const retained = await (await getMongoDatabase()).collection("notifications").find({ ownerId }).toArray();
         expect(retained).toHaveLength(2);
         expect(retained.find((document) => document.notificationId === "not_first")?.active).toBe(false);
+        expect((await listNotificationCenterNotifications(ownerId, "legacy", 0, second)).map((notification) => notification.id)).toEqual(["not_second", "not_first"]);
+
+        await collections(await getMongoDatabase()).notifications.updateOne({ ownerId, notificationId: "not_second", source: "legacy" }, { $set: { seenAt: second, "notification.seen": true } });
+        await replaceActiveNotifications(ownerId, "legacy", [{ id: "not_second", type: "invite", message: "Second reconciled" }], new Date(second.getTime() + 60_000));
+        expect(await listActiveNotifications(ownerId, "legacy", 0)).toEqual([expect.objectContaining({ id: "not_second", seen: true, message: "Second reconciled" })]);
     });
 
     test("claims browser notifications once after activation and only for the active owner", async () => {

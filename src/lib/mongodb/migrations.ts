@@ -462,6 +462,13 @@ const migrations: Migration[] = [
             await Promise.all([c.appSettings.updateMany({ browserNotificationsEnabled: { $exists: false } }, { $set: { browserNotificationsEnabled: false, updatedAt } }), c.notifications.createIndex({ ownerId: 1, source: 1, browserDeliveredAt: 1, firstObservedAt: 1 }, { name: "owner_browser_delivery" })]);
         },
     },
+    {
+        version: 43,
+        name: "add-notification-center-layout",
+        async apply(c) {
+            await Promise.all([c.appSettings.updateMany({ notificationLayout: { $exists: false } }, { $set: { notificationLayout: "notification-center", updatedAt: new Date() } }), c.notifications.createIndex({ ownerId: 1, source: 1, firstObservedAt: -1 }, { name: "owner_source_first_observed" })]);
+        },
+    },
 ];
 
 async function applyMigrations() {

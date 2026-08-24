@@ -104,7 +104,7 @@ export async function applyPipelineNotificationState(ownerId: string, notificati
     if (!notificationIds.length) return;
     await ensureMongoSchema();
     const sources: NotificationSource[] = source === "legacy" ? ["legacy", "hidden"] : ["v2"];
-    const update = state === "hidden" ? { active: false, updatedAt: observedAt } : { "notification.seen": true, updatedAt: observedAt };
+    const update = state === "hidden" ? { active: false, updatedAt: observedAt } : { "notification.seen": true, seenAt: observedAt, updatedAt: observedAt };
     await collections(await getMongoDatabase()).notifications.updateMany({ ownerId, notificationId: { $in: notificationIds }, source: { $in: sources } }, { $set: update });
 }
 
@@ -114,7 +114,7 @@ export async function updateNotificationProjection(ownerId: string, notification
     const updatedAt = new Date();
     const filter = source === "legacy" ? { ownerId, notificationId, source: { $in: ["legacy", "hidden"] as NotificationSource[] } } : { _id: documentId(ownerId, source, notificationId) };
     if (action === "see") {
-        await collection.updateMany(filter, { $set: { "notification.seen": true, updatedAt } });
+        await collection.updateMany(filter, { $set: { "notification.seen": true, seenAt: updatedAt, updatedAt } });
         return;
     }
     await collection.updateMany(filter, { $set: { active: false, updatedAt } });
@@ -128,5 +128,17 @@ export async function listActiveNotifications(ownerId: string, source: Notificat
         .skip(offset)
         .limit(limit)
         .toArray();
-    return documents.map((document) => document.notification);
+    return documents.map((document) => (document.seenAt ? { ...document.notification, seen: true } : document.notification));
+}
+
+export async function listNotificationCenterNotifications(ownerId: string, source: Extract<NotificationSource, "legacy" | "v2">, offset: number, now = new Date(), limit = 100): Promise<VrchatNotification[]> {
+    await ensureMongoSchema();
+    const recentCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1_000);
+    const documents = await collections(await getMongoDatabase())
+        .notifications.find({ ownerId, source, $or: [{ active: true }, { firstObservedAt: { $gte: recentCutoff } }] })
+        .sort({ lastObservedAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .toArray();
+    return documents.map((document) => (document.seenAt ? { ...document.notification, seen: true } : document.notification));
 }

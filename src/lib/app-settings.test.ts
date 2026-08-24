@@ -12,6 +12,7 @@ describe("application settings boundary", () => {
             recentActionCooldownEnabled: false,
             recentActionCooldownMinutes: 60,
             browserNotificationsEnabled: false,
+            notificationLayout: "notification-center",
             activityTablePageSize: 20,
             avatarAutoCleanupDays: 0,
             mutualGraphLayoutIterations: 800,
@@ -29,6 +30,8 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ recentActionCooldownMinutes: 0 }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ recentActionCooldownMinutes: 1_441 }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ browserNotificationsEnabled: true }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ notificationLayout: "notification-center" }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ notificationLayout: "sheet" }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
     });
 
