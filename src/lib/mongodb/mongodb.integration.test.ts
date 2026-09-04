@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -45,6 +45,7 @@ describe("MongoDB application repositories", () => {
             notificationLayout: "notification-center",
             notificationDeliveryFilters: expect.objectContaining({ Online: "VIP", invite: "Friends", "group.joinRequest": "Off" }),
             toolsCollapsedCategories: [],
+            groupCalendarShowFeaturedEvents: false,
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
             favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
             moderationFilters: [],
@@ -70,6 +71,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("avatar_style_snapshots").indexExists(["owner_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("tools_group_calendar_snapshots").indexExists(["owner_month_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("entity_memos").indexExists("owner_type_entity_unique")).toBe(true);
         expect(await database.collection("note_export_jobs").indexExists(["owner_unique", "status_heartbeat"])).toBe(true);
@@ -641,6 +643,54 @@ describe("MongoDB application repositories", () => {
         await replaceCachedGroupCalendar(ownerId, groupId, [], false, 0);
         expect((await getCachedGroupCalendar(ownerId, groupId))?.events).toEqual([]);
         expect(await updateCachedGroupCalendarEvent(ownerId, groupId, { id: calendarEvent.id, userInterest: { isFollowing: false } })).toBe(false);
+    });
+
+    test("persists owner-isolated Tools calendar months and projects follow changes", async () => {
+        const { getToolsGroupCalendar, replaceToolsGroupCalendar, updateToolsGroupCalendarEvent } = await import("./tools-group-calendar-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000165";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000166";
+        const groupId = "grp_00000000-0000-0000-0000-000000000167";
+        const calendarEvent = {
+            id: "evt_tools_calendar",
+            ownerId: groupId,
+            title: "Tools Calendar",
+            description: "Remote event",
+            startsAt: "2026-09-10T10:00:00.000Z",
+            endsAt: "2026-09-10T11:00:00.000Z",
+            accessType: "group",
+            category: "hangout",
+            closeInstanceAfterEndMinutes: 5,
+            createdAt: "2026-09-01T00:00:00.000Z",
+            deletedAt: null,
+            durationInMs: 3_600_000,
+            featured: false,
+            guestEarlyJoinMinutes: 0,
+            hostEarlyJoinMinutes: 0,
+            imageId: null,
+            interestedUserCount: 4,
+            isDraft: false,
+            languages: ["eng"],
+            occurrenceKind: "single",
+            platforms: ["standalonewindows"],
+            recurrence: null,
+            roleIds: null,
+            seriesId: null,
+            tags: [],
+            type: "event",
+            updatedAt: "2026-09-01T00:00:00.000Z",
+            usesInstanceOverflow: false,
+        };
+        const observedAt = new Date("2026-09-04T10:00:00.000Z");
+        const payload = { month: "2026-09", events: [calendarEvent], followingEvents: [], featuredEvents: [], featuredFetched: true, groups: { [groupId]: { id: groupId, name: "Calendar Group" } }, observedAt };
+        await replaceToolsGroupCalendar(ownerId, payload);
+        await replaceToolsGroupCalendar(otherOwnerId, payload);
+        await updateToolsGroupCalendarEvent(ownerId, { id: calendarEvent.id, userInterest: { isFollowing: true } });
+        expect(await getToolsGroupCalendar(ownerId, "2026-09")).toMatchObject({ events: [{ userInterest: { isFollowing: true } }], followingEvents: [{ id: calendarEvent.id }] });
+        const otherCalendar = await getToolsGroupCalendar(otherOwnerId, "2026-09");
+        expect(otherCalendar?.events[0].userInterest).toBeUndefined();
+        expect(otherCalendar?.followingEvents).toEqual([]);
+        await updateToolsGroupCalendarEvent(ownerId, { id: calendarEvent.id, userInterest: { isFollowing: false } });
+        expect((await getToolsGroupCalendar(ownerId, "2026-09"))?.followingEvents).toEqual([]);
     });
 
     test("replaces complete group-gallery snapshots without crossing owners", async () => {

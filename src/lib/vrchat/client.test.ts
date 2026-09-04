@@ -52,6 +52,13 @@ describe("VRChat response decoding", () => {
         expect(isAllowedVrchatEndpoint(`users/usr_${uuid}/wrld_${uuid}/persist/export`)).toBe(false);
     });
 
+    it("allowlists only the three global calendar collection resources", () => {
+        expect(isAllowedVrchatEndpoint("calendar")).toBe(true);
+        expect(isAllowedVrchatEndpoint("calendar/following")).toBe(true);
+        expect(isAllowedVrchatEndpoint("calendar/featured")).toBe(true);
+        expect(isAllowedVrchatEndpoint("calendar/arbitrary")).toBe(false);
+    });
+
     it("forwards multipart gallery uploads without overriding the boundary header", async () => {
         const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
             expect(init?.body).toBeInstanceOf(FormData);

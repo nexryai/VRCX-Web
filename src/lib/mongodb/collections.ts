@@ -85,7 +85,8 @@ export type AppSettingsDocument = {
     mutualGraphCommunitySeparation: number;
     mutualGraphExcludedFriendIds: string[];
     avatarAutoCleanupDays: 0 | 30 | 90 | 180 | 365;
-    toolsCollapsedCategories: Array<"user">;
+    toolsCollapsedCategories: Array<"group" | "user">;
+    groupCalendarShowFeaturedEvents: boolean;
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];
@@ -283,6 +284,19 @@ export type GroupCalendarSnapshotDocument = {
     events: VrchatGroupCalendarEvent[];
     hasNext: boolean;
     totalCount: number;
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type ToolsGroupCalendarSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    month: string;
+    events: VrchatGroupCalendarEvent[];
+    followingEvents: VrchatGroupCalendarEvent[];
+    featuredEvents: VrchatGroupCalendarEvent[];
+    featuredFetched: boolean;
+    groups: Record<string, VrchatGroup>;
     observedAt: Date;
     updatedAt: Date;
 };
@@ -528,6 +542,7 @@ export type Collections = {
     groupAuditLogSnapshots: Collection<GroupAuditLogSnapshotDocument>;
     groupInstanceSnapshots: Collection<GroupInstanceSnapshotDocument>;
     groupCalendarSnapshots: Collection<GroupCalendarSnapshotDocument>;
+    toolsGroupCalendarSnapshots: Collection<ToolsGroupCalendarSnapshotDocument>;
     groupGallerySnapshots: Collection<GroupGallerySnapshotDocument>;
     avatars: Collection<AvatarDocument>;
     avatarTags: Collection<AvatarTagDocument>;
@@ -569,6 +584,7 @@ export function collections(db: Db): Collections {
         groupAuditLogSnapshots: db.collection<GroupAuditLogSnapshotDocument>("group_audit_log_snapshots"),
         groupInstanceSnapshots: db.collection<GroupInstanceSnapshotDocument>("group_instance_snapshots"),
         groupCalendarSnapshots: db.collection<GroupCalendarSnapshotDocument>("group_calendar_snapshots"),
+        toolsGroupCalendarSnapshots: db.collection<ToolsGroupCalendarSnapshotDocument>("tools_group_calendar_snapshots"),
         groupGallerySnapshots: db.collection<GroupGallerySnapshotDocument>("group_gallery_snapshots"),
         avatars: db.collection<AvatarDocument>("avatars"),
         avatarTags: db.collection<AvatarTagDocument>("avatar_tags"),

@@ -6,12 +6,13 @@ import { Loader2 } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
+import { GroupCalendarDialog } from "@/components/tools/group-calendar-dialog";
 import { NoteExportDialog } from "@/components/tools/note-export-dialog";
 import { ToolsDialogFrame } from "@/components/tools/tools-dialog-frame";
 import { formatDiscordNamesCsv, formatFriendsListExports, formatOwnedAvatarsCsv, ownedAvatarsPageSchema } from "@/lib/tools-exports";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
-type ToolDialog = "avatars" | "discord" | "friends" | "notes";
+type ToolDialog = "avatars" | "calendar" | "discord" | "friends" | "notes";
 
 const tools: Array<{ key: ToolDialog; icon: string; title: string; description: string }> = [
     { key: "discord", icon: "ri-discord-line", title: "Discord Names", description: "Find the Discord usernames of your VRChat friends" },
@@ -28,6 +29,7 @@ export function ToolsView() {
     const [avatarsLoading, setAvatarsLoading] = useState(false);
     const [avatarError, setAvatarError] = useState("");
     const [exportCollapsed, setExportCollapsed] = useState(false);
+    const [groupCollapsed, setGroupCollapsed] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
     const trigger = useRef<HTMLButtonElement | null>(null);
     const avatarController = useRef<AbortController | null>(null);
@@ -49,7 +51,10 @@ export function ToolsView() {
         const controller = new AbortController();
         void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
             .then((response) => response.json() as Promise<{ toolsCollapsedCategories?: string[] }>)
-            .then((settings) => setExportCollapsed(settings.toolsCollapsedCategories?.includes("user") === true))
+            .then((settings) => {
+                setExportCollapsed(settings.toolsCollapsedCategories?.includes("user") === true);
+                setGroupCollapsed(settings.toolsCollapsedCategories?.includes("group") === true);
+            })
             .catch(() => undefined)
             .finally(() => {
                 if (!controller.signal.aborted) setSettingsLoaded(true);
@@ -57,12 +62,17 @@ export function ToolsView() {
         return () => controller.abort();
     }, []);
 
-    function toggleExport() {
-        setExportCollapsed((current) => {
-            const next = !current;
-            settingsSaveQueue.current = settingsSaveQueue.current.catch(() => undefined).then(() => fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toolsCollapsedCategories: next ? ["user"] : [] }) }));
-            return next;
-        });
+    useEffect(() => {
+        if (dialog === null) trigger.current?.focus();
+    }, [dialog]);
+
+    function toggleCategory(category: "group" | "user") {
+        const nextExport = category === "user" ? !exportCollapsed : exportCollapsed;
+        const nextGroup = category === "group" ? !groupCollapsed : groupCollapsed;
+        setExportCollapsed(nextExport);
+        setGroupCollapsed(nextGroup);
+        const categories = [...(nextGroup ? (["group"] as const) : []), ...(nextExport ? (["user"] as const) : [])];
+        settingsSaveQueue.current = settingsSaveQueue.current.catch(() => undefined).then(() => fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ toolsCollapsedCategories: categories }) }));
     }
 
     async function openTool(next: ToolDialog, button: HTMLButtonElement) {
@@ -97,7 +107,6 @@ export function ToolsView() {
     function closeDialog() {
         avatarController.current?.abort();
         setDialog(null);
-        requestAnimationFrame(() => trigger.current?.focus());
     }
 
     return (
@@ -106,12 +115,34 @@ export function ToolsView() {
                 Tools
             </h1>
             <div className="mt-5 px-1 sm:px-5">
+                <section aria-labelledby="tools-group-heading" className="mb-6">
+                    <h2 id="tools-group-heading" className="mb-3">
+                        <button
+                            type="button"
+                            disabled={!settingsLoaded}
+                            onClick={() => toggleCategory("group")}
+                            aria-expanded={!groupCollapsed}
+                            className="flex w-full items-center rounded-lg px-3 py-2 text-left text-base font-semibold hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait"
+                        >
+                            <i className={`ri-arrow-down-s-line mr-2 text-sm transition-transform duration-300 ${groupCollapsed ? "-rotate-90" : ""}`} aria-hidden="true" /> Group
+                        </button>
+                    </h2>
+                    <div className={`grid grid-cols-1 gap-4 sm:ml-4 sm:grid-cols-2 ${groupCollapsed ? "hidden" : ""}`}>
+                        <button type="button" onClick={(event) => void openTool("calendar", event.currentTarget)} className="group flex min-h-20 items-start gap-3 rounded-lg border border-border bg-card p-4 text-left hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                            <i className="ri-calendar-event-line inline-flex size-8 shrink-0 items-center justify-center text-2xl" aria-hidden="true" />
+                            <span className="min-w-0">
+                                <span className="block text-sm font-medium">Group Calendar</span>
+                                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">View upcoming events from your groups</span>
+                            </span>
+                        </button>
+                    </div>
+                </section>
                 <section aria-labelledby="tools-export-heading" className="mb-6">
                     <h2 id="tools-export-heading" className="mb-3">
                         <button
                             type="button"
                             disabled={!settingsLoaded}
-                            onClick={toggleExport}
+                            onClick={() => toggleCategory("user")}
                             aria-expanded={!exportCollapsed}
                             className="flex w-full items-center rounded-lg px-3 py-2 text-left text-base font-semibold hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait"
                         >
@@ -142,6 +173,7 @@ export function ToolsView() {
             {dialog === "friends" ? <FriendsExportDialog csv={friendExports.csv} json={friendExports.json} close={closeDialog} /> : null}
             {dialog === "avatars" ? <ExportDialog title="Export Own Avatars" value={formatOwnedAvatarsCsv(avatars)} loading={avatarsLoading} error={avatarError} close={closeDialog} /> : null}
             {dialog === "notes" ? <NoteExportDialog close={closeDialog} /> : null}
+            {dialog === "calendar" ? <GroupCalendarDialog close={closeDialog} /> : null}
         </section>
     );
 }

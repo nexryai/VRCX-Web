@@ -44,6 +44,16 @@ export async function getCachedGroup(ownerId: string, groupId: string) {
     return (await collections(await getMongoDatabase()).groups.findOne({ _id: `${ownerId}:${groupId}` }))?.group || null;
 }
 
+export async function getCachedGroups(ownerId: string, groupIds: string[]) {
+    if (!groupIds.length) return [];
+    await ensureMongoSchema();
+    return (
+        await collections(await getMongoDatabase())
+            .groups.find({ ownerId, groupId: { $in: [...new Set(groupIds)] } })
+            .toArray()
+    ).map((document) => document.group);
+}
+
 export async function setCachedGroupMembershipActive(ownerId: string, groupId: string, membershipActive: boolean, observedAt = new Date()) {
     await ensureMongoSchema();
     await collections(await getMongoDatabase()).groups.updateOne({ _id: `${ownerId}:${groupId}` }, { $set: { membershipActive, membershipObservedAt: observedAt, updatedAt: observedAt } });

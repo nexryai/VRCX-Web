@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { updateCachedGroupCalendarEvent } from "@/lib/mongodb/group-dialog-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
+import { updateToolsGroupCalendarEvent } from "@/lib/mongodb/tools-group-calendar-repository";
 import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
 import { calendarEventIdSchema, groupIdSchema } from "@/lib/vrchat/ids";
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/gro
         const upstream = await requestVrchat<unknown>(`calendar/${groupId.data}/${eventId.data}/follow`, { method: "POST", cookies, body: body.data });
         const event = vrchatGroupCalendarInterestUpdateSchema.parse(upstream.data);
         if (event.id !== eventId.data || (event.ownerId && event.ownerId !== groupId.data)) throw new Error("The calendar follow response did not match the requested event.");
-        await updateCachedGroupCalendarEvent(ownerId, groupId.data, event);
+        await Promise.all([updateCachedGroupCalendarEvent(ownerId, groupId.data, event), updateToolsGroupCalendarEvent(ownerId, event)]);
         await persistRotatedVrchatCookies(upstream.cookies, expectedAuthCookie);
         return response({ event });
     } catch (error) {

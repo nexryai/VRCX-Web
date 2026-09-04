@@ -495,6 +495,18 @@ const migrations: Migration[] = [
             await Promise.all([c.noteExportJobs.createIndex({ ownerId: 1 }, { unique: true, name: "owner_unique" }), c.noteExportJobs.createIndex({ status: 1, heartbeatAt: 1 }, { name: "status_heartbeat" })]);
         },
     },
+    {
+        version: 47,
+        name: "add-tools-group-calendar",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ groupCalendarShowFeaturedEvents: { $exists: false } }, { $set: { groupCalendarShowFeaturedEvents: false, updatedAt } }),
+                c.toolsGroupCalendarSnapshots.createIndex({ ownerId: 1, month: 1 }, { unique: true, name: "owner_month_unique" }),
+                c.toolsGroupCalendarSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

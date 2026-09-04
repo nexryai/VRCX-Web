@@ -447,6 +447,28 @@ await database.collection("group_calendar_snapshots").insertOne({
     observedAt: now,
     updatedAt: now,
 });
+const toolsCalendarMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+const toolsCalendarEvent = {
+    ...calendarEventBase,
+    id: "evt_tools_today",
+    title: "Tools Creator Meetup",
+    startsAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 30).toISOString(),
+    endsAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0).toISOString(),
+    seriesId: "series_visual_weekly",
+    userInterest: { createdAt: now.toISOString(), isFollowing: true, updatedAt: now.toISOString() },
+};
+await database.collection("tools_group_calendar_snapshots").insertOne({
+    _id: `${ownerId}:${toolsCalendarMonth}`,
+    ownerId,
+    month: toolsCalendarMonth,
+    events: [toolsCalendarEvent],
+    followingEvents: [toolsCalendarEvent],
+    featuredEvents: [],
+    featuredFetched: true,
+    groups: { [groupId]: { id: groupId, name: "Remote Events Group", bannerUrl: "" } },
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("group_gallery_snapshots").insertOne({
     _id: `${ownerId}:${groupId}`,
     ownerId,

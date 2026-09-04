@@ -65,10 +65,11 @@ export const appSettingsUpdateSchema = z
         mutualGraphExcludedFriendIds: z.array(userIdSchema).max(10_000).optional(),
         avatarAutoCleanupDays: z.union([z.literal(0), z.literal(30), z.literal(90), z.literal(180), z.literal(365)]).optional(),
         toolsCollapsedCategories: z
-            .array(z.literal("user"))
-            .max(1)
+            .array(z.enum(["group", "user"]))
+            .max(2)
             .refine((values) => new Set(values).size === values.length)
             .optional(),
+        groupCalendarShowFeaturedEvents: z.boolean().optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -125,5 +126,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         mutualGraphExcludedFriendIds: settings?.mutualGraphExcludedFriendIds ?? [],
         avatarAutoCleanupDays: settings?.avatarAutoCleanupDays ?? 0,
         toolsCollapsedCategories: settings?.toolsCollapsedCategories ?? [],
+        groupCalendarShowFeaturedEvents: settings?.groupCalendarShowFeaturedEvents ?? false,
     };
 }

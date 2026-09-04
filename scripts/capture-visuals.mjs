@@ -103,6 +103,7 @@ const captures = [
     { name: "tools-note-export", path: "/tools", readyText: "Note Export", toolDialog: "notes" },
     { name: "tools-friends-export", path: "/tools", readyText: "Export Friends List", toolDialog: "friends" },
     { name: "tools-avatars-export", path: "/tools", readyText: "Export Own Avatars", toolDialog: "avatars", avatars: true },
+    { name: "tools-group-calendar", path: "/tools", readyText: "Tools Creator Meetup", toolDialog: "calendar", groupCalendarDownload: true },
 ];
 
 const searchFixture = [
@@ -886,7 +887,7 @@ for (const width of widths) {
             await dialog.waitFor();
         }
         if (capture.toolDialog) {
-            const labels = { avatars: "Export Own Avatars", discord: "Discord Names", friends: "Export Friends List", notes: "Export User Memos" };
+            const labels = { avatars: "Export Own Avatars", calendar: "Group Calendar", discord: "Discord Names", friends: "Export Friends List", notes: "Export User Memos" };
             const label = labels[capture.toolDialog];
             const dialogName = capture.toolDialog === "notes" ? "Note Export" : label;
             const trigger = page.getByRole("button", { name: new RegExp(`^${label}`) });
@@ -927,12 +928,20 @@ for (const width of widths) {
                 await output.waitFor();
                 if (!(await output.inputValue()).includes("Browser Dance Avatar")) throw new Error("Export Own Avatars did not render the remote avatar page.");
             }
+            if (capture.toolDialog === "calendar") {
+                await dialog.getByText("Tools Creator Meetup", { exact: true }).waitFor();
+                await dialog.getByRole("button", { name: "List View", exact: true }).click();
+                await dialog.getByPlaceholder("Search groups or events...").fill("Remote Events");
+                await dialog.getByText("Remote Events Group", { exact: true }).waitFor();
+                await dialog.getByRole("button", { name: "Calendar View", exact: true }).click();
+            }
             await page.keyboard.press("Escape");
             await dialog.waitFor({ state: "detached" });
             if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error(`${label} did not restore trigger focus.`);
             await trigger.click();
             await dialog.waitFor();
             if (capture.toolDialog === "avatars") await dialog.getByRole("textbox", { name: "Export Own Avatars export", exact: true }).waitFor();
+            if (capture.toolDialog === "calendar") await dialog.getByText("Tools Creator Meetup", { exact: true }).waitFor();
         }
         if (capture.toolsReady) {
             const trigger = page.getByRole("button", { name: /^Export Friends List/ });

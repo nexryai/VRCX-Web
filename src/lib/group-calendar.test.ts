@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { partitionGroupCalendarEvents } from "./group-calendar";
+import { calendarDateKey, calendarMonthFromDate, mergeCalendarEvents, partitionGroupCalendarEvents, toolsGroupCalendarPayloadSchema } from "./group-calendar";
 import { type VrchatGroupCalendarEvent, vrchatGroupCalendarInterestUpdateSchema } from "./vrchat/types";
 
 function event(id: string, startsAt: string, endsAt: string, seriesId: string | null = null): VrchatGroupCalendarEvent {
@@ -59,5 +59,28 @@ describe("VRCX group calendar partition", () => {
     it("accepts the partial interest object returned by the follow endpoint", () => {
         expect(vrchatGroupCalendarInterestUpdateSchema.parse({ id: "evt_one", userInterest: { isFollowing: true } })).toEqual({ id: "evt_one", userInterest: { isFollowing: true } });
         expect(vrchatGroupCalendarInterestUpdateSchema.safeParse({ id: "evt_one", userInterest: {} }).success).toBe(false);
+    });
+
+    it("uses local calendar keys and merges duplicate global events by ID", () => {
+        const first = event("evt_one", "2026-09-02T10:00:00.000Z", "2026-09-02T11:00:00.000Z");
+        const followed = { ...first, userInterest: { isFollowing: true } };
+        expect(calendarMonthFromDate(new Date(2026, 8, 2))).toBe("2026-09");
+        expect(calendarDateKey(new Date(2026, 8, 2))).toBe("2026-09-02");
+        expect(mergeCalendarEvents([first], [followed])).toEqual([followed]);
+    });
+
+    it("validates bounded month snapshots and canonical owner IDs", () => {
+        const valid = {
+            month: "2026-09",
+            events: [event("evt_one", "2026-09-02T10:00:00.000Z", "2026-09-02T11:00:00.000Z")],
+            followingEvents: [],
+            featuredEvents: [],
+            featuredFetched: false,
+            groups: { "grp_00000000-0000-0000-0000-000000000001": { id: "grp_00000000-0000-0000-0000-000000000001", name: "Group" } },
+            observedAt: new Date(),
+        };
+        expect(toolsGroupCalendarPayloadSchema.safeParse(valid).success).toBe(true);
+        expect(toolsGroupCalendarPayloadSchema.safeParse({ ...valid, month: "2026-13" }).success).toBe(false);
+        expect(toolsGroupCalendarPayloadSchema.safeParse({ ...valid, events: [{ ...valid.events[0], ownerId: "grp_invalid" }] }).success).toBe(false);
     });
 });
