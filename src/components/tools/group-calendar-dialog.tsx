@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Download, Loader2, Repeat, Search, Share2, Star } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Download, Loader2, Pencil, Repeat, Search, Share2, Star } from "lucide-react";
 
+import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
+import { GroupEventEditor } from "@/components/groups/group-event-editor";
 import { ToolsDialogFrame } from "@/components/tools/tools-dialog-frame";
 import { VrchatImage } from "@/components/vrchat-image";
 import { calendarDateKey, calendarMonthFromDate, mergeCalendarEvents, toolsGroupCalendarPayloadSchema } from "@/lib/group-calendar";
@@ -12,8 +14,14 @@ import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterest
 
 type CalendarView = "timeline" | "list";
 
+function canManageCalendar(group: VrchatGroup) {
+    const permissions = group.myMember?.permissions || [];
+    return permissions.includes("*") || permissions.includes("group-calendar-manage");
+}
+
 export function GroupCalendarDialog({ close }: { close: () => void }) {
     const { openGroup } = useFriends();
+    const currentUser = useCurrentUser();
     const [selectedDay, setSelectedDay] = useState(() => new Date());
     const [events, setEvents] = useState<VrchatGroupCalendarEvent[]>([]);
     const [followingEvents, setFollowingEvents] = useState<VrchatGroupCalendarEvent[]>([]);
@@ -26,6 +34,7 @@ export function GroupCalendarDialog({ close }: { close: () => void }) {
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [editingEvent, setEditingEvent] = useState<VrchatGroupCalendarEvent | null>(null);
     const controller = useRef<AbortController | null>(null);
     const selectedMonth = calendarMonthFromDate(selectedDay);
 
@@ -106,6 +115,16 @@ export function GroupCalendarDialog({ close }: { close: () => void }) {
         });
     }
 
+    function updateEditedEvent(updated: VrchatGroupCalendarEvent | null) {
+        if (!editingEvent) return;
+        const replace = (items: VrchatGroupCalendarEvent[]) => (updated ? [...items.filter((item) => item.id !== editingEvent.id && item.id !== updated.id), updated].toSorted((a, b) => a.startsAt.localeCompare(b.startsAt)) : items.filter((item) => item.id !== editingEvent.id));
+        setEvents(replace);
+        setFeaturedEvents((current) => (current.some((item) => item.id === editingEvent.id) ? replace(current) : current));
+        setFollowingEvents((current) => (current.some((item) => item.id === editingEvent.id) ? replace(current) : current));
+        setEditingEvent(null);
+        void load(selectedMonth, showFeatured, true);
+    }
+
     const visibleEvents = useMemo(() => mergeCalendarEvents(events, showFeatured ? featuredEvents : []), [events, featuredEvents, showFeatured]);
     const followingIds = useMemo(() => new Set(followingEvents.map((event) => event.id)), [followingEvents]);
     const dayEvents = visibleEvents.filter((event) => calendarDateKey(event.startsAt) === calendarDateKey(selectedDay));
@@ -124,64 +143,83 @@ export function GroupCalendarDialog({ close }: { close: () => void }) {
     }, [groups, search, selectedDay, visibleEvents]);
 
     return (
-        <ToolsDialogFrame title="Group Calendar" close={close} calendar>
-            <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
-                <label className="mr-1 inline-flex min-h-9 items-center gap-2 text-xs">
-                    Featured Events
-                    <button type="button" role="switch" aria-checked={showFeatured} disabled={!settingsLoaded || loading} onClick={() => void toggleFeatured()} className={`relative h-5 w-9 rounded-full border border-border transition-colors ${showFeatured ? "bg-primary" : "bg-muted"}`}>
-                        <span className={`absolute top-0.5 size-3.5 rounded-full bg-white transition-transform ${showFeatured ? "left-[18px]" : "left-0.5"}`} />
+        <>
+            <ToolsDialogFrame title="Group Calendar" close={close} calendar>
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                    <label className="mr-1 inline-flex min-h-9 items-center gap-2 text-xs">
+                        Featured Events
+                        <button type="button" role="switch" aria-checked={showFeatured} disabled={!settingsLoaded || loading} onClick={() => void toggleFeatured()} className={`relative h-5 w-9 rounded-full border border-border transition-colors ${showFeatured ? "bg-primary" : "bg-muted"}`}>
+                            <span className={`absolute top-0.5 size-3.5 rounded-full bg-white transition-transform ${showFeatured ? "left-[18px]" : "left-0.5"}`} />
+                        </button>
+                    </label>
+                    <button type="button" onClick={() => setView((current) => (current === "timeline" ? "list" : "timeline"))} className="h-8 rounded-md border border-input px-3 text-xs hover:bg-muted">
+                        {view === "timeline" ? "List View" : "Calendar View"}
                     </button>
-                </label>
-                <button type="button" onClick={() => setView((current) => (current === "timeline" ? "list" : "timeline"))} className="h-8 rounded-md border border-input px-3 text-xs hover:bg-muted">
-                    {view === "timeline" ? "List View" : "Calendar View"}
-                </button>
-            </div>
-            {error ? <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">{error}</div> : null}
-            <div className="mt-3 h-[min(640px,calc(100dvh-9rem))] min-h-[360px] overflow-hidden">
-                {view === "timeline" ? (
-                    <div className="grid h-full min-h-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(200px,1fr)_360px]">
-                        <div className="min-h-0 overflow-y-auto px-2 pb-4">{loading && !visibleEvents.length ? <Loading /> : dayEvents.length ? <Timeline events={dayEvents} groups={groups} followingIds={followingIds} updateFollow={updateFollow} selectGroup={selectGroup} /> : <Empty label="No events found" />}</div>
-                        <MonthCalendar selected={selectedDay} events={visibleEvents} followingIds={followingIds} changeMonth={changeMonth} select={setSelectedDay} />
-                    </div>
-                ) : (
-                    <div className="flex h-full min-h-0 flex-col">
-                        <label className="relative ml-auto block w-full max-w-[300px]">
-                            <Search className="absolute top-2 left-2.5 size-4 text-muted-foreground" />
-                            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search groups or events..." className="h-8 w-full rounded-md border border-input bg-background pr-3 pl-8 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-                        </label>
-                        <div className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 py-1">
-                            {loading && !visibleEvents.length ? (
-                                <Loading />
-                            ) : groupRows.length ? (
-                                groupRows.map((row) => {
-                                    const isCollapsed = collapsed.has(row.groupId) && !search.trim();
-                                    return (
-                                        <section key={row.groupId} className="mb-[18px]">
-                                            <button type="button" onClick={() => setCollapsed((current) => toggleSet(current, row.groupId))} aria-expanded={!isCollapsed} className="mb-2 flex w-full items-center rounded-md px-3 py-1 text-left text-base font-bold hover:bg-muted">
-                                                <ChevronDown className={`mr-2 size-4 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} /> {row.groupName}
-                                            </button>
-                                            {!isCollapsed ? (
-                                                <div className="flex flex-wrap gap-4">
-                                                    {row.events.map((event) => (
-                                                        <CalendarEventCard key={event.id} event={event} group={groups[event.ownerId]} following={followingIds.has(event.id)} updateFollow={updateFollow} selectGroup={selectGroup} mode="list" />
-                                                    ))}
-                                                </div>
-                                            ) : null}
-                                        </section>
-                                    );
-                                })
-                            ) : (
-                                <Empty label={search.trim() ? "No matching events found" : "No events this month"} />
-                            )}
+                </div>
+                {error ? <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">{error}</div> : null}
+                <div className="mt-3 h-[min(640px,calc(100dvh-9rem))] min-h-[360px] overflow-hidden">
+                    {view === "timeline" ? (
+                        <div className="grid h-full min-h-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(200px,1fr)_360px]">
+                            <div className="min-h-0 overflow-y-auto px-2 pb-4">
+                                {loading && !visibleEvents.length ? <Loading /> : dayEvents.length ? <Timeline events={dayEvents} groups={groups} followingIds={followingIds} updateFollow={updateFollow} selectGroup={selectGroup} edit={setEditingEvent} /> : <Empty label="No events found" />}
+                            </div>
+                            <MonthCalendar selected={selectedDay} events={visibleEvents} followingIds={followingIds} changeMonth={changeMonth} select={setSelectedDay} />
                         </div>
-                    </div>
-                )}
-            </div>
-        </ToolsDialogFrame>
+                    ) : (
+                        <div className="flex h-full min-h-0 flex-col">
+                            <label className="relative ml-auto block w-full max-w-[300px]">
+                                <Search className="absolute top-2 left-2.5 size-4 text-muted-foreground" />
+                                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search groups or events..." className="h-8 w-full rounded-md border border-input bg-background pr-3 pl-8 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                            </label>
+                            <div className="mt-3 min-h-0 flex-1 overflow-y-auto px-2 py-1">
+                                {loading && !visibleEvents.length ? (
+                                    <Loading />
+                                ) : groupRows.length ? (
+                                    groupRows.map((row) => {
+                                        const isCollapsed = collapsed.has(row.groupId) && !search.trim();
+                                        return (
+                                            <section key={row.groupId} className="mb-[18px]">
+                                                <button type="button" onClick={() => setCollapsed((current) => toggleSet(current, row.groupId))} aria-expanded={!isCollapsed} className="mb-2 flex w-full items-center rounded-md px-3 py-1 text-left text-base font-bold hover:bg-muted">
+                                                    <ChevronDown className={`mr-2 size-4 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} /> {row.groupName}
+                                                </button>
+                                                {!isCollapsed ? (
+                                                    <div className="flex flex-wrap gap-4">
+                                                        {row.events.map((event) => (
+                                                            <CalendarEventCard key={event.id} event={event} group={groups[event.ownerId]} following={followingIds.has(event.id)} updateFollow={updateFollow} selectGroup={selectGroup} edit={setEditingEvent} mode="list" />
+                                                        ))}
+                                                    </div>
+                                                ) : null}
+                                            </section>
+                                        );
+                                    })
+                                ) : (
+                                    <Empty label={search.trim() ? "No matching events found" : "No events this month"} />
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </ToolsDialogFrame>
+            {editingEvent ? <GroupEventEditor groupId={editingEvent.ownerId} initialGroup={groups[editingEvent.ownerId]} event={editingEvent} vrcPlus={currentUser.tags?.includes("system_supporter") === true} close={() => setEditingEvent(null)} saved={updateEditedEvent} /> : null}
+        </>
     );
 }
 
-function Timeline({ events, groups, followingIds, updateFollow, selectGroup }: { events: VrchatGroupCalendarEvent[]; groups: Record<string, VrchatGroup>; followingIds: Set<string>; updateFollow: (event: VrchatGroupCalendarInterestUpdate) => void; selectGroup: (groupId: string) => void }) {
+function Timeline({
+    events,
+    groups,
+    followingIds,
+    updateFollow,
+    selectGroup,
+    edit,
+}: {
+    events: VrchatGroupCalendarEvent[];
+    groups: Record<string, VrchatGroup>;
+    followingIds: Set<string>;
+    updateFollow: (event: VrchatGroupCalendarInterestUpdate) => void;
+    selectGroup: (groupId: string) => void;
+    edit: (event: VrchatGroupCalendarEvent) => void;
+}) {
     const grouped = new Map<string, VrchatGroupCalendarEvent[]>();
     for (const event of events) {
         const key = timeOnly(event.startsAt);
@@ -194,14 +232,30 @@ function Timeline({ events, groups, followingIds, updateFollow, selectGroup }: {
             </h3>
             <div className="flex flex-col gap-2">
                 {timeEvents.map((event) => (
-                    <CalendarEventCard key={event.id} event={event} group={groups[event.ownerId]} following={followingIds.has(event.id)} updateFollow={updateFollow} selectGroup={selectGroup} mode="timeline" />
+                    <CalendarEventCard key={event.id} event={event} group={groups[event.ownerId]} following={followingIds.has(event.id)} updateFollow={updateFollow} selectGroup={selectGroup} edit={edit} mode="timeline" />
                 ))}
             </div>
         </section>
     ));
 }
 
-function CalendarEventCard({ event, group, following, updateFollow, selectGroup, mode }: { event: VrchatGroupCalendarEvent; group?: VrchatGroup; following: boolean; updateFollow: (event: VrchatGroupCalendarInterestUpdate) => void; selectGroup: (groupId: string) => void; mode: CalendarView }) {
+function CalendarEventCard({
+    event,
+    group,
+    following,
+    updateFollow,
+    selectGroup,
+    edit,
+    mode,
+}: {
+    event: VrchatGroupCalendarEvent;
+    group?: VrchatGroup;
+    following: boolean;
+    updateFollow: (event: VrchatGroupCalendarInterestUpdate) => void;
+    selectGroup: (groupId: string) => void;
+    edit: (event: VrchatGroupCalendarEvent) => void;
+    mode: CalendarView;
+}) {
     const [busy, setBusy] = useState(false);
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -258,6 +312,11 @@ function CalendarEventCard({ event, group, following, updateFollow, selectGroup,
                 }
             />
             <div className="absolute top-1 right-1 flex gap-1.5">
+                {group && canManageCalendar(group) ? (
+                    <button type="button" onClick={() => edit(event)} className="inline-flex size-7 items-center justify-center rounded-full bg-secondary shadow" aria-label={`Edit ${event.title}`}>
+                        <Pencil className="size-3.5" />
+                    </button>
+                ) : null}
                 <button type="button" onClick={() => void copy()} className="inline-flex size-7 items-center justify-center rounded-full bg-secondary shadow" aria-label={`Copy event link for ${event.title}`}>
                     {copied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />}
                 </button>

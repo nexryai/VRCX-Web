@@ -599,7 +599,7 @@ describe("MongoDB application repositories", () => {
     });
 
     test("replaces and updates complete group-calendar snapshots without crossing owners", async () => {
-        const { getCachedGroupCalendar, replaceCachedGroupCalendar, updateCachedGroupCalendarEvent } = await import("./group-dialog-repository");
+        const { getCachedGroupCalendar, removeCachedGroupCalendarEvent, replaceCachedGroupCalendar, updateCachedGroupCalendarEvent, upsertCachedGroupCalendarEvent } = await import("./group-dialog-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000065";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000066";
         const groupId = "grp_00000000-0000-0000-0000-000000000067";
@@ -643,10 +643,16 @@ describe("MongoDB application repositories", () => {
         await replaceCachedGroupCalendar(ownerId, groupId, [], false, 0);
         expect((await getCachedGroupCalendar(ownerId, groupId))?.events).toEqual([]);
         expect(await updateCachedGroupCalendarEvent(ownerId, groupId, { id: calendarEvent.id, userInterest: { isFollowing: false } })).toBe(false);
+        expect(await upsertCachedGroupCalendarEvent(ownerId, groupId, { ...calendarEvent, title: "Created" })).toBe(true);
+        expect(await upsertCachedGroupCalendarEvent(ownerId, groupId, { ...calendarEvent, title: "Edited" })).toBe(true);
+        expect(await getCachedGroupCalendar(ownerId, groupId)).toMatchObject({ totalCount: 1, events: [{ title: "Edited" }] });
+        expect(await removeCachedGroupCalendarEvent(ownerId, groupId, calendarEvent.id)).toBe(true);
+        expect(await getCachedGroupCalendar(ownerId, groupId)).toMatchObject({ totalCount: 0, events: [] });
+        expect((await getCachedGroupCalendar(otherOwnerId, groupId))?.events).toHaveLength(1);
     });
 
     test("persists owner-isolated Tools calendar months and projects follow changes", async () => {
-        const { getToolsGroupCalendar, replaceToolsGroupCalendar, updateToolsGroupCalendarEvent } = await import("./tools-group-calendar-repository");
+        const { getToolsGroupCalendar, projectToolsGroupCalendarEvent, removeToolsGroupCalendarEvent, replaceToolsGroupCalendar, updateToolsGroupCalendarEvent } = await import("./tools-group-calendar-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000165";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000166";
         const groupId = "grp_00000000-0000-0000-0000-000000000167";
@@ -691,6 +697,14 @@ describe("MongoDB application repositories", () => {
         expect(otherCalendar?.followingEvents).toEqual([]);
         await updateToolsGroupCalendarEvent(ownerId, { id: calendarEvent.id, userInterest: { isFollowing: false } });
         expect((await getToolsGroupCalendar(ownerId, "2026-09"))?.followingEvents).toEqual([]);
+        await replaceToolsGroupCalendar(ownerId, { ...payload, month: "2026-10", events: [], groups: {} });
+        const movedEvent = { ...calendarEvent, title: "Moved", startsAt: "2026-10-10T10:00:00.000Z", endsAt: "2026-10-10T11:00:00.000Z" };
+        await projectToolsGroupCalendarEvent(ownerId, movedEvent, { id: groupId, name: "Calendar Group", myMember: { permissions: ["group-calendar-manage"] } });
+        expect((await getToolsGroupCalendar(ownerId, "2026-09"))?.events).toEqual([]);
+        expect(await getToolsGroupCalendar(ownerId, "2026-10")).toMatchObject({ events: [{ title: "Moved" }], groups: { [groupId]: { name: "Calendar Group" } } });
+        expect((await getToolsGroupCalendar(otherOwnerId, "2026-09"))?.events).toHaveLength(1);
+        await removeToolsGroupCalendarEvent(ownerId, calendarEvent.id);
+        expect((await getToolsGroupCalendar(ownerId, "2026-10"))?.events).toEqual([]);
     });
 
     test("replaces complete group-gallery snapshots without crossing owners", async () => {

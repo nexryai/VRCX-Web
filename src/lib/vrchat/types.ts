@@ -384,6 +384,22 @@ export const vrchatGroupCalendarUserInterestSchema = z
     })
     .passthrough();
 
+export const vrchatGroupCalendarRecurrenceSchema = z
+    .object({
+        frequency: z.enum(["weekly", "monthly", "yearly"]),
+        interval: z.number().int().positive(),
+        timezone: z.string().min(1).max(128),
+        daysOfWeek: z
+            .array(z.enum(["MO", "TU", "WE", "TH", "FR", "SA", "SU"]))
+            .max(7)
+            .optional(),
+        end: z
+            .union([z.object({ type: z.literal("afterOccurrences"), count: z.number().int().positive() }).strict(), z.object({ type: z.literal("afterDate"), date: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})?$/) }).strict()])
+            .nullable()
+            .optional(),
+    })
+    .passthrough();
+
 export const vrchatGroupCalendarEventSchema = z
     .object({
         id: z.string(),
@@ -408,7 +424,7 @@ export const vrchatGroupCalendarEventSchema = z
         languages: z.array(z.string()),
         occurrenceKind: z.string(),
         platforms: z.array(z.string()),
-        recurrence: z.string().nullable(),
+        recurrence: z.union([z.string(), vrchatGroupCalendarRecurrenceSchema]).nullable(),
         roleIds: z.array(z.string()).nullable(),
         seriesId: z.string().nullable(),
         tags: z.array(z.string()),

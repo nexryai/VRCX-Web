@@ -247,6 +247,28 @@ export async function updateCachedGroupCalendarEvent(ownerId: string, groupId: s
     return true;
 }
 
+export async function upsertCachedGroupCalendarEvent(ownerId: string, groupId: string, event: VrchatGroupCalendarEvent, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).groupCalendarSnapshots;
+    const existing = await collection.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+    if (!existing) return false;
+    const wasPresent = existing.events.some((item) => item.id === event.id);
+    const events = [...existing.events.filter((item) => item.id !== event.id), event].toSorted((a, b) => a.startsAt.localeCompare(b.startsAt));
+    await collection.updateOne({ _id: existing._id, ownerId, groupId }, { $set: { events, totalCount: wasPresent ? existing.totalCount : existing.totalCount + 1, updatedAt } });
+    return true;
+}
+
+export async function removeCachedGroupCalendarEvent(ownerId: string, groupId: string, eventId: string, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).groupCalendarSnapshots;
+    const existing = await collection.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });
+    if (!existing) return false;
+    const events = existing.events.filter((item) => item.id !== eventId);
+    if (events.length === existing.events.length) return false;
+    await collection.updateOne({ _id: existing._id, ownerId, groupId }, { $set: { events, totalCount: Math.max(0, existing.totalCount - 1), updatedAt } });
+    return true;
+}
+
 export async function getCachedGroupGalleries(ownerId: string, groupId: string) {
     await ensureMongoSchema();
     const document = await collections(await getMongoDatabase()).groupGallerySnapshots.findOne({ _id: `${ownerId}:${groupId}`, ownerId, groupId });

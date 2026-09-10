@@ -48,6 +48,8 @@ const captures = [
     { name: "world-favorite-dialog", path: "/favorites/worlds", readyText: "VRChat Favorites", favoriteKind: "world", worldDialog: true, favoriteActionLabel: "Manage favorites for Favorite Moonlit World" },
     { name: "group-dialog", path: "/friends-locations", readyText: "Remote Group Lounge · #Community Hub", groupDialog: true },
     { name: "group-dialog-calendar", path: "/friends-locations", readyText: "Remote Creator Meetup", groupDialog: true, groupCalendar: true, groupCalendarDownload: true },
+    { name: "group-dialog-event-create", path: "/friends-locations", readyText: "Create Group Event", groupDialog: true, groupEventDialog: "create" },
+    { name: "group-dialog-event-recurrence", path: "/friends-locations", readyText: "Custom days", groupDialog: true, groupEventDialog: "recurrence" },
     { name: "group-dialog-photos", path: "/friends-locations", readyText: "Highlights shared by the whole community.", groupDialog: true, groupTab: "Photos" },
     { name: "previous-instances-group", path: "/friends-locations", readyText: "You", groupDialog: true, previousInstances: "group" },
     { name: "group-dialog-posts", path: "/friends-locations", readyText: "Community meetup", groupDialog: true, groupTab: "Posts" },
@@ -104,6 +106,8 @@ const captures = [
     { name: "tools-friends-export", path: "/tools", readyText: "Export Friends List", toolDialog: "friends" },
     { name: "tools-avatars-export", path: "/tools", readyText: "Export Own Avatars", toolDialog: "avatars", avatars: true },
     { name: "tools-group-calendar", path: "/tools", readyText: "Tools Creator Meetup", toolDialog: "calendar", groupCalendarDownload: true },
+    { name: "tools-group-calendar-event-edit", path: "/tools", readyText: "Edit Group Event", toolDialog: "calendar", groupEventDialog: "edit" },
+    { name: "tools-group-calendar-event-delete", path: "/tools", readyText: "Are you sure you want to delete this group event?", toolDialog: "calendar", groupEventDialog: "delete" },
 ];
 
 const searchFixture = [
@@ -370,6 +374,14 @@ for (const width of widths) {
                 }),
             );
         }
+        if (capture.groupEventDialog) {
+            await page.route("**/api/groups/grp_00000000-0000-0000-0000-000000000020?refresh=true", async (route) => {
+                const url = new URL(route.request().url());
+                url.search = "";
+                const response = await route.fetch({ url: url.toString() });
+                return route.fulfill({ response });
+            });
+        }
         if (capture.groupPostDialog === "create") {
             await page.route("**/api/groups/*/posts", async (route) => {
                 if (route.request().method() !== "POST") return route.fallback();
@@ -553,6 +565,18 @@ for (const width of widths) {
                 await page.getByRole("button", { name: "Download .ics", exact: true }).click();
                 const download = await downloadPromise;
                 if (download.suggestedFilename() !== "evt_visual_upcoming.ics") throw new Error(`Unexpected calendar filename: ${download.suggestedFilename()}`);
+            }
+            if (capture.groupEventDialog === "create" || capture.groupEventDialog === "recurrence") {
+                await page.getByLabel("Manage group", { exact: true }).click();
+                await page.getByRole("button", { name: "Create Event", exact: true }).click();
+                const editor = page.getByRole("dialog", { name: "Create Group Event", exact: true });
+                await editor.waitFor();
+                if (capture.groupEventDialog === "recurrence") {
+                    await editor.locator('select:has(option[value="weekly"])').selectOption("weekly");
+                    await editor.getByLabel("Weekly pattern", { exact: true }).selectOption("custom");
+                    await editor.locator('label:has-text("Mon") input[type="checkbox"]').check();
+                    await editor.locator('select:has(option[value="count"])').selectOption("count");
+                }
             }
             if (capture.groupPostDialog === "create") {
                 const manage = page.getByLabel("Manage group", { exact: true });
@@ -942,6 +966,15 @@ for (const width of widths) {
             await dialog.waitFor();
             if (capture.toolDialog === "avatars") await dialog.getByRole("textbox", { name: "Export Own Avatars export", exact: true }).waitFor();
             if (capture.toolDialog === "calendar") await dialog.getByText("Tools Creator Meetup", { exact: true }).waitFor();
+            if (capture.groupEventDialog === "edit" || capture.groupEventDialog === "delete") {
+                await dialog.getByRole("button", { name: "Edit Tools Creator Meetup", exact: true }).click();
+                const editor = page.getByRole("dialog", { name: "Edit Group Event", exact: true });
+                await editor.waitFor();
+                if (capture.groupEventDialog === "delete") {
+                    await editor.getByRole("button", { name: "Delete", exact: true }).click();
+                    await page.getByRole("alertdialog").waitFor();
+                }
+            }
         }
         if (capture.toolsReady) {
             const trigger = page.getByRole("button", { name: /^Export Friends List/ });

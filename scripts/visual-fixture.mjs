@@ -358,7 +358,7 @@ await database.collection("groups").insertOne({
             visibility: "friends",
             isRepresenting: true,
             isSubscribedToAnnouncements: true,
-            permissions: ["group-announcement-manage", "group-invites-manage", "group-members-manage", "group-members-remove", "group-bans-manage", "group-roles-assign", "group-audit-view"],
+            permissions: ["group-announcement-manage", "group-calendar-manage", "group-invites-manage", "group-members-manage", "group-members-remove", "group-bans-manage", "group-roles-assign", "group-audit-view"],
             roleIds: ["grol_00000000-0000-0000-0000-000000000021"],
         },
     },
@@ -465,7 +465,19 @@ await database.collection("tools_group_calendar_snapshots").insertOne({
     followingEvents: [toolsCalendarEvent],
     featuredEvents: [],
     featuredFetched: true,
-    groups: { [groupId]: { id: groupId, name: "Remote Events Group", bannerUrl: "" } },
+    groups: {
+        [groupId]: {
+            id: groupId,
+            name: "Remote Events Group",
+            bannerUrl: "",
+            privacy: "default",
+            roles: [
+                { id: "grol_00000000-0000-0000-0000-000000000021", name: "Everyone", permissions: [] },
+                { id: "grol_00000000-0000-0000-0000-000000000022", name: "Event Host", permissions: ["group-instance-manage"] },
+            ],
+            myMember: { membershipStatus: "member", permissions: ["group-calendar-manage"] },
+        },
+    },
     observedAt: now,
     updatedAt: now,
 });

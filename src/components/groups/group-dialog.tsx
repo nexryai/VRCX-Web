@@ -39,6 +39,8 @@ import {
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
+import { GalleryFilePicker } from "@/components/groups/gallery-file-picker";
+import { GroupEventEditor } from "@/components/groups/group-event-editor";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
@@ -46,8 +48,7 @@ import { locationLabel } from "@/lib/friends";
 import { formatGroupAuditLogCsv, GROUP_AUDIT_LOG_EXPORT_FIELDS, GROUP_AUDIT_LOG_EXPORT_LABELS, type GroupAuditLogExportField, groupAuditLogTypeName } from "@/lib/group-audit-log-transfer";
 import { extractGroupBanUserIds, formatGroupBanCsv, GROUP_BAN_EXPORT_FIELDS, GROUP_BAN_EXPORT_LABELS, type GroupBanExportField } from "@/lib/group-ban-transfer";
 import { partitionGroupCalendarEvents } from "@/lib/group-calendar";
-import { latestVrchatFileUrl } from "@/lib/vrchat/gallery-files";
-import type { VrchatFile, VrchatGroup, VrchatGroupAuditLog, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatGroup, VrchatGroupAuditLog, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate, VrchatGroupGallery, VrchatGroupGalleryImage, VrchatGroupInstance, VrchatGroupMember, VrchatGroupPost, VrchatUser } from "@/lib/vrchat/types";
 
 type GroupTab = "Info" | "Posts" | "Members" | "Photos" | "JSON";
 type GroupActionName = "announcements" | "block" | "cancel-request" | "event-announcements" | "join" | "leave" | "representation" | "unblock" | "visibility";
@@ -110,6 +111,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
     const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
     const [postEditor, setPostEditor] = useState<VrchatGroupPost | "new" | null>(null);
+    const [eventEditor, setEventEditor] = useState<VrchatGroupCalendarEvent | "new" | null>(null);
     const [postToDelete, setPostToDelete] = useState<VrchatGroupPost | null>(null);
     const [postMutationLoading, setPostMutationLoading] = useState(false);
     const [inviteOpen, setInviteOpen] = useState(false);
@@ -117,6 +119,7 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
     const closeButton = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
     const postActionReturnFocus = useRef<HTMLElement | null>(null);
+    const eventActionReturnFocus = useRef<HTMLElement | null>(null);
     const inviteReturnFocus = useRef<HTMLElement | null>(null);
     const moderationReturnFocus = useRef<HTMLElement | null>(null);
 
@@ -457,6 +460,10 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                     runAction={runAction}
                                     confirm={setConfirmAction}
                                     createPost={(trigger) => openPostEditor("new", trigger)}
+                                    createEvent={(trigger) => {
+                                        eventActionReturnFocus.current = trigger;
+                                        setEventEditor("new");
+                                    }}
                                     invite={(trigger) => {
                                         inviteReturnFocus.current = trigger;
                                         setInviteOpen(true);
@@ -507,6 +514,10 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
                                     calendarLoading={calendarLoading}
                                     followingEventId={followingEventId}
                                     followCalendarEvent={followCalendarEvent}
+                                    editCalendarEvent={(calendarEvent, trigger) => {
+                                        eventActionReturnFocus.current = trigger;
+                                        setEventEditor(calendarEvent);
+                                    }}
                                     announcement={posts[0]}
                                     canManagePosts={canManageGroupPosts(group)}
                                     editPost={openPostEditor}
@@ -547,6 +558,25 @@ export function GroupDialog({ groupId, friends, openUser, onClose }: { groupId: 
             {previousInstancesOpen && group ? <PreviousInstancesDialog variant="group" entityId={group.id} label={group.name} onClose={() => setPreviousInstancesOpen(false)} returnFocusRef={previousInstancesButton} /> : null}
             {postEditor && group ? <GroupPostEditor group={group} post={postEditor === "new" ? undefined : postEditor} vrcPlus={currentUser.tags?.includes("system_supporter") === true} loading={postMutationLoading} error={error} cancel={closePostOverlay} save={savePost} /> : null}
             {postToDelete ? <GroupPostDeleteConfirmation post={postToDelete} loading={postMutationLoading} error={error} cancel={closePostOverlay} confirm={() => void deletePost()} /> : null}
+            {eventEditor && group ? (
+                <GroupEventEditor
+                    groupId={group.id}
+                    initialGroup={group}
+                    event={eventEditor === "new" ? null : eventEditor}
+                    vrcPlus={currentUser.tags?.includes("system_supporter") === true}
+                    close={() => {
+                        setEventEditor(null);
+                        window.setTimeout(() => eventActionReturnFocus.current?.focus(), 0);
+                    }}
+                    saved={(savedEvent) => {
+                        const editingId = eventEditor === "new" ? "" : eventEditor.id;
+                        setCalendar((current) => (savedEvent ? [...current.filter((item) => item.id !== editingId && item.id !== savedEvent.id), savedEvent].toSorted((a, b) => a.startsAt.localeCompare(b.startsAt)) : current.filter((item) => item.id !== editingId)));
+                        setEventEditor(null);
+                        void loadCalendar(true);
+                        window.setTimeout(() => eventActionReturnFocus.current?.focus(), 0);
+                    }}
+                />
+            ) : null}
             {inviteOpen && group ? (
                 <GroupInviteDialog
                     group={group}
@@ -613,6 +643,7 @@ function GroupManageMenu({
     runAction,
     confirm,
     createPost,
+    createEvent,
     invite,
     moderate,
 }: {
@@ -621,6 +652,7 @@ function GroupManageMenu({
     runAction: (action: GroupActionName, value?: boolean | string) => Promise<void>;
     confirm: (action: ConfirmAction) => void;
     createPost: (trigger: HTMLElement) => void;
+    createEvent: (trigger: HTMLElement) => void;
     invite: (trigger: HTMLElement) => void;
     moderate: (trigger: HTMLElement) => void;
 }) {
@@ -668,6 +700,17 @@ function GroupManageMenu({
                                 action={(event) => {
                                     const returnFocus = event.currentTarget.closest("details")?.querySelector<HTMLElement>("summary") || event.currentTarget;
                                     closeAndRun(event, () => createPost(returnFocus));
+                                }}
+                            />
+                        ) : null}
+                        {hasGroupPermission(group, "group-calendar-manage") ? (
+                            <GroupMenuButton
+                                icon={<CalendarDays />}
+                                label="Create Event"
+                                disabled={loading !== ""}
+                                action={(event) => {
+                                    const returnFocus = event.currentTarget.closest("details")?.querySelector<HTMLElement>("summary") || event.currentTarget;
+                                    closeAndRun(event, () => createEvent(returnFocus));
                                 }}
                             />
                         ) : null}
@@ -742,6 +785,7 @@ function GroupInfo({
     calendarLoading,
     followingEventId,
     followCalendarEvent,
+    editCalendarEvent,
     announcement,
     canManagePosts,
     editPost,
@@ -759,6 +803,7 @@ function GroupInfo({
     calendarLoading: boolean;
     followingEventId: string;
     followCalendarEvent: (event: VrchatGroupCalendarEvent) => Promise<void>;
+    editCalendarEvent: (event: VrchatGroupCalendarEvent, trigger: HTMLButtonElement) => void;
     announcement?: VrchatGroupPost;
     canManagePosts: boolean;
     editPost: (post: VrchatGroupPost, trigger: HTMLButtonElement) => void;
@@ -857,7 +902,7 @@ function GroupInfo({
                 </div>
                 <FullInfo label="Rules" value={group.rules || "—"} />
             </div>
-            <GroupCalendar events={calendar} loading={calendarLoading} followingEventId={followingEventId} follow={followCalendarEvent} />
+            <GroupCalendar events={calendar} loading={calendarLoading} followingEventId={followingEventId} follow={followCalendarEvent} canEdit={hasGroupPermission(group, "group-calendar-manage")} edit={editCalendarEvent} />
             <div className="flex flex-wrap items-start px-1">
                 <Info label="Members" value={`${number(group.memberCount)} (${number(group.onlineMemberCount)})`} icon={<Users className="size-3.5" />} />
                 <Info label="Created" value={date(group.createdAt)} />
@@ -888,7 +933,21 @@ function GroupInfo({
     );
 }
 
-function GroupCalendar({ events, loading, followingEventId, follow }: { events: VrchatGroupCalendarEvent[]; loading: boolean; followingEventId: string; follow: (event: VrchatGroupCalendarEvent) => Promise<void> }) {
+function GroupCalendar({
+    events,
+    loading,
+    followingEventId,
+    follow,
+    canEdit,
+    edit,
+}: {
+    events: VrchatGroupCalendarEvent[];
+    loading: boolean;
+    followingEventId: string;
+    follow: (event: VrchatGroupCalendarEvent) => Promise<void>;
+    canEdit: boolean;
+    edit: (event: VrchatGroupCalendarEvent, trigger: HTMLButtonElement) => void;
+}) {
     const { past, upcoming } = partitionGroupCalendarEvents(events);
     return (
         <div className="px-2 pb-2 text-[13px]">
@@ -900,7 +959,7 @@ function GroupCalendar({ events, loading, followingEventId, follow }: { events: 
             ) : upcoming.length ? (
                 <div className="mt-2 flex max-h-[360px] flex-wrap gap-4 overflow-y-auto py-1">
                     {upcoming.map((event) => (
-                        <GroupCalendarCard key={event.id} event={event} following={followingEventId === event.id} follow={follow} />
+                        <GroupCalendarCard key={event.id} event={event} following={followingEventId === event.id} follow={follow} canEdit={canEdit} edit={edit} />
                     ))}
                 </div>
             ) : (
@@ -911,7 +970,7 @@ function GroupCalendar({ events, loading, followingEventId, follow }: { events: 
                     <h3 className="mt-3 font-medium leading-[18px]">Past Events</h3>
                     <div className="mt-2 flex max-h-[360px] flex-wrap gap-4 overflow-y-auto py-1">
                         {past.map((event) => (
-                            <GroupCalendarCard key={event.id} event={event} following={followingEventId === event.id} follow={follow} />
+                            <GroupCalendarCard key={event.id} event={event} following={followingEventId === event.id} follow={follow} canEdit={canEdit} edit={edit} />
                         ))}
                     </div>
                 </>
@@ -920,7 +979,7 @@ function GroupCalendar({ events, loading, followingEventId, follow }: { events: 
     );
 }
 
-function GroupCalendarCard({ event, following, follow }: { event: VrchatGroupCalendarEvent; following: boolean; follow: (event: VrchatGroupCalendarEvent) => Promise<void> }) {
+function GroupCalendarCard({ event, following, follow, canEdit, edit }: { event: VrchatGroupCalendarEvent; following: boolean; follow: (event: VrchatGroupCalendarEvent) => Promise<void>; canEdit: boolean; edit: (event: VrchatGroupCalendarEvent, trigger: HTMLButtonElement) => void }) {
     const link = `https://vrchat.com/home/group/${event.ownerId}/calendar/${event.id}`;
     const [linkCopied, setLinkCopied] = useState(false);
     const [downloadingIcs, setDownloadingIcs] = useState(false);
@@ -972,6 +1031,11 @@ function GroupCalendarCard({ event, following, follow }: { event: VrchatGroupCal
                 }
             />
             <div className="absolute top-1 right-1 flex gap-1.5">
+                {canEdit ? (
+                    <button type="button" onClick={(clickEvent) => edit(event, clickEvent.currentTarget)} className="inline-flex size-6 items-center justify-center rounded-full bg-secondary shadow" aria-label={`Edit ${event.title}`}>
+                        <Pencil className="size-3.5" />
+                    </button>
+                ) : null}
                 <button type="button" onClick={() => void copyLink()} className="inline-flex size-6 items-center justify-center rounded-full bg-secondary shadow" aria-label={`Copy event link for ${event.title}`}>
                     {linkCopied ? <Check className="size-3.5" /> : <Share2 className="size-3.5" />}
                 </button>
@@ -2588,114 +2652,6 @@ function GroupPostEditor({ group, post, vrcPlus, loading, error, cancel, save }:
                         }}
                     />
                 ) : null}
-            </div>
-        </div>
-    );
-}
-
-function GalleryFilePicker({ vrcPlus, close, select }: { vrcPlus: boolean; close: () => void; select: (file: VrchatFile, url: string) => void }) {
-    const [files, setFiles] = useState<VrchatFile[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState("");
-    const dialog = useRef<HTMLDivElement>(null);
-    const noneButton = useRef<HTMLButtonElement>(null);
-    const uploadInput = useRef<HTMLInputElement>(null);
-
-    const load = useCallback(async (refresh = false) => {
-        setLoading(true);
-        setError("");
-        try {
-            const response = await fetch(`/api/gallery/files${refresh ? "?refresh=true" : ""}`, { cache: "no-store" });
-            const payload = (await response.json()) as { error?: string; files?: VrchatFile[] };
-            if (response.status === 401) window.location.assign("/login");
-            if (!response.ok) throw new Error(payload.error || "The personal gallery could not be loaded.");
-            setFiles(payload.files || []);
-        } catch (loadError) {
-            setError(loadError instanceof Error ? loadError.message : "The personal gallery could not be loaded.");
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        void load();
-        noneButton.current?.focus();
-        function handleKey(event: KeyboardEvent) {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopImmediatePropagation();
-                close();
-                return;
-            }
-            if (event.key !== "Tab" || !dialog.current) return;
-            const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])"));
-            const first = focusable[0];
-            const last = focusable.at(-1);
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last?.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first?.focus();
-            }
-        }
-        window.addEventListener("keydown", handleKey, true);
-        return () => window.removeEventListener("keydown", handleKey, true);
-    }, [close, load]);
-
-    async function upload(file: File) {
-        setUploading(true);
-        setError("");
-        try {
-            const formData = new FormData();
-            formData.set("file", file);
-            const response = await fetch("/api/gallery/files", { method: "POST", body: formData });
-            const payload = (await response.json()) as { error?: string; file?: VrchatFile; refreshRequired?: boolean };
-            if (response.status === 401) window.location.assign("/login");
-            if (!response.ok || !payload.file) throw new Error(payload.error || "The gallery image could not be uploaded.");
-            setFiles((current) => [payload.file as VrchatFile, ...current.filter((item) => item.id !== payload.file?.id)]);
-            if (payload.refreshRequired) void load(true);
-        } catch (uploadError) {
-            setError(uploadError instanceof Error ? uploadError.message : "The gallery image could not be uploaded.");
-        } finally {
-            setUploading(false);
-            if (uploadInput.current) uploadInput.current.value = "";
-        }
-    }
-
-    return (
-        <div data-gallery-file-picker className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3 sm:p-4">
-            <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="gallery-file-picker-title" className="max-h-[calc(100dvh-1.5rem)] w-full max-w-[900px] overflow-y-auto rounded-xl border border-border bg-popover p-4 shadow-2xl">
-                <h4 id="gallery-file-picker-title" className="font-semibold">
-                    Select Gallery Image
-                </h4>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                    <span>Gallery</span>
-                    <span className="text-muted-foreground">{files.length}/64</span>
-                    <button ref={noneButton} type="button" onClick={close} className="inline-flex h-8 items-center gap-1 rounded-md border border-input px-3 hover:bg-muted">
-                        <X className="size-3.5" /> None
-                    </button>
-                    <button type="button" onClick={() => void load(true)} disabled={loading} className="inline-flex h-8 items-center gap-1 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
-                        {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} Refresh
-                    </button>
-                    <input ref={uploadInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" onChange={(event) => event.target.files?.[0] && void upload(event.target.files[0])} />
-                    <button type="button" onClick={() => uploadInput.current?.click()} disabled={!vrcPlus || uploading} title={vrcPlus ? undefined : "VRChat+ is required"} className="inline-flex h-8 items-center gap-1 rounded-md border border-input px-3 hover:bg-muted disabled:opacity-40">
-                        {uploading ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Upload
-                    </button>
-                </div>
-                {error ? <p className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{error}</p> : null}
-                <div className="mt-2.5 grid grid-cols-[repeat(auto-fill,200px)] gap-5">
-                    {files.map((file) => {
-                        const url = latestVrchatFileUrl(file);
-                        return url ? (
-                            <button key={file.id} type="button" onClick={() => select(file, url)} className="size-[200px] overflow-hidden rounded-[20px] bg-muted focus:ring-2 focus:ring-ring" aria-label={`Select gallery image ${file.name || file.id}`}>
-                                <VrchatImage src={url} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
-                            </button>
-                        ) : null;
-                    })}
-                </div>
-                {!loading && !files.some((file) => latestVrchatFileUrl(file)) ? <EmptyState>No gallery images.</EmptyState> : null}
             </div>
         </div>
     );

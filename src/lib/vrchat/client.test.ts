@@ -59,6 +59,14 @@ describe("VRChat response decoding", () => {
         expect(isAllowedVrchatEndpoint("calendar/arbitrary")).toBe(false);
     });
 
+    it("allowlists only the fixed group calendar event resources", () => {
+        const group = `grp_${uuid}`;
+        expect(isAllowedVrchatEndpoint(`calendar/${group}/event`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`calendar/${group}/evt_one`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`calendar/${group}/evt_one/event`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`calendar/${group}/evt_one/event/delete`)).toBe(false);
+    });
+
     it("forwards multipart gallery uploads without overriding the boundary header", async () => {
         const fetchMock = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
             expect(init?.body).toBeInstanceOf(FormData);

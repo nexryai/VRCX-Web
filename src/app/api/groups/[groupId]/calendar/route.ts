@@ -1,8 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { getCachedGroupCalendar, replaceCachedGroupCalendar } from "@/lib/mongodb/group-dialog-repository";
+import { getCachedGroupCalendar, replaceCachedGroupCalendar, upsertCachedGroupCalendarEvent } from "@/lib/mongodb/group-dialog-repository";
 import { requireActiveUserId } from "@/lib/mongodb/single-user";
+import { projectToolsGroupCalendarEvent } from "@/lib/mongodb/tools-group-calendar-repository";
+import { isMutationOriginAllowed } from "@/lib/request-security";
 import { requestVrchat, VrchatApiError } from "@/lib/vrchat/client";
+import { groupCalendarEventInputSchema, groupCalendarEventUpstreamBody } from "@/lib/vrchat/group-calendar-event";
+import { assertGroupCalendarEventPolicy } from "@/lib/vrchat/group-calendar-policy";
 import { groupIdSchema } from "@/lib/vrchat/ids";
 import type { VrchatCookies } from "@/lib/vrchat/protocol";
 import { clearVrchatSession, persistRotatedVrchatCookies, requireVrchatCookies } from "@/lib/vrchat/session";
@@ -48,6 +52,29 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/grou
     }
 }
 
+export async function POST(request: NextRequest, context: RouteContext<"/api/groups/[groupId]/calendar">) {
+    if (!isMutationOriginAllowed(request)) return response({ error: "Cross-site requests are not allowed." }, 403);
+    const groupId = groupIdSchema.safeParse((await context.params).groupId);
+    const body = groupCalendarEventInputSchema.safeParse(await request.json().catch(() => null));
+    if (!groupId.success || !body.success) return response({ error: "The group event is invalid." }, 400);
+
+    let expectedAuthCookie: string | undefined;
+    try {
+        const [ownerId, cookies] = await Promise.all([requireActiveUserId(), requireVrchatCookies()]);
+        expectedAuthCookie = cookies.auth;
+        const group = await assertGroupCalendarEventPolicy(groupId.data, body.data, ownerId, cookies);
+        const upstream = await requestVrchat<unknown>(`calendar/${groupId.data}/event`, { method: "POST", cookies, body: { groupId: groupId.data, ...groupCalendarEventUpstreamBody(body.data) } });
+        Object.assign(cookies, upstream.cookies);
+        const event = parseEventForGroup(upstream.data, groupId.data);
+        // Creation is not idempotent. Preserve upstream success if local
+        // projections or rotated-cookie persistence need later reconciliation.
+        const [groupProjection, toolsProjection, session] = await Promise.allSettled([upsertCachedGroupCalendarEvent(ownerId, groupId.data, event), projectToolsGroupCalendarEvent(ownerId, event, group), persistRotatedVrchatCookies(cookies, expectedAuthCookie)]);
+        return response({ event, refreshRequired: [groupProjection, toolsProjection, session].some((result) => result.status === "rejected") });
+    } catch (error) {
+        return mutationError(error, expectedAuthCookie, "The group event response was not valid.");
+    }
+}
+
 async function fetchEventDetail(groupId: string, event: VrchatGroupCalendarEvent, cookies: VrchatCookies) {
     try {
         const upstream = await requestVrchat<unknown>(`calendar/${groupId}/${event.id}`, { cookies });
@@ -66,4 +93,16 @@ function response(payload: object, status = 200) {
     const result = NextResponse.json(payload, { status });
     result.headers.set("Cache-Control", "private, no-store");
     return result;
+}
+
+function parseEventForGroup(value: unknown, groupId: string, eventId?: string) {
+    const event = vrchatGroupCalendarEventSchema.parse(value);
+    if (event.ownerId !== groupId || (eventId && event.id !== eventId)) throw new Error("The calendar event response did not match the requested event.");
+    return event;
+}
+
+async function mutationError(error: unknown, expectedAuthCookie: string | undefined, fallback: string) {
+    const status = error instanceof VrchatApiError ? error.status : 502;
+    if (status === 401 && expectedAuthCookie) await clearVrchatSession(expectedAuthCookie);
+    return response({ error: error instanceof VrchatApiError ? error.message : fallback }, status);
 }

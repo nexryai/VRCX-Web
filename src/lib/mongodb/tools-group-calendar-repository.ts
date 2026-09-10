@@ -1,7 +1,7 @@
 import "server-only";
 
 import { type ToolsGroupCalendarPayload, toolsGroupCalendarPayloadSchema } from "@/lib/group-calendar";
-import type { VrchatGroupCalendarInterestUpdate } from "@/lib/vrchat/types";
+import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate } from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
 import { ensureMongoSchema } from "./migrations";
@@ -60,4 +60,29 @@ export async function updateToolsGroupCalendarEvent(ownerId: string, event: Vrch
             },
         },
     ]);
+}
+
+export async function projectToolsGroupCalendarEvent(ownerId: string, event: VrchatGroupCalendarEvent, group: VrchatGroup, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).toolsGroupCalendarSnapshots;
+    const snapshots = await collection.find({ ownerId }).toArray();
+    const targetMonth = event.startsAt.slice(0, 7);
+    for (const snapshot of snapshots) {
+        const oldEvent = snapshot.events.find((item) => item.id === event.id);
+        const oldFollowing = snapshot.followingEvents.some((item) => item.id === event.id);
+        const oldFeatured = snapshot.featuredEvents.some((item) => item.id === event.id);
+        const belongsHere = snapshot.month === targetMonth;
+        const replacement = oldEvent ? { ...event, userInterest: event.userInterest || oldEvent.userInterest } : event;
+        const sort = (items: VrchatGroupCalendarEvent[]) => items.toSorted((a, b) => a.startsAt.localeCompare(b.startsAt));
+        const events = sort([...snapshot.events.filter((item) => item.id !== event.id), ...(belongsHere ? [replacement] : [])]);
+        const followingEvents = sort([...snapshot.followingEvents.filter((item) => item.id !== event.id), ...(belongsHere && (event.userInterest?.isFollowing || oldFollowing) ? [replacement] : [])]);
+        const featuredEvents = sort([...snapshot.featuredEvents.filter((item) => item.id !== event.id), ...(belongsHere && (event.featured || oldFeatured) ? [replacement] : [])]);
+        await collection.updateOne({ _id: snapshot._id, ownerId }, { $set: { events, followingEvents, featuredEvents, groups: belongsHere ? { ...snapshot.groups, [group.id]: group } : snapshot.groups, updatedAt } });
+    }
+}
+
+export async function removeToolsGroupCalendarEvent(ownerId: string, eventId: string, updatedAt = new Date()) {
+    await ensureMongoSchema();
+    const collection = collections(await getMongoDatabase()).toolsGroupCalendarSnapshots;
+    await collection.updateMany({ ownerId }, { $pull: { events: { id: eventId }, followingEvents: { id: eventId }, featuredEvents: { id: eventId } }, $set: { updatedAt } });
 }
