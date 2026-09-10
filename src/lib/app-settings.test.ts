@@ -19,6 +19,10 @@ describe("application settings boundary", () => {
             avatarAutoCleanupDays: 0,
             toolsCollapsedCategories: [],
             groupCalendarShowFeaturedEvents: false,
+            sidebarGroupByInstance: true,
+            sidebarHideGroupedFriends: false,
+            sidebarSameInstanceAboveFavorites: false,
+            sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"],
             mutualGraphLayoutIterations: 800,
             mutualGraphExcludedFriendIds: [],
         });
@@ -52,6 +56,9 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["group", "user"], groupCalendarShowFeaturedEvents: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["user", "user"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["system"] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ sidebarSortMethods: ["Sort by Status", "Sort by Location"] }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ sidebarSortMethods: ["Sort by Status", "Sort by Status"] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ sidebarSortMethods: ["Sort by Time in Instance"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
     });
 

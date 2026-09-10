@@ -12,6 +12,8 @@ await mkdir(output, { recursive: true });
 const captures = [
     { name: "friends-locations", path: "/friends-locations", readyText: "Aoi Sample" },
     { name: "feed", path: "/feed", readyText: "Own status is now recorded" },
+    { name: "sidebar-instance-groups", path: "/feed", readyText: "Same Instance ― 1", desktopOnly: true },
+    { name: "sidebar-settings", path: "/feed", readyText: "Sort by Last Active", sidebarSettings: true, desktopOnly: true },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
     { name: "friend-list-note-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Note", query: "world-building meetup" } },
@@ -137,6 +139,7 @@ if (widths.some((width) => !Number.isInteger(width) || width < 320 || width > 38
 
 for (const width of widths) {
     for (const capture of selectedCaptures) {
+        if (capture.desktopOnly && width < 1280) continue;
         // A fresh browser per capture avoids native Chromium resource leakage in
         // minimal CI containers while keeping each screenshot deterministic.
         const browser = await chromium.launch({
@@ -874,6 +877,15 @@ for (const width of widths) {
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
+        }
+        if (capture.sidebarSettings) {
+            const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });
+            await trigger.click();
+            await page.keyboard.press("Escape");
+            await page.getByRole("dialog", { name: "Sidebar settings", exact: true }).waitFor({ state: "detached" });
+            if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Sidebar settings did not restore trigger focus after Escape.");
+            await trigger.click();
+            await page.getByRole("button", { name: "Advanced", exact: true }).click();
         }
         if (capture.customNavigation) {
             if (width < 768) await page.getByRole("button", { name: "Open navigation", exact: true }).click();

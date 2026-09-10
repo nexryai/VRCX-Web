@@ -5,6 +5,7 @@ import type { Collection, Db } from "mongodb";
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
 import type { NavigationConfig } from "@/lib/navigation-config";
 import type { NotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
+import type { SidebarSortMethod } from "@/lib/sidebar-friends";
 import type {
     VrchatAvatar,
     VrchatAvatarModeration,
@@ -59,7 +60,10 @@ export type AppSettingsDocument = {
     friendLocationShowSameInstance: boolean;
     friendLocationSegment: "active" | "favorite" | "offline" | "online" | "same-instance";
     sidebarGroupByInstance: boolean;
-    sidebarCollapsedSections: Array<"active" | "favorite" | "me" | "offline" | "online">;
+    sidebarHideGroupedFriends: boolean;
+    sidebarSameInstanceAboveFavorites: boolean;
+    sidebarSortMethods: SidebarSortMethod[];
+    sidebarCollapsedSections: Array<"active" | "favorite" | "me" | "offline" | "online" | "same-instance">;
     sidebarTab: "friends" | "groups";
     feedFilters: Array<"GPS" | "Online" | "Offline" | "Status" | "Avatar" | "Bio">;
     feedFavoritesOnly: boolean;

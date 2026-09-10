@@ -9,11 +9,12 @@ import { NotificationCenter } from "@/components/notifications/notification-cent
 import { VrchatImage } from "@/components/vrchat-image";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { locationLabel } from "@/lib/friends";
+import { groupSidebarFriendInstances, type SidebarSortMethod, sidebarSortMethods, sortSidebarFriends } from "@/lib/sidebar-friends";
 import type { VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
-type SectionKey = "active" | "favorite" | "me" | "offline" | "online";
+type SectionKey = "active" | "favorite" | "me" | "offline" | "online" | "same-instance";
 type SidebarTab = "friends" | "groups";
 
 export function FriendsSidebar() {
@@ -22,21 +23,38 @@ export function FriendsSidebar() {
     const [search, setSearch] = useState("");
     const [searchOpen, setSearchOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [groupByInstance, setGroupByInstance] = useState(false);
+    const [groupByInstance, setGroupByInstance] = useState(true);
+    const [hideGroupedFriends, setHideGroupedFriends] = useState(false);
+    const [sameInstanceAboveFavorites, setSameInstanceAboveFavorites] = useState(false);
+    const [sortMethods, setSortMethods] = useState<SidebarSortMethod[]>(["Sort Private to Bottom", "Sort by Last Active"]);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
     const [collapsed, setCollapsed] = useState<Set<SectionKey>>(new Set());
     const [tab, setTab] = useState<SidebarTab>("friends");
     const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
     const [groups, setGroups] = useState<VrchatGroup[]>([]);
     const [notificationLayout, setNotificationLayout] = useState<"notification-center" | "table">("notification-center");
     const searchRef = useRef<HTMLInputElement>(null);
+    const settingsRef = useRef<HTMLDivElement>(null);
+    const settingsButtonRef = useRef<HTMLButtonElement>(null);
 
     useEffect(() => {
         const controller = new AbortController();
         async function loadSidebarData() {
             const [settingsResponse, favoriteIds, groupsResponse] = await Promise.all([fetch("/api/settings", { cache: "no-store", signal: controller.signal }), loadFavoriteFriendIds(controller.signal), fetch("/api/groups", { cache: "no-store", signal: controller.signal })]);
-            const settings = (await settingsResponse.json()) as { sidebarGroupByInstance?: boolean; sidebarCollapsedSections?: SectionKey[]; sidebarTab?: SidebarTab; notificationLayout?: "notification-center" | "table" };
+            const settings = (await settingsResponse.json()) as {
+                sidebarGroupByInstance?: boolean;
+                sidebarHideGroupedFriends?: boolean;
+                sidebarSameInstanceAboveFavorites?: boolean;
+                sidebarSortMethods?: SidebarSortMethod[];
+                sidebarCollapsedSections?: SectionKey[];
+                sidebarTab?: SidebarTab;
+                notificationLayout?: "notification-center" | "table";
+            };
             const groupPayload = (await groupsResponse.json()) as { groups?: VrchatGroup[] };
             setGroupByInstance(settings.sidebarGroupByInstance === true);
+            setHideGroupedFriends(settings.sidebarHideGroupedFriends === true);
+            setSameInstanceAboveFavorites(settings.sidebarSameInstanceAboveFavorites === true);
+            setSortMethods(settings.sidebarSortMethods ?? ["Sort Private to Bottom", "Sort by Last Active"]);
             setCollapsed(new Set(settings.sidebarCollapsedSections ?? []));
             setTab(settings.sidebarTab ?? "friends");
             setNotificationLayout(settings.notificationLayout ?? "notification-center");
@@ -46,6 +64,26 @@ export function FriendsSidebar() {
         void loadSidebarData().catch(() => undefined);
         return () => controller.abort();
     }, []);
+
+    useEffect(() => {
+        if (!settingsOpen) return;
+        function closeSettings(event: MouseEvent | KeyboardEvent) {
+            if (event instanceof KeyboardEvent) {
+                if (event.key === "Escape") {
+                    setSettingsOpen(false);
+                    requestAnimationFrame(() => settingsButtonRef.current?.focus());
+                }
+                return;
+            }
+            if (!settingsRef.current?.contains(event.target as Node)) setSettingsOpen(false);
+        }
+        document.addEventListener("mousedown", closeSettings);
+        document.addEventListener("keydown", closeSettings);
+        return () => {
+            document.removeEventListener("mousedown", closeSettings);
+            document.removeEventListener("keydown", closeSettings);
+        };
+    }, [settingsOpen]);
 
     useEffect(() => {
         function applySettings(event: Event) {
@@ -88,12 +126,28 @@ export function FriendsSidebar() {
         const query = search.trim().toLocaleLowerCase();
         const matches = (friend: VrchatUser) => !query || `${friend.displayName} ${friend.statusDescription || ""} ${locationLabel(friend)}`.toLocaleLowerCase().includes(query);
         const onlineIds = new Set(friends.map((friend) => friend.id));
-        const favorite = friends.filter((friend) => favoriteIds.has(friend.id) && matches(friend));
-        const online = friends.filter((friend) => !favoriteIds.has(friend.id) && matches(friend));
-        const active = allFriends.filter((friend) => friend.state === "active" && matches(friend));
-        const offline = allFriends.filter((friend) => !onlineIds.has(friend.id) && friend.state !== "active" && matches(friend));
-        return { favorite, online, active, offline };
-    }, [allFriends, favoriteIds, friends, search]);
+        const matchedOnline = friends.filter(matches);
+        const instanceGroups = groupByInstance ? groupSidebarFriendInstances(matchedOnline, sortMethods) : [];
+        const groupedIds = new Set(instanceGroups.flatMap((group) => group.friends.map((friend) => friend.id)));
+        const visibleOutsideGroups = (friend: VrchatUser) => !hideGroupedFriends || !groupedIds.has(friend.id);
+        const favorite = sortSidebarFriends(
+            matchedOnline.filter((friend) => favoriteIds.has(friend.id) && visibleOutsideGroups(friend)),
+            sortMethods,
+        );
+        const online = sortSidebarFriends(
+            matchedOnline.filter((friend) => !favoriteIds.has(friend.id) && visibleOutsideGroups(friend)),
+            sortMethods,
+        );
+        const active = sortSidebarFriends(
+            allFriends.filter((friend) => friend.state === "active" && matches(friend)),
+            sortMethods,
+        );
+        const offline = sortSidebarFriends(
+            allFriends.filter((friend) => !onlineIds.has(friend.id) && friend.state !== "active" && matches(friend)),
+            sortMethods,
+        );
+        return { favorite, online, active, offline, instanceGroups };
+    }, [allFriends, favoriteIds, friends, groupByInstance, hideGroupedFriends, search, sortMethods]);
 
     function save(update: object) {
         void fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(update) });
@@ -112,6 +166,30 @@ export function FriendsSidebar() {
         setTab(value);
         save({ sidebarTab: value });
     }
+
+    function changeSortMethod(index: number, value: SidebarSortMethod | "") {
+        const next = [...sortMethods];
+        if (!value) next.splice(index);
+        else next[index] = value;
+        const unique = next.filter((method, methodIndex) => method && next.indexOf(method) === methodIndex).slice(0, 3);
+        setSortMethods(unique);
+        save({ sidebarSortMethods: unique });
+    }
+
+    const sameInstanceSection =
+        groupByInstance && sections.instanceGroups.length ? (
+            <SidebarSection label="Same Instance" section="same-instance" count={sections.instanceGroups.length} collapsed={collapsed.has("same-instance")} toggle={toggleSection}>
+                {sections.instanceGroups.map((group) => (
+                    <div key={group.location}>
+                        <div className="mt-2 mb-1 flex items-center px-1.5 text-xs text-muted-foreground">
+                            <span className="truncate">{group.label}</span>
+                            <span className="ml-1">({group.friends.length})</span>
+                        </div>
+                        {renderFriends(group.friends, openUser)}
+                    </div>
+                ))}
+            </SidebarSection>
+        ) : null;
 
     return (
         <aside className="hidden h-full min-h-0 w-[19rem] shrink-0 flex-col bg-sidebar p-[8px_6px_6px_8px] xl:flex" aria-label="Friends and groups sidebar">
@@ -151,12 +229,12 @@ export function FriendsSidebar() {
                     <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
                 </button>
                 <NotificationCenter layout={notificationLayout} friends={allFriends} openUser={openUser} openGroup={openGroup} />
-                <div className="relative">
-                    <button type="button" onClick={() => setSettingsOpen((value) => !value)} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-accent" aria-label="Sidebar settings">
+                <div ref={settingsRef} className="relative">
+                    <button ref={settingsButtonRef} type="button" onClick={() => setSettingsOpen((value) => !value)} className="inline-flex size-8 items-center justify-center rounded-full hover:bg-accent" aria-label="Sidebar settings" aria-haspopup="dialog" aria-expanded={settingsOpen}>
                         <Settings className="size-4" />
                     </button>
                     {settingsOpen ? (
-                        <div className="absolute top-10 right-0 z-30 w-64 rounded-md border border-border bg-popover p-3 text-xs shadow-lg">
+                        <div role="dialog" aria-label="Sidebar settings" className="absolute top-10 right-0 z-30 w-72 rounded-md border border-border bg-popover p-3 text-xs shadow-lg">
                             <p className="mb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Display</p>
                             <label className="flex items-center justify-between gap-3">
                                 <span>Group by instance</span>
@@ -170,6 +248,61 @@ export function FriendsSidebar() {
                                     className="size-4 accent-primary"
                                 />
                             </label>
+                            {groupByInstance ? (
+                                <>
+                                    <label className="mt-3 flex items-center justify-between gap-3">
+                                        <span>Hide Grouped Friends</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={hideGroupedFriends}
+                                            onChange={(event) => {
+                                                setHideGroupedFriends(event.target.checked);
+                                                save({ sidebarHideGroupedFriends: event.target.checked });
+                                            }}
+                                            className="size-4 accent-primary"
+                                        />
+                                    </label>
+                                    <label className="mt-3 flex items-center justify-between gap-3">
+                                        <span>Prioritize Same Instance</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={sameInstanceAboveFavorites}
+                                            onChange={(event) => {
+                                                setSameInstanceAboveFavorites(event.target.checked);
+                                                save({ sidebarSameInstanceAboveFavorites: event.target.checked });
+                                            }}
+                                            className="size-4 accent-primary"
+                                        />
+                                    </label>
+                                </>
+                            ) : null}
+                            <div className="my-3 border-t border-border" />
+                            <button type="button" onClick={() => setAdvancedOpen((value) => !value)} aria-expanded={advancedOpen} className="flex w-full items-center gap-1 py-1 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                                <ChevronDown className={`size-3.5 transition-transform ${advancedOpen ? "" : "-rotate-90"}`} />
+                                Advanced
+                            </button>
+                            {advancedOpen ? (
+                                <div className="mt-2 space-y-2">
+                                    {[0, 1, 2].map((index) => (
+                                        <label key={index} className="block">
+                                            <span className="sr-only">Sort method {index + 1}</span>
+                                            <select
+                                                value={sortMethods[index] ?? ""}
+                                                disabled={index > 0 && sortMethods.length < index}
+                                                onChange={(event) => changeSortMethod(index, event.target.value as SidebarSortMethod | "")}
+                                                className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs outline-none focus:border-ring disabled:opacity-50"
+                                            >
+                                                {index ? <option value="">None</option> : null}
+                                                {sidebarSortMethods.map((method) => (
+                                                    <option key={method} value={method} disabled={sortMethods.includes(method) && sortMethods[index] !== method}>
+                                                        {method}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </label>
+                                    ))}
+                                </div>
+                            ) : null}
                         </div>
                     ) : null}
                 </div>
@@ -192,17 +325,19 @@ export function FriendsSidebar() {
                         <SidebarSection label="Me" section="me" count={1} collapsed={collapsed.has("me")} toggle={toggleSection}>
                             <SidebarUser user={currentUser} openUser={openUser} />
                         </SidebarSection>
+                        {sameInstanceAboveFavorites ? sameInstanceSection : null}
                         <SidebarSection label="Favorites" section="favorite" count={sections.favorite.length} collapsed={collapsed.has("favorite")} toggle={toggleSection}>
-                            {renderFriends(sections.favorite, openUser, groupByInstance)}
+                            {renderFriends(sections.favorite, openUser)}
                         </SidebarSection>
+                        {!sameInstanceAboveFavorites ? sameInstanceSection : null}
                         <SidebarSection label="Online" section="online" count={sections.online.length} collapsed={collapsed.has("online")} toggle={toggleSection}>
-                            {renderFriends(sections.online, openUser, groupByInstance)}
+                            {renderFriends(sections.online, openUser)}
                         </SidebarSection>
                         <SidebarSection label="Active" section="active" count={sections.active.length} collapsed={collapsed.has("active")} toggle={toggleSection}>
-                            {renderFriends(sections.active, openUser, false)}
+                            {renderFriends(sections.active, openUser)}
                         </SidebarSection>
                         <SidebarSection label="Offline" section="offline" count={sections.offline.length} collapsed={collapsed.has("offline")} toggle={toggleSection}>
-                            {renderFriends(sections.offline, openUser, false)}
+                            {renderFriends(sections.offline, openUser)}
                         </SidebarSection>
                     </>
                 )}
@@ -237,25 +372,8 @@ function SidebarUser({ user, openUser }: { user: VrchatUser; openUser: (userId: 
     );
 }
 
-function renderFriends(friends: VrchatUser[], openUser: (userId: string) => void, groupByInstance: boolean) {
-    if (!groupByInstance) return friends.map((friend) => <SidebarUser key={friend.id} user={friend} openUser={openUser} />);
-    return groupFriends(friends).map((group) => (
-        <div key={group.location}>
-            <div className="mb-1 mt-2 flex items-center text-xs text-muted-foreground">
-                <span className="truncate">{group.location}</span>
-                <span className="ml-1">({group.friends.length})</span>
-            </div>
-            {group.friends.map((friend) => (
-                <SidebarUser key={friend.id} user={friend} openUser={openUser} />
-            ))}
-        </div>
-    ));
-}
-
-function groupFriends(friends: VrchatUser[]) {
-    const groups = new Map<string, VrchatUser[]>();
-    for (const friend of friends) groups.set(locationLabel(friend), [...(groups.get(locationLabel(friend)) ?? []), friend]);
-    return [...groups].map(([location, members]) => ({ location, friends: members })).toSorted((a, b) => a.location.localeCompare(b.location));
+function renderFriends(friends: VrchatUser[], openUser: (userId: string) => void) {
+    return friends.map((friend) => <SidebarUser key={friend.id} user={friend} openUser={openUser} />);
 }
 
 function GroupList({ groups, search, openGroup }: { groups: VrchatGroup[]; search: string; openGroup: (groupId: string) => void }) {

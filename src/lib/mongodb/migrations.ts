@@ -57,7 +57,7 @@ const migrations: Migration[] = [
                         friendLocationCardSpacing: 1,
                         friendLocationShowSameInstance: false,
                         friendLocationSegment: "online",
-                        sidebarGroupByInstance: false,
+                        sidebarGroupByInstance: true,
                         sidebarCollapsedSections: [],
                         sidebarTab: "friends",
                         updatedAt: now,
@@ -513,6 +513,18 @@ const migrations: Migration[] = [
         name: "add-custom-navigation-layout",
         async apply(c) {
             await c.appSettings.updateMany({ navigationConfig: { $exists: false } }, { $set: { navigationConfig: defaultNavigationConfig, updatedAt: new Date() } });
+        },
+    },
+    {
+        version: 49,
+        name: "add-sidebar-instance-and-sorting-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ sidebarHideGroupedFriends: { $exists: false } }, { $set: { sidebarHideGroupedFriends: false, updatedAt } }),
+                c.appSettings.updateMany({ sidebarSameInstanceAboveFavorites: { $exists: false } }, { $set: { sidebarSameInstanceAboveFavorites: false, updatedAt } }),
+                c.appSettings.updateMany({ sidebarSortMethods: { $exists: false } }, { $set: { sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"], updatedAt } }),
+            ]);
         },
     },
 ];

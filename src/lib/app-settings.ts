@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { defaultNavigationConfig, navigationConfigSchema, sanitizeNavigationConfig } from "@/lib/navigation-config";
 import { defaultNotificationDeliveryFilters, notificationDeliveryFiltersSchema } from "@/lib/notification-delivery-filters";
+import { sidebarSortMethods } from "@/lib/sidebar-friends";
 import { userIdSchema } from "@/lib/vrchat/ids";
 
 const remoteFavoriteFriendGroupKeySchema = z
@@ -26,9 +27,16 @@ export const appSettingsUpdateSchema = z
         friendLocationShowSameInstance: z.boolean().optional(),
         friendLocationSegment: z.enum(["active", "favorite", "offline", "online", "same-instance"]).optional(),
         sidebarGroupByInstance: z.boolean().optional(),
+        sidebarHideGroupedFriends: z.boolean().optional(),
+        sidebarSameInstanceAboveFavorites: z.boolean().optional(),
+        sidebarSortMethods: z
+            .array(z.enum(sidebarSortMethods))
+            .max(3)
+            .refine((values) => new Set(values).size === values.length)
+            .optional(),
         sidebarCollapsedSections: z
-            .array(z.enum(["active", "favorite", "me", "offline", "online"]))
-            .max(5)
+            .array(z.enum(["active", "favorite", "me", "offline", "online", "same-instance"]))
+            .max(6)
             .optional(),
         sidebarTab: z.enum(["friends", "groups"]).optional(),
         feedFilters: z
@@ -100,7 +108,10 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         friendLocationCardSpacing: settings?.friendLocationCardSpacing ?? 1,
         friendLocationShowSameInstance: settings?.friendLocationShowSameInstance ?? false,
         friendLocationSegment: settings?.friendLocationSegment ?? "online",
-        sidebarGroupByInstance: settings?.sidebarGroupByInstance ?? false,
+        sidebarGroupByInstance: settings?.sidebarGroupByInstance ?? true,
+        sidebarHideGroupedFriends: settings?.sidebarHideGroupedFriends ?? false,
+        sidebarSameInstanceAboveFavorites: settings?.sidebarSameInstanceAboveFavorites ?? false,
+        sidebarSortMethods: settings?.sidebarSortMethods ?? ["Sort Private to Bottom", "Sort by Last Active"],
         sidebarCollapsedSections: settings?.sidebarCollapsedSections ?? [],
         sidebarTab: settings?.sidebarTab ?? "friends",
         feedFilters: settings?.feedFilters ?? [],
