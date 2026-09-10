@@ -7,6 +7,7 @@ describe("application settings boundary", () => {
         expect(serializeAppSettings()).toMatchObject({
             theme: "dark",
             navigationCollapsed: false,
+            navigationConfig: expect.objectContaining({ hiddenKeys: [] }),
             favoriteSortByDate: false,
             localFavoriteFriendsGroups: [],
             recentActionCooldownEnabled: false,
@@ -37,6 +38,16 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ notificationLayout: "sheet" }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ notificationDeliveryFilters: serializeAppSettings().notificationDeliveryFilters }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ notificationDeliveryFilters: { invite: "Friends" } }).success).toBe(false);
+        const navigation = appSettingsUpdateSchema.safeParse({
+            navigationConfig: {
+                layout: [
+                    { type: "item", key: "feed" },
+                    { type: "item", key: "feed" },
+                ],
+                hiddenKeys: [],
+            },
+        });
+        expect(navigation.success && navigation.data.navigationConfig?.layout.filter((entry) => entry.type === "item" && entry.key === "feed")).toHaveLength(1);
         expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["user"] }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["group", "user"], groupCalendarShowFeaturedEvents: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ toolsCollapsedCategories: ["user", "user"] }).success).toBe(false);

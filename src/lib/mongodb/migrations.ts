@@ -1,5 +1,6 @@
 import "server-only";
 
+import { defaultNavigationConfig } from "@/lib/navigation-config";
 import { defaultNotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
 import { getMongoDatabase } from "./client";
 import type { Collections } from "./collections";
@@ -505,6 +506,13 @@ const migrations: Migration[] = [
                 c.toolsGroupCalendarSnapshots.createIndex({ ownerId: 1, month: 1 }, { unique: true, name: "owner_month_unique" }),
                 c.toolsGroupCalendarSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" }),
             ]);
+        },
+    },
+    {
+        version: 48,
+        name: "add-custom-navigation-layout",
+        async apply(c) {
+            await c.appSettings.updateMany({ navigationConfig: { $exists: false } }, { $set: { navigationConfig: defaultNavigationConfig, updatedAt: new Date() } });
         },
     },
 ];

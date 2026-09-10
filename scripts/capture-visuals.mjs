@@ -101,6 +101,8 @@ const captures = [
     { name: "settings-notifications", path: "/settings", readyText: "Send Test Notification", settingsTab: "Notifications", notificationsSettings: true },
     { name: "settings-notification-filters", path: "/settings", readyText: "Notification Filters", settingsTab: "Notifications", notificationFiltersDialog: true },
     { name: "tools", path: "/tools", readyText: "Export Own Avatars", toolsReady: true },
+    { name: "custom-navigation", path: "/tools", readyText: "Customize Navigation Menu", customNavigation: true },
+    { name: "custom-navigation-tool-pin", path: "/tools", readyText: "Tools Creator Meetup", pinTool: "group-calendar" },
     { name: "tools-discord-names", path: "/tools", readyText: "Discord Names", toolDialog: "discord" },
     { name: "tools-note-export", path: "/tools", readyText: "Note Export", toolDialog: "notes" },
     { name: "tools-friends-export", path: "/tools", readyText: "Export Friends List", toolDialog: "friends" },
@@ -870,6 +872,16 @@ for (const width of widths) {
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
+        }
+        if (capture.customNavigation) {
+            if (width < 768) await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+            await page.getByRole("button", { name: "Manage", exact: true }).click();
+            await page.getByRole("button", { name: "Customize Navigation", exact: true }).click();
+        }
+        if (capture.pinTool) {
+            await page.getByRole("button", { name: "Pin to Navigation", exact: true }).first().click();
+            if (width < 768) await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+            await page.getByRole("link", { name: "Group Calendar", exact: true }).click();
         }
         if (capture.settingsTab) {
             await page.getByText("Application data", { exact: true }).waitFor({ state: "attached" });

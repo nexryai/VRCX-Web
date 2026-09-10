@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Loader2 } from "lucide-react";
@@ -9,6 +10,7 @@ import { useFriends } from "@/components/friends/friends-provider";
 import { GroupCalendarDialog } from "@/components/tools/group-calendar-dialog";
 import { NoteExportDialog } from "@/components/tools/note-export-dialog";
 import { ToolsDialogFrame } from "@/components/tools/tools-dialog-frame";
+import { collectNavigationKeys, defaultNavigationConfig, type NavigationConfig, type NavigationItemKey, type NavigationLayoutEntry, sanitizeNavigationConfig } from "@/lib/navigation-config";
 import { formatDiscordNamesCsv, formatFriendsListExports, formatOwnedAvatarsCsv, ownedAvatarsPageSchema } from "@/lib/tools-exports";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
@@ -22,6 +24,7 @@ const tools: Array<{ key: ToolDialog; icon: string; title: string; description: 
 ];
 
 export function ToolsView() {
+    const searchParams = useSearchParams();
     const currentUser = useCurrentUser();
     const { allFriends, loading: friendsLoading } = useFriends();
     const [dialog, setDialog] = useState<ToolDialog | null>(null);
@@ -31,6 +34,7 @@ export function ToolsView() {
     const [exportCollapsed, setExportCollapsed] = useState(false);
     const [groupCollapsed, setGroupCollapsed] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
+    const [navigationConfig, setNavigationConfig] = useState<NavigationConfig>(defaultNavigationConfig);
     const trigger = useRef<HTMLButtonElement | null>(null);
     const avatarController = useRef<AbortController | null>(null);
     const settingsSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -50,10 +54,11 @@ export function ToolsView() {
     useEffect(() => {
         const controller = new AbortController();
         void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
-            .then((response) => response.json() as Promise<{ toolsCollapsedCategories?: string[] }>)
+            .then((response) => response.json() as Promise<{ toolsCollapsedCategories?: string[]; navigationConfig?: NavigationConfig }>)
             .then((settings) => {
                 setExportCollapsed(settings.toolsCollapsedCategories?.includes("user") === true);
                 setGroupCollapsed(settings.toolsCollapsedCategories?.includes("group") === true);
+                setNavigationConfig(sanitizeNavigationConfig(settings.navigationConfig));
             })
             .catch(() => undefined)
             .finally(() => {
@@ -61,6 +66,12 @@ export function ToolsView() {
             });
         return () => controller.abort();
     }, []);
+
+    useEffect(() => {
+        if (!settingsLoaded) return;
+        const key = searchParams.get("tool");
+        document.querySelector<HTMLButtonElement>(`[data-tool-key="${key}"]`)?.click();
+    }, [searchParams, settingsLoaded]);
 
     useEffect(() => {
         if (dialog === null) trigger.current?.focus();
@@ -109,6 +120,27 @@ export function ToolsView() {
         setDialog(null);
     }
 
+    async function togglePinned(toolKey: "group-calendar" | "discord-names" | "export-notes" | "export-friend-list" | "export-own-avatars") {
+        const navKey = `tool-${toolKey}` as NavigationItemKey;
+        const pinned = collectNavigationKeys(navigationConfig.layout).has(navKey);
+        const layout: NavigationLayoutEntry[] = [];
+        for (const entry of navigationConfig.layout) {
+            if (pinned) {
+                if (entry.type === "item") {
+                    if (entry.key !== navKey) layout.push(entry);
+                } else layout.push({ ...entry, items: entry.items.filter((key) => key !== navKey) });
+            } else {
+                if (entry.type === "item" && entry.key === "tools") layout.push({ type: "item", key: navKey });
+                layout.push(entry);
+            }
+        }
+        const next = sanitizeNavigationConfig({ ...navigationConfig, layout });
+        setNavigationConfig(next);
+        window.dispatchEvent(new CustomEvent("vrcx:navigation", { detail: next }));
+        const response = await fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ navigationConfig: next }) });
+        if (response.ok) window.dispatchEvent(new CustomEvent("vrcx:navigation", { detail: next }));
+    }
+
     return (
         <section className="h-full min-h-0 overflow-y-auto p-4" aria-labelledby="tools-heading">
             <h1 id="tools-heading" className="text-sm font-medium">
@@ -128,13 +160,16 @@ export function ToolsView() {
                         </button>
                     </h2>
                     <div className={`grid grid-cols-1 gap-4 sm:ml-4 sm:grid-cols-2 ${groupCollapsed ? "hidden" : ""}`}>
-                        <button type="button" onClick={(event) => void openTool("calendar", event.currentTarget)} className="group flex min-h-20 items-start gap-3 rounded-lg border border-border bg-card p-4 text-left hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                            <i className="ri-calendar-event-line inline-flex size-8 shrink-0 items-center justify-center text-2xl" aria-hidden="true" />
-                            <span className="min-w-0">
-                                <span className="block text-sm font-medium">Group Calendar</span>
-                                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">View upcoming events from your groups</span>
-                            </span>
-                        </button>
+                        <div className="group relative rounded-lg border border-border bg-card hover:bg-accent/50">
+                            <button data-tool-key="group-calendar" type="button" onClick={(event) => void openTool("calendar", event.currentTarget)} className="flex min-h-20 w-full items-start gap-3 p-4 pr-12 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                <i className="ri-calendar-event-line inline-flex size-8 shrink-0 items-center justify-center text-2xl" aria-hidden="true" />
+                                <span className="min-w-0">
+                                    <span className="block text-sm font-medium">Group Calendar</span>
+                                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">View upcoming events from your groups</span>
+                                </span>
+                            </button>
+                            <PinButton pinned={collectNavigationKeys(navigationConfig.layout).has("tool-group-calendar")} toggle={() => void togglePinned("group-calendar")} />
+                        </div>
                     </div>
                 </section>
                 <section aria-labelledby="tools-export-heading" className="mb-6">
@@ -151,19 +186,25 @@ export function ToolsView() {
                     </h2>
                     <div className={`grid grid-cols-1 gap-4 sm:ml-4 sm:grid-cols-2 ${exportCollapsed ? "hidden" : ""}`}>
                         {tools.map((tool) => (
-                            <button
-                                key={tool.key}
-                                type="button"
-                                disabled={friendsLoading && tool.key !== "avatars"}
-                                onClick={(event) => void openTool(tool.key, event.currentTarget)}
-                                className="group flex min-h-20 items-start gap-3 rounded-lg border border-border bg-card p-4 text-left hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
-                            >
-                                <i className={`${tool.icon} inline-flex size-8 shrink-0 items-center justify-center text-2xl`} aria-hidden="true" />
-                                <span className="min-w-0">
-                                    <span className="block text-sm font-medium">{tool.title}</span>
-                                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{tool.description}</span>
-                                </span>
-                            </button>
+                            <div key={tool.key} className="group relative rounded-lg border border-border bg-card hover:bg-accent/50">
+                                <button
+                                    data-tool-key={tool.key === "discord" ? "discord-names" : tool.key === "notes" ? "export-notes" : tool.key === "friends" ? "export-friend-list" : "export-own-avatars"}
+                                    type="button"
+                                    disabled={friendsLoading && tool.key !== "avatars"}
+                                    onClick={(event) => void openTool(tool.key, event.currentTarget)}
+                                    className="flex min-h-20 w-full items-start gap-3 p-4 pr-12 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-50"
+                                >
+                                    <i className={`${tool.icon} inline-flex size-8 shrink-0 items-center justify-center text-2xl`} aria-hidden="true" />
+                                    <span className="min-w-0">
+                                        <span className="block text-sm font-medium">{tool.title}</span>
+                                        <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{tool.description}</span>
+                                    </span>
+                                </button>
+                                <PinButton
+                                    pinned={collectNavigationKeys(navigationConfig.layout).has(`tool-${tool.key === "discord" ? "discord-names" : tool.key === "notes" ? "export-notes" : tool.key === "friends" ? "export-friend-list" : "export-own-avatars"}` as never)}
+                                    toggle={() => void togglePinned(tool.key === "discord" ? "discord-names" : tool.key === "notes" ? "export-notes" : tool.key === "friends" ? "export-friend-list" : "export-own-avatars")}
+                                />
+                            </div>
                         ))}
                     </div>
                 </section>
@@ -175,6 +216,23 @@ export function ToolsView() {
             {dialog === "notes" ? <NoteExportDialog close={closeDialog} /> : null}
             {dialog === "calendar" ? <GroupCalendarDialog close={closeDialog} /> : null}
         </section>
+    );
+}
+
+function PinButton({ pinned, toggle }: { pinned: boolean; toggle: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={toggle}
+            title={pinned ? "Unpin" : "Pin to Navigation"}
+            aria-label={pinned ? "Unpin" : "Pin to Navigation"}
+            className={`absolute top-3 right-3 grid size-7 place-items-center rounded-md transition-opacity hover:bg-secondary focus:opacity-100 ${pinned ? "bg-secondary opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+        >
+            <span className="relative inline-flex">
+                <i className="ri-side-bar-line text-base" />
+                <i className={`${pinned ? "ri-subtract-line" : "ri-add-line"} absolute -top-1 -right-1 text-[10px]`} />
+            </span>
+        </button>
     );
 }
 

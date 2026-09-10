@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { defaultNavigationConfig, navigationConfigSchema, sanitizeNavigationConfig } from "@/lib/navigation-config";
 import { defaultNotificationDeliveryFilters, notificationDeliveryFiltersSchema } from "@/lib/notification-delivery-filters";
 import { userIdSchema } from "@/lib/vrchat/ids";
 
@@ -15,6 +16,7 @@ export const appSettingsUpdateSchema = z
     .object({
         theme: z.enum(["dark", "light"]).optional(),
         navigationCollapsed: z.boolean().optional(),
+        navigationConfig: navigationConfigSchema.transform((value) => sanitizeNavigationConfig(value)).optional(),
         myAvatarsView: z.enum(["grid", "table"]).optional(),
         myAvatarsCardScale: z.number().min(0.3).max(0.9).optional(),
         myAvatarsCardSpacing: z.number().min(0.5).max(1.5).optional(),
@@ -89,6 +91,7 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
     return {
         theme: settings?.theme ?? "dark",
         navigationCollapsed: settings?.navigationCollapsed ?? false,
+        navigationConfig: sanitizeNavigationConfig(settings?.navigationConfig ?? defaultNavigationConfig),
         myAvatarsView: settings?.myAvatarsView ?? "grid",
         myAvatarsCardScale: settings?.myAvatarsCardScale ?? 0.6,
         myAvatarsCardSpacing: settings?.myAvatarsCardSpacing ?? 1,

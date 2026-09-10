@@ -39,7 +39,8 @@ describe("VRCX route difference register", () => {
         const appRoot = join(process.cwd(), "src/app");
         const productRoutes = (await pageFiles(appRoot)).map((file) => routeForPage(appRoot, file)).filter((route) => !["/", "/login"].includes(route));
         const shell = await readFile(join(process.cwd(), "src/components/app-shell.tsx"), "utf8");
-        const linkedRoutes = new Set([...shell.matchAll(/(?:href:|href=)[ ]*"([^"]+)"/g)].map((match) => match[1]));
+        const navigationConfig = await readFile(join(process.cwd(), "src/lib/navigation-config.ts"), "utf8");
+        const linkedRoutes = new Set([...`${shell}\n${navigationConfig}`.matchAll(/(?:href:|href=)[ ]*"([^"]+)"/g)].map((match) => match[1].split("?")[0]));
         expect(productRoutes.filter((route) => !linkedRoutes.has(route))).toEqual([]);
 
         const document = await readFile(join(process.cwd(), "docs/vrcx-route-difference-register.md"), "utf8");

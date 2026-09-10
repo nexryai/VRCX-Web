@@ -3,6 +3,7 @@ import "server-only";
 import type { Collection, Db } from "mongodb";
 
 import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
+import type { NavigationConfig } from "@/lib/navigation-config";
 import type { NotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
 import type {
     VrchatAvatar,
@@ -48,6 +49,7 @@ export type AppSettingsDocument = {
     activeUserId?: string;
     theme: "dark" | "light";
     navigationCollapsed: boolean;
+    navigationConfig: NavigationConfig;
     myAvatarsView: "grid" | "table";
     myAvatarsCardScale: number;
     myAvatarsCardSpacing: number;

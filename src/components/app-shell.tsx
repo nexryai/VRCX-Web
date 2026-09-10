@@ -3,12 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ChevronRight, ExternalLink, LogOut, Menu, X } from "lucide-react";
 
+import { defaultNavigationConfig, type NavigationConfig, navigationDefinitions, sanitizeNavigationConfig } from "@/lib/navigation-config";
 import type { VrchatUser } from "@/lib/vrchat/types";
 import { BrowserNotificationBridge } from "./browser-notification-bridge";
+import { CustomNavigationDialog } from "./custom-navigation-dialog";
 import { MonitorStatusBar } from "./monitor-status-bar";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -18,41 +20,24 @@ type NavigationEntry = NavigationItem | { label: string; icon: string; children:
 // Order, grouping, labels, and icons are translated from VRCX's
 // navLayoutDefaults.js and shared/constants/ui.js. Local-only and explicitly
 // excluded destinations are intentionally absent rather than disabled.
-const navigation: NavigationEntry[] = [
-    { href: "/feed", label: "Feed", icon: "ri-rss-line" },
-    { href: "/friends-locations", label: "Friends Locations", icon: "ri-user-location-line" },
-    { href: "/game-log", label: "Game Log", icon: "ri-history-line" },
-    { href: "/search", label: "Search", icon: "ri-search-line" },
-    {
-        label: "Favorites",
-        icon: "ri-star-line",
-        children: [
-            { href: "/favorites/friends", label: "Favorite Friends", icon: "ri-user-heart-line" },
-            { href: "/favorites/worlds", label: "Favorite Worlds", icon: "ri-earth-line" },
-            { href: "/favorites/avatars", label: "Favorite Avatars", icon: "ri-empathize-line" },
-        ],
-    },
-    {
-        label: "Social",
-        icon: "ri-group-line",
-        children: [
-            { href: "/social/friend-log", label: "Friend Log", icon: "ri-contacts-line" },
-            { href: "/social/friend-list", label: "Friend List", icon: "ri-booklet-line" },
-            { href: "/social/moderation", label: "Moderation", icon: "ri-shield-user-line" },
-        ],
-    },
-    { href: "/notification", label: "Notifications", icon: "ri-notification-2-line" },
-    { href: "/my-avatars", label: "My Avatars", icon: "ri-contacts-book-3-line" },
-    {
-        label: "Charts",
-        icon: "ri-pie-chart-line",
-        children: [
-            { href: "/charts/mutual", label: "Mutual Friends", icon: "ri-group-2-line" },
-            { href: "/charts/hot-worlds", label: "Hot Worlds", icon: "ri-fire-line" },
-        ],
-    },
-    { href: "/tools", label: "Tools", icon: "ri-tools-line" },
-];
+const navigationDefinitionMap = new Map(navigationDefinitions.map((definition) => [definition.key, definition]));
+
+function buildNavigation(config: NavigationConfig): NavigationEntry[] {
+    const navigation: NavigationEntry[] = [];
+    for (const entry of config.layout) {
+        if (entry.type === "item") {
+            const definition = navigationDefinitionMap.get(entry.key);
+            if (definition) navigation.push({ href: definition.href, label: definition.label, icon: definition.icon });
+            continue;
+        }
+        const children = entry.items.flatMap((key) => {
+            const definition = navigationDefinitionMap.get(key);
+            return definition ? [{ href: definition.href, label: definition.label, icon: definition.icon }] : [];
+        });
+        if (children.length) navigation.push({ label: entry.name, icon: entry.icon, children });
+    }
+    return navigation;
+}
 
 function isItem(entry: NavigationEntry): entry is NavigationItem {
     return "href" in entry;
@@ -62,7 +47,7 @@ function isActive(pathname: string, href: string) {
     return href === "/" ? pathname === "/" : pathname === href;
 }
 
-function navigationTitle(pathname: string) {
+function navigationTitle(pathname: string, navigation: NavigationEntry[]) {
     if (pathname === "/settings") return "Settings";
     if (pathname === "/about") return "About";
     for (const entry of navigation) {
@@ -84,12 +69,18 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
     const [openFolder, setOpenFolder] = useState<string>();
     const [manageOpen, setManageOpen] = useState(false);
     const [helpOpen, setHelpOpen] = useState(false);
+    const [navigationConfig, setNavigationConfig] = useState<NavigationConfig>(defaultNavigationConfig);
+    const [customNavigationOpen, setCustomNavigationOpen] = useState(false);
+    const navigation = useMemo(() => buildNavigation(navigationConfig), [navigationConfig]);
 
     useEffect(() => {
         const controller = new AbortController();
         void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
-            .then((response) => response.json() as Promise<{ navigationCollapsed?: boolean }>)
-            .then((settings) => setCollapsed(settings.navigationCollapsed === true))
+            .then((response) => response.json() as Promise<{ navigationCollapsed?: boolean; navigationConfig?: NavigationConfig }>)
+            .then((settings) => {
+                setCollapsed(settings.navigationCollapsed === true);
+                setNavigationConfig(sanitizeNavigationConfig(settings.navigationConfig));
+            })
             .catch(() => undefined);
         return () => controller.abort();
     }, []);
@@ -101,6 +92,15 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
         }
         window.addEventListener("vrcx:settings", applySettings);
         return () => window.removeEventListener("vrcx:settings", applySettings);
+    }, []);
+
+    useEffect(() => {
+        function applyNavigation(event: Event) {
+            const detail = (event as CustomEvent<NavigationConfig>).detail;
+            if (detail) setNavigationConfig(sanitizeNavigationConfig(detail));
+        }
+        window.addEventListener("vrcx:navigation", applyNavigation);
+        return () => window.removeEventListener("vrcx:navigation", applyNavigation);
     }, []);
 
     function toggleCollapsed() {
@@ -120,6 +120,13 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
         }
     }
 
+    function saveNavigation(config: NavigationConfig) {
+        setNavigationConfig(config);
+        window.dispatchEvent(new CustomEvent("vrcx:navigation", { detail: config }));
+        setCustomNavigationOpen(false);
+        void fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ navigationConfig: config }) });
+    }
+
     return (
         <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-sidebar text-foreground">
             <BrowserNotificationBridge />
@@ -137,7 +144,13 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                         </button>
                     </div>
 
-                    <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+                    <nav
+                        className="min-h-0 flex-1 overflow-y-auto px-2 py-3"
+                        onContextMenu={(event) => {
+                            event.preventDefault();
+                            setCustomNavigationOpen(true);
+                        }}
+                    >
                         <ul className="space-y-1">
                             {navigation.map((entry) => {
                                 if (isItem(entry)) {
@@ -233,6 +246,16 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                 <Link href="/settings" onClick={() => setManageOpen(false)} className="flex h-8 items-center rounded px-2 hover:bg-accent">
                                     Settings and about
                                 </Link>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setManageOpen(false);
+                                        setCustomNavigationOpen(true);
+                                    }}
+                                    className="flex h-8 w-full items-center rounded px-2 hover:bg-accent"
+                                >
+                                    Customize Navigation
+                                </button>
                                 <div className="my-1 border-t border-border" />
                                 <button type="button" onClick={() => void logout()} disabled={loggingOut} className="flex h-8 w-full items-center gap-2 rounded px-2 text-destructive hover:bg-accent disabled:opacity-50">
                                     <LogOut className="size-4" />
@@ -264,7 +287,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                         <button type="button" onClick={() => setMobileOpen(true)} className="inline-flex size-8 items-center justify-center rounded-md hover:bg-sidebar-accent" aria-label="Open navigation">
                             <Menu aria-hidden="true" className="size-5" />
                         </button>
-                        <span className="text-sm font-medium">{navigationTitle(pathname)}</span>
+                        <span className="text-sm font-medium">{navigationTitle(pathname, navigation)}</span>
                     </header>
                     <div className="flex min-h-0 flex-1">
                         <main className="min-w-0 flex-1 overflow-hidden bg-background md:m-2 md:mr-0 md:rounded-md md:border">{children}</main>
@@ -273,6 +296,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                 </div>
             </div>
             <MonitorStatusBar />
+            <CustomNavigationDialog open={customNavigationOpen} config={navigationConfig} close={() => setCustomNavigationOpen(false)} saved={saveNavigation} />
         </div>
     );
 }
