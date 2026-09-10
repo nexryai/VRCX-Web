@@ -3,19 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ChevronRight, ExternalLink, LogOut, Menu, X } from "lucide-react";
+import { ChevronRight, ExternalLink, Heart, LogOut, Menu, X } from "lucide-react";
 
-import { defaultNavigationConfig, type NavigationConfig, navigationDefinitions, sanitizeNavigationConfig } from "@/lib/navigation-config";
-import type { VrchatUser } from "@/lib/vrchat/types";
+import { defaultNavigationConfig, type NavigationConfig, type NavigationLayoutEntry, navigationDefinitions, sanitizeNavigationConfig } from "@/lib/navigation-config";
 import { BrowserNotificationBridge } from "./browser-notification-bridge";
 import { CustomNavigationDialog } from "./custom-navigation-dialog";
 import { MonitorStatusBar } from "./monitor-status-bar";
 import { ThemeToggle } from "./theme-toggle";
 
-type NavigationItem = { href: string; label: string; icon: string };
-type NavigationEntry = NavigationItem | { label: string; icon: string; children: NavigationItem[] };
+type NavigationItem = { key: string; href: string; label: string; icon: string };
+type NavigationEntry = NavigationItem | { key: string; label: string; icon: string; children: NavigationItem[] };
 
 // Order, grouping, labels, and icons are translated from VRCX's
 // navLayoutDefaults.js and shared/constants/ui.js. Local-only and explicitly
@@ -27,14 +26,14 @@ function buildNavigation(config: NavigationConfig): NavigationEntry[] {
     for (const entry of config.layout) {
         if (entry.type === "item") {
             const definition = navigationDefinitionMap.get(entry.key);
-            if (definition) navigation.push({ href: definition.href, label: definition.label, icon: definition.icon });
+            if (definition) navigation.push({ key: definition.key, href: definition.href, label: definition.label, icon: definition.icon });
             continue;
         }
         const children = entry.items.flatMap((key) => {
             const definition = navigationDefinitionMap.get(key);
-            return definition ? [{ href: definition.href, label: definition.label, icon: definition.icon }] : [];
+            return definition ? [{ key: definition.key, href: definition.href, label: definition.label, icon: definition.icon }] : [];
         });
-        if (children.length) navigation.push({ label: entry.name, icon: entry.icon, children });
+        if (children.length) navigation.push({ key: entry.id, label: entry.name, icon: entry.icon, children });
     }
     return navigation;
 }
@@ -60,7 +59,7 @@ function navigationTitle(pathname: string, navigation: NavigationEntry[]) {
     return "VRCX";
 }
 
-export function AppShell({ user, children, aside }: { user: VrchatUser; children: React.ReactNode; aside?: React.ReactNode }) {
+export function AppShell({ version, children, aside }: { version: string; children: React.ReactNode; aside?: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const [collapsed, setCollapsed] = useState(false);
@@ -71,6 +70,9 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
     const [helpOpen, setHelpOpen] = useState(false);
     const [navigationConfig, setNavigationConfig] = useState<NavigationConfig>(defaultNavigationConfig);
     const [customNavigationOpen, setCustomNavigationOpen] = useState(false);
+    const [navigationMenu, setNavigationMenu] = useState<{ x: number; y: number; itemKey?: string } | null>(null);
+    const navigationMenuRef = useRef<HTMLDivElement>(null);
+    const navigationMenuReturnFocus = useRef<HTMLElement | null>(null);
     const navigation = useMemo(() => buildNavigation(navigationConfig), [navigationConfig]);
 
     useEffect(() => {
@@ -84,6 +86,25 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
             .catch(() => undefined);
         return () => controller.abort();
     }, []);
+
+    useEffect(() => {
+        if (!navigationMenu) return;
+        const closeMenu = () => setNavigationMenu(null);
+        requestAnimationFrame(() => navigationMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus());
+        const handleKey = (event: KeyboardEvent) => {
+            if (event.key !== "Escape") return;
+            setNavigationMenu(null);
+            navigationMenuReturnFocus.current?.focus();
+        };
+        window.addEventListener("click", closeMenu);
+        window.addEventListener("blur", closeMenu);
+        window.addEventListener("keydown", handleKey);
+        return () => {
+            window.removeEventListener("click", closeMenu);
+            window.removeEventListener("blur", closeMenu);
+            window.removeEventListener("keydown", handleKey);
+        };
+    }, [navigationMenu]);
 
     useEffect(() => {
         function applySettings(event: Event) {
@@ -127,6 +148,27 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
         void fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ navigationConfig: config }) });
     }
 
+    function openNavigationMenu(event: React.MouseEvent, itemKey?: string) {
+        event.preventDefault();
+        event.stopPropagation();
+        navigationMenuReturnFocus.current = event.target instanceof Element ? event.target.closest<HTMLElement>("a, button") : null;
+        setNavigationMenu({ x: Math.min(event.clientX, window.innerWidth - 190), y: Math.min(event.clientY, window.innerHeight - 90), itemKey });
+    }
+
+    function unpinTool(itemKey: string) {
+        const layout: NavigationLayoutEntry[] = [];
+        for (const entry of navigationConfig.layout) {
+            if (entry.type === "item") {
+                if (entry.key !== itemKey) layout.push(entry);
+                continue;
+            }
+            const items = entry.items.filter((key) => key !== itemKey);
+            if (items.length) layout.push({ ...entry, items });
+        }
+        saveNavigation(sanitizeNavigationConfig({ ...navigationConfig, layout }));
+        setNavigationMenu(null);
+    }
+
     return (
         <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-sidebar text-foreground">
             <BrowserNotificationBridge />
@@ -144,19 +186,13 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                         </button>
                     </div>
 
-                    <nav
-                        className="min-h-0 flex-1 overflow-y-auto px-2 py-3"
-                        onContextMenu={(event) => {
-                            event.preventDefault();
-                            setCustomNavigationOpen(true);
-                        }}
-                    >
+                    <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-3" onContextMenu={(event) => openNavigationMenu(event)}>
                         <ul className="space-y-1">
                             {navigation.map((entry) => {
                                 if (isItem(entry)) {
                                     const active = isActive(pathname, entry.href);
                                     return (
-                                        <li key={entry.href}>
+                                        <li key={entry.key} onContextMenu={(event) => openNavigationMenu(event, entry.key)}>
                                             <Link
                                                 href={entry.href}
                                                 title={collapsed ? entry.label : undefined}
@@ -173,7 +209,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                 const active = entry.children.some((item) => isActive(pathname, item.href));
                                 const expanded = openFolder === entry.label || (!collapsed && active && openFolder === undefined);
                                 return (
-                                    <li key={entry.label} className="relative">
+                                    <li key={entry.key} className="relative" onContextMenu={(event) => openNavigationMenu(event)}>
                                         <button
                                             type="button"
                                             title={collapsed ? entry.label : undefined}
@@ -188,7 +224,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                         {expanded ? (
                                             <ul className={collapsed ? "absolute top-0 left-11 z-50 w-56 space-y-1 rounded-md border border-border bg-popover p-1 shadow-lg" : "mt-1 ml-4 space-y-1 border-l border-sidebar-border pl-2"}>
                                                 {entry.children.map((item) => (
-                                                    <li key={item.href}>
+                                                    <li key={item.key} onContextMenu={(event) => openNavigationMenu(event, item.key)}>
                                                         <Link href={item.href} onClick={() => setMobileOpen(false)} className={`flex h-8 items-center gap-2 rounded-md px-2 text-sm ${isActive(pathname, item.href) ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/70"}`}>
                                                             <i className={`${item.icon} inline-flex size-5 shrink-0 items-center justify-center text-base`} aria-hidden="true" />
                                                             <span>{item.label}</span>
@@ -209,11 +245,18 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                 <Link href="/about" className="flex h-8 items-center rounded px-2 hover:bg-accent">
                                     About and notices
                                 </Link>
+                                <div className="my-1 border-t border-border" />
+                                <p className="px-2 py-1 text-xs text-muted-foreground">Resources</p>
                                 <a href="https://github.com/vrcx-team/VRCX/wiki" target="_blank" rel="noreferrer" className="flex h-8 items-center gap-2 rounded px-2 hover:bg-accent">
                                     VRCX Wiki <ExternalLink className="ml-auto size-3" />
                                 </a>
+                                <div className="my-1 border-t border-border" />
+                                <p className="px-2 py-1 text-xs text-muted-foreground">Get Help</p>
                                 <a href="https://github.com/vrcx-team/VRCX" target="_blank" rel="noreferrer" className="flex h-8 items-center gap-2 rounded px-2 hover:bg-accent">
                                     GitHub <ExternalLink className="ml-auto size-3" />
+                                </a>
+                                <a href="https://vrcx.app/discord" target="_blank" rel="noreferrer" className="flex h-8 items-center gap-2 rounded px-2 hover:bg-accent">
+                                    Join our Discord <ExternalLink className="ml-auto size-3" />
                                 </a>
                             </div>
                         ) : null}
@@ -234,8 +277,10 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                 <div className="flex items-center gap-2 px-2 py-1.5">
                                     <Image src="/vrcx.png" alt="" width={24} height={24} />
                                     <div className="min-w-0">
-                                        <p className="truncate font-medium">VRCX</p>
-                                        <p className="truncate text-xs text-muted-foreground">{user.displayName}</p>
+                                        <p className="flex items-center gap-1 truncate font-medium">
+                                            VRCX <Heart className="size-3 fill-primary text-primary" />
+                                        </p>
+                                        <p className="truncate text-xs text-muted-foreground">{version}</p>
                                     </div>
                                 </div>
                                 <div className="my-1 border-t border-border" />
@@ -244,7 +289,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                     <ThemeToggle className="size-8 rounded-md" />
                                 </div>
                                 <Link href="/settings" onClick={() => setManageOpen(false)} className="flex h-8 items-center rounded px-2 hover:bg-accent">
-                                    Settings and about
+                                    Settings
                                 </Link>
                                 <button
                                     type="button"
@@ -270,7 +315,7 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                                 setHelpOpen(false);
                             }}
                             title={collapsed ? "Manage" : undefined}
-                            className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-sidebar-accent"
+                            className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-sidebar-accent ${pathname === "/settings" ? "bg-sidebar-accent font-medium" : ""}`}
                         >
                             <i className="ri-settings-3-line inline-flex size-6 items-center justify-center text-lg" aria-hidden="true" />
                             <span className={collapsed ? "md:hidden" : ""}>Manage</span>
@@ -296,6 +341,26 @@ export function AppShell({ user, children, aside }: { user: VrchatUser; children
                 </div>
             </div>
             <MonitorStatusBar />
+            {navigationMenu ? (
+                <div ref={navigationMenuRef} role="menu" aria-label="Navigation actions" style={{ left: navigationMenu.x, top: navigationMenu.y }} className="fixed z-[90] min-w-44 rounded-md border border-border bg-popover p-1 text-xs shadow-lg" onClick={(event) => event.stopPropagation()}>
+                    {navigationMenu.itemKey?.startsWith("tool-") ? (
+                        <button type="button" role="menuitem" onClick={() => unpinTool(navigationMenu.itemKey ?? "")} className="flex h-8 w-full items-center rounded px-2 text-left hover:bg-accent">
+                            Unpin
+                        </button>
+                    ) : null}
+                    <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                            setNavigationMenu(null);
+                            setCustomNavigationOpen(true);
+                        }}
+                        className="flex h-8 w-full items-center rounded px-2 text-left hover:bg-accent"
+                    >
+                        Customize Navigation
+                    </button>
+                </div>
+            ) : null}
             <CustomNavigationDialog open={customNavigationOpen} config={navigationConfig} close={() => setCustomNavigationOpen(false)} saved={saveNavigation} />
         </div>
     );

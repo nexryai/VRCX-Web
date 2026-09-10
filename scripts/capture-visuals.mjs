@@ -102,6 +102,8 @@ const captures = [
     { name: "settings-notification-filters", path: "/settings", readyText: "Notification Filters", settingsTab: "Notifications", notificationFiltersDialog: true },
     { name: "tools", path: "/tools", readyText: "Export Own Avatars", toolsReady: true },
     { name: "custom-navigation", path: "/tools", readyText: "Customize Navigation Menu", customNavigation: true },
+    { name: "navigation-context-menu", path: "/tools", readyText: "Customize Navigation", navigationContextMenu: true },
+    { name: "navigation-tool-context-menu", path: "/tools", readyText: "Unpin", pinToolContextMenu: "group-calendar" },
     { name: "custom-navigation-tool-pin", path: "/tools", readyText: "Tools Creator Meetup", pinTool: "group-calendar" },
     { name: "tools-discord-names", path: "/tools", readyText: "Discord Names", toolDialog: "discord" },
     { name: "tools-note-export", path: "/tools", readyText: "Note Export", toolDialog: "notes" },
@@ -879,9 +881,31 @@ for (const width of widths) {
             await page.getByRole("button", { name: "Customize Navigation", exact: true }).click();
         }
         if (capture.pinTool) {
-            await page.getByRole("button", { name: "Pin to Navigation", exact: true }).first().click();
+            const calendarCard = page.locator('[data-tool-key="group-calendar"]').locator("..");
+            const pin = calendarCard.getByRole("button", { name: "Pin to Navigation", exact: true });
+            if (await pin.count()) await pin.click();
+            await page.getByRole("link", { name: "Group Calendar", exact: true }).waitFor({ state: "attached" });
             if (width < 768) await page.getByRole("button", { name: "Open navigation", exact: true }).click();
             await page.getByRole("link", { name: "Group Calendar", exact: true }).click();
+        }
+        if (capture.navigationContextMenu) {
+            if (width < 768) await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+            const toolsLink = page.getByRole("link", { name: "Tools", exact: true });
+            await toolsLink.click({ button: "right" });
+            const menu = page.getByRole("menu", { name: "Navigation actions", exact: true });
+            await menu.waitFor();
+            await page.keyboard.press("Escape");
+            await menu.waitFor({ state: "detached" });
+            if (!(await toolsLink.evaluate((element) => document.activeElement === element))) throw new Error("Navigation context menu did not restore trigger focus after Escape.");
+            await toolsLink.click({ button: "right" });
+        }
+        if (capture.pinToolContextMenu) {
+            const calendarCard = page.locator('[data-tool-key="group-calendar"]').locator("..");
+            const pin = calendarCard.getByRole("button", { name: "Pin to Navigation", exact: true });
+            if (await pin.count()) await pin.click();
+            await page.getByRole("link", { name: "Group Calendar", exact: true }).waitFor({ state: "attached" });
+            if (width < 768) await page.getByRole("button", { name: "Open navigation", exact: true }).click();
+            await page.getByRole("link", { name: "Group Calendar", exact: true }).click({ button: "right" });
         }
         if (capture.settingsTab) {
             await page.getByText("Application data", { exact: true }).waitFor({ state: "attached" });
