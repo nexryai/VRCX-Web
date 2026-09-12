@@ -11,6 +11,24 @@ const remoteFavoriteFriendGroupKeySchema = z
     .regex(/^friend:[a-z0-9_-]+$/i);
 const localFavoriteFriendGroupKeySchema = z.string().regex(/^local:lfg_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 
+export const statusBarVisibilitySchema = z
+    .object({
+        servers: z.boolean(),
+        ws: z.boolean(),
+        monitor: z.boolean(),
+        sync: z.boolean(),
+        rateLimit: z.boolean(),
+        uptime: z.boolean(),
+    })
+    .strict();
+
+export const defaultStatusBarVisibility = { servers: true, ws: true, monitor: true, sync: true, rateLimit: true, uptime: true } as const;
+
+export function defaultStatusBarClocks(now = new Date()): [number, number, number] {
+    const localOffset = Math.max(-12, Math.min(14, Math.round(-now.getTimezoneOffset() / 60)));
+    return [localOffset, 0, localOffset < 0 ? 9 : -5];
+}
+
 export const favoriteFriendGroupKeySchema = z.union([remoteFavoriteFriendGroupKeySchema, localFavoriteFriendGroupKeySchema]);
 
 export const appSettingsUpdateSchema = z
@@ -92,6 +110,9 @@ export const appSettingsUpdateSchema = z
             .refine((values) => new Set(values).size === values.length)
             .optional(),
         groupCalendarShowFeaturedEvents: z.boolean().optional(),
+        statusBarVisibility: statusBarVisibilitySchema.optional(),
+        statusBarClockCount: z.number().int().min(0).max(3).optional(),
+        statusBarClocks: z.tuple([z.number().int().min(-12).max(14), z.number().int().min(-12).max(14), z.number().int().min(-12).max(14)]).optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -157,5 +178,8 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         avatarAutoCleanupDays: settings?.avatarAutoCleanupDays ?? 0,
         toolsCollapsedCategories: settings?.toolsCollapsedCategories ?? [],
         groupCalendarShowFeaturedEvents: settings?.groupCalendarShowFeaturedEvents ?? false,
+        statusBarVisibility: settings?.statusBarVisibility ?? defaultStatusBarVisibility,
+        statusBarClockCount: settings?.statusBarClockCount ?? 2,
+        statusBarClocks: settings?.statusBarClocks ?? defaultStatusBarClocks(),
     };
 }

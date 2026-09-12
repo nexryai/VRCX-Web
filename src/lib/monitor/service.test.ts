@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     resumeStaleMutualGraphJob: vi.fn(async () => false),
     resumeNoteExportJob: vi.fn(async () => false),
     applyPipelineSelfEvent: vi.fn(async () => true),
+    reconcileVrchatServiceStatus: vi.fn(async () => undefined),
     sockets: [] as FakeWebSocket[],
 }));
 
@@ -79,6 +80,7 @@ vi.mock("@/lib/vrchat/client", () => ({
         }
     },
 }));
+vi.mock("@/lib/vrchat/service-status", () => ({ reconcileVrchatServiceStatus: mocks.reconcileVrchatServiceStatus }));
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -98,6 +100,7 @@ describe("AlwaysOnMonitor leadership lifecycle", () => {
         const monitor = new AlwaysOnMonitor();
 
         await monitor.start();
+        expect(mocks.reconcileVrchatServiceStatus).toHaveBeenCalledTimes(1);
         expect(mocks.reconcileRemoteState).toHaveBeenCalledTimes(1);
         expect(mocks.runAvatarAutoCleanup).toHaveBeenCalledWith("usr_00000000-0000-0000-0000-000000000001");
         expect(mocks.resumeStaleMutualGraphJob).toHaveBeenCalledWith("usr_00000000-0000-0000-0000-000000000001", { auth: "auth-cookie" });

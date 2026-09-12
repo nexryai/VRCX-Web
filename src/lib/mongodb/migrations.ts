@@ -1,5 +1,6 @@
 import "server-only";
 
+import { defaultStatusBarClocks, defaultStatusBarVisibility } from "@/lib/app-settings";
 import { defaultNavigationConfig } from "@/lib/navigation-config";
 import { defaultNotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
 import { getMongoDatabase } from "./client";
@@ -556,6 +557,24 @@ const migrations: Migration[] = [
         name: "add-sidebar-group-instance-order",
         async apply(c) {
             await c.groupInstanceSnapshots.createIndex({ ownerId: 1, sidebarOrder: 1 }, { name: "owner_sidebar_order" });
+        },
+    },
+    {
+        version: 53,
+        name: "add-vrcx-status-bar-settings",
+        async apply(c) {
+            const updatedAt = new Date();
+            await c.appSettings.updateMany(
+                { statusBarVisibility: { $exists: false } },
+                {
+                    $set: {
+                        statusBarVisibility: defaultStatusBarVisibility,
+                        statusBarClockCount: 2,
+                        statusBarClocks: defaultStatusBarClocks(updatedAt),
+                        updatedAt,
+                    },
+                },
+            );
         },
     },
 ];

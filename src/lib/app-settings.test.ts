@@ -29,6 +29,8 @@ describe("application settings boundary", () => {
             sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"],
             mutualGraphLayoutIterations: 800,
             mutualGraphExcludedFriendIds: [],
+            statusBarVisibility: { servers: true, ws: true, monitor: true, sync: true, rateLimit: true, uptime: true },
+            statusBarClockCount: 2,
         });
     });
 
@@ -66,6 +68,9 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ sidebarFavoriteGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ sidebarFavoriteGroupOrder: ["friend:group_0", "friend:group_0"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ statusBarClockCount: 3, statusBarClocks: [9, 0, -5] }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ statusBarClockCount: 4 }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ statusBarClocks: [15, 0, -5] }).success).toBe(false);
     });
 
     it("accepts only the versioned settings backup format", () => {

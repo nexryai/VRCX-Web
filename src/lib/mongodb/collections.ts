@@ -6,6 +6,7 @@ import type { LegacyBrowserStorageKey } from "@/lib/legacy-browser-settings";
 import type { NavigationConfig } from "@/lib/navigation-config";
 import type { NotificationDeliveryFilters } from "@/lib/notification-delivery-filters";
 import type { SidebarSortMethod } from "@/lib/sidebar-friends";
+import type { StatusBarVisibility } from "@/lib/status-bar";
 import type {
     VrchatAvatar,
     VrchatAvatarModeration,
@@ -98,6 +99,9 @@ export type AppSettingsDocument = {
     avatarAutoCleanupDays: 0 | 30 | 90 | 180 | 365;
     toolsCollapsedCategories: Array<"group" | "user">;
     groupCalendarShowFeaturedEvents: boolean;
+    statusBarVisibility: StatusBarVisibility;
+    statusBarClockCount: number;
+    statusBarClocks: [number, number, number];
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];
@@ -124,6 +128,14 @@ export type MonitorStateDocument = {
     lastAvatarCleanupDeleted?: number;
     lastAvatarCleanupError?: string;
     lastError?: string;
+    monitorStartedAt?: Date;
+    vrchatServiceIndicator?: "none" | "minor" | "major" | "critical" | "maintenance" | "unknown";
+    vrchatServiceDescription?: string;
+    vrchatServiceAffectedComponents?: string[];
+    vrchatServiceUpdatedAt?: Date;
+    vrchatServiceCheckedAt?: Date;
+    vrchatServiceNextCheckAt?: Date;
+    vrchatServiceLastError?: string;
     updatedAt: Date;
 };
 

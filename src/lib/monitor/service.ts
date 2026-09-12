@@ -9,6 +9,7 @@ import { resumeStaleMutualGraphJob } from "@/lib/mutual-graph-job";
 import { resumeNoteExportJob } from "@/lib/note-export-job";
 import { applyPipelineNotificationState, upsertPipelineNotification } from "@/lib/notifications/repository";
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
+import { reconcileVrchatServiceStatus } from "@/lib/vrchat/service-status";
 import { vrchatNotificationSchema } from "@/lib/vrchat/types";
 import { runAvatarAutoCleanup } from "./avatar-cleanup";
 import { applyPipelineFriendEvent, isPipelineFriendEventType } from "./friend-events";
@@ -81,6 +82,8 @@ export class AlwaysOnMonitor {
             }
             const becameLeader = !this.hasLeadership;
             this.hasLeadership = true;
+            if (becameLeader) await this.safeHealth({ monitorStartedAt: new Date() });
+            await reconcileVrchatServiceStatus(this.leaderId);
             const stored = await getStoredVrchatSession();
             if (stored?.status !== "authenticated" || !stored.activeUserId) {
                 this.cookies = undefined;

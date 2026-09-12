@@ -20,6 +20,18 @@ export async function GET() {
             : undefined,
         lastPipelineEventAt: state?.lastPipelineEventAt?.toISOString(),
         lastReconciledAt: state?.lastReconciledAt?.toISOString(),
+        monitorStartedAt: state?.monitorStartedAt?.toISOString(),
+        vrchatService:
+            state?.vrchatServiceIndicator || state?.vrchatServiceLastError
+                ? {
+                      indicator: state.vrchatServiceIndicator ?? "unknown",
+                      description: state.vrchatServiceDescription,
+                      affectedComponents: state.vrchatServiceAffectedComponents ?? [],
+                      updatedAt: state.vrchatServiceUpdatedAt?.toISOString(),
+                      checkedAt: state.vrchatServiceCheckedAt?.toISOString(),
+                      error: state.vrchatServiceLastError,
+                  }
+                : undefined,
         avatarCleanup:
             state?.lastAvatarCleanupAt || state?.lastAvatarCleanupError
                 ? {

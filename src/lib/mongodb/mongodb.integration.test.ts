@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -64,6 +64,8 @@ describe("MongoDB application repositories", () => {
             mutualGraphCommunitySeparation: 0,
             mutualGraphExcludedFriendIds: [],
             legacyBrowserSettingsImportVersion: 0,
+            statusBarVisibility: { servers: true, ws: true, monitor: true, sync: true, rateLimit: true, uptime: true },
+            statusBarClockCount: 2,
         });
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner", "owner_world_started", "owner_group_started"]);
         expect(sessionIndexes).toBe(true);
@@ -93,6 +95,42 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("notifications").indexExists("owner_source_first_observed")).toBe(true);
         expect(await databaseCollections.monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
+    });
+
+    test("persists public VRChat status on the monitor leader cadence and preserves the last known state on failure", async () => {
+        const { getMongoDatabase } = await import("./client");
+        const { collections } = await import("./collections");
+        const { reconcileVrchatServiceStatus } = await import("@/lib/vrchat/service-status");
+        const monitorState = collections(await getMongoDatabase()).monitorState;
+        const leaderId = "status-test-leader";
+        const now = new Date("2026-09-13T12:00:00.000Z");
+        await monitorState.updateOne(
+            { _id: "singleton" },
+            {
+                $set: { leaderId, leaseExpiresAt: new Date(now.getTime() + 60_000) },
+                $unset: { vrchatServiceNextCheckAt: "", vrchatServiceLastError: "" },
+            },
+        );
+        const fetcher = async () => new Response(JSON.stringify({ page: { updated_at: now.toISOString() }, status: { indicator: "none", description: "All Systems Operational" } }), { status: 200 });
+
+        await reconcileVrchatServiceStatus(leaderId, now, fetcher);
+        expect(await monitorState.findOne({ _id: "singleton" })).toMatchObject({
+            vrchatServiceIndicator: "none",
+            vrchatServiceDescription: "All Systems Operational",
+            vrchatServiceAffectedComponents: [],
+            vrchatServiceCheckedAt: now,
+            vrchatServiceNextCheckAt: new Date(now.getTime() + 15 * 60_000),
+        });
+
+        await monitorState.updateOne({ _id: "singleton" }, { $set: { vrchatServiceNextCheckAt: now } });
+        await reconcileVrchatServiceStatus(leaderId, now, async () => new Response("unavailable", { status: 503 }));
+        expect(await monitorState.findOne({ _id: "singleton" })).toMatchObject({
+            vrchatServiceIndicator: "none",
+            vrchatServiceDescription: "All Systems Operational",
+            vrchatServiceLastError: "VRChat service status could not be refreshed.",
+            vrchatServiceNextCheckAt: new Date(now.getTime() + 2 * 60_000),
+        });
+        await monitorState.updateOne({ _id: "singleton", leaderId }, { $unset: { leaderId: "", leaseExpiresAt: "" } });
     });
 
     test("imports the former root browser settings into MongoDB exactly once", async () => {

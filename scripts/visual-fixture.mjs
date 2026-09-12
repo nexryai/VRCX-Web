@@ -231,10 +231,30 @@ await database.collection("app_settings").insertOne({
     mutualGraphCommunitySeparation: 0,
     mutualGraphExcludedFriendIds: [],
     avatarAutoCleanupDays: 90,
+    statusBarVisibility: { servers: true, ws: true, monitor: true, sync: true, rateLimit: true, uptime: true },
+    statusBarClockCount: 2,
+    statusBarClocks: [9, 0, -5],
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
-await database.collection("monitor_state").insertOne({ _id: "singleton", schemaVersion: 1, ownerId, status: "healthy", pipelineConnected: true, pipelineSequence: 12, lastPipelineEventAt: now, lastReconciledAt: now, updatedAt: now });
+await database.collection("monitor_state").insertOne({
+    _id: "singleton",
+    schemaVersion: 1,
+    ownerId,
+    status: "healthy",
+    pipelineConnected: true,
+    pipelineSequence: 12,
+    lastPipelineEventAt: now,
+    lastReconciledAt: now,
+    monitorStartedAt: new Date(now.getTime() - 3_723_000),
+    vrchatServiceIndicator: "minor",
+    vrchatServiceDescription: "Minor Service Outage",
+    vrchatServiceAffectedComponents: ["Realtime Pipeline"],
+    vrchatServiceUpdatedAt: now,
+    vrchatServiceCheckedAt: now,
+    vrchatServiceNextCheckAt: new Date(now.getTime() + 120_000),
+    updatedAt: now,
+});
 await database.collection("users").insertOne({ _id: `${ownerId}:${ownerId}`, ownerId, userId: ownerId, user: currentUser, source: "auth", observedAt: now, updatedAt: now });
 await database.collection("self_snapshots").insertOne({ _id: ownerId, ownerId, userId: ownerId, online: true, user: currentUser, observedAt: now, updatedAt: now });
 await database.collection("friend_snapshots").insertMany(friends.map((user) => ({ _id: `${ownerId}:${user.id}`, ownerId, friendId: user.id, online: user.state === "online", user, observedAt: now, updatedAt: now })));

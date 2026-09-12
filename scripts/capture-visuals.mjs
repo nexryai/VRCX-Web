@@ -17,6 +17,10 @@ const captures = [
     { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
     { name: "sidebar-cosmetics", path: "/feed", readyText: "Aoi Sample", sidebarCosmetics: true, desktopOnly: true },
     { name: "sidebar-group-instances", path: "/feed", readyText: "Aoi Sample", sidebarGroupInstances: true, desktopOnly: true },
+    { name: "status-bar", path: "/feed", readyText: "Servers", statusBar: true },
+    { name: "status-bar-incident", path: "/feed", readyText: "VRChat Server Issues", statusBarIncident: true, desktopOnly: true },
+    { name: "status-bar-context", path: "/feed", readyText: "Clocks", statusBarContext: true, desktopOnly: true },
+    { name: "status-bar-clock", path: "/feed", readyText: "Timezone", statusBarClock: true, desktopOnly: true },
     { name: "sidebar-favorite-selector", path: "/feed", readyText: "Event Crew", sidebarSettings: true, sidebarFavoriteSelector: true, desktopOnly: true },
     { name: "sidebar-favorite-order", path: "/feed", readyText: "Edit Group Order", sidebarSettings: true, sidebarFavoriteOrder: true, desktopOnly: true },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
@@ -201,6 +205,17 @@ for (const width of widths) {
                     body: '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><defs><linearGradient id="g"><stop stop-color="#00b8ff"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs><circle cx="64" cy="64" r="55" fill="none" stroke="url(#g)" stroke-width="7"/><path d="m23 38 12 1 4-12 8 10M105 90l-12-1-4 12-8-10" fill="none" stroke="#d7f5ff" stroke-width="4" stroke-linecap="round"/></svg>',
                 }),
             );
+        }
+        if (capture.statusBar) {
+            await page.route("**/api/monitor/status", async (route) => {
+                const response = await route.fetch();
+                const payload = await response.json();
+                return route.fulfill({
+                    response,
+                    contentType: "application/json",
+                    body: JSON.stringify({ ...payload, vrchatService: { indicator: "none", description: "All Systems Operational", affectedComponents: [], checkedAt: new Date().toISOString() } }),
+                });
+            });
         }
         if (capture.searchQuery) {
             await page.route("**/api/search/config", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ worldRows: [{ index: 0, name: "Featured", sortHeading: "featured" }] }) }));
@@ -474,6 +489,36 @@ for (const width of widths) {
             await header.click();
             await page.getByText("Remote Group Lounge · #Community Hub", { exact: true }).waitFor({ state: "detached" });
             await header.click();
+        }
+        if (capture.statusBarIncident) {
+            await page.getByRole("link", { name: "Servers", exact: true }).hover();
+            await page.getByText("VRChat Server Issues", { exact: true }).waitFor();
+        }
+        if (capture.statusBarContext) {
+            const statusBar = page.getByLabel("Server monitoring status", { exact: true });
+            await statusBar.click({ button: "right" });
+            const menu = page.getByRole("menu", { name: "Status bar visibility", exact: true });
+            await menu.waitFor();
+            await menu.getByRole("menuitemcheckbox", { name: "Monitor", exact: true }).click();
+            if (await statusBar.getByText("Monitor", { exact: true }).count()) throw new Error("Status bar visibility did not hide Monitor.");
+            await menu.getByRole("menuitemcheckbox", { name: "Monitor", exact: true }).click();
+            await statusBar.getByText("Monitor", { exact: true }).waitFor();
+            await page.keyboard.press("Escape");
+            await menu.waitFor({ state: "detached" });
+            await statusBar.focus();
+            await page.keyboard.press("Shift+F10");
+            await menu.waitFor();
+        }
+        if (capture.statusBarClock) {
+            const clock = page.getByRole("button", { name: /UTC[+-]/ }).first();
+            await clock.click();
+            const select = page.getByLabel("Timezone", { exact: true });
+            await select.waitFor();
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await select.selectOption("8");
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.statusBarClocks?.[0] !== 8) throw new Error("Status bar clock offset did not persist in MongoDB.");
         }
         if (capture.friendListSearch) {
             const filterSummary = page.getByText("Filter fields", { exact: true });
