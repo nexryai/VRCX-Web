@@ -527,6 +527,18 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 50,
+        name: "add-sidebar-favorite-group-preferences",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ sidebarDivideByFriendGroup: { $exists: false } }, { $set: { sidebarDivideByFriendGroup: true, updatedAt } }),
+                c.appSettings.updateMany({ sidebarFavoriteGroups: { $exists: false } }, { $set: { sidebarFavoriteGroups: [], updatedAt } }),
+                c.appSettings.updateMany({ sidebarFavoriteGroupOrder: { $exists: false } }, { $set: { sidebarFavoriteGroupOrder: [], updatedAt } }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

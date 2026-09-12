@@ -29,6 +29,17 @@ export const appSettingsUpdateSchema = z
         sidebarGroupByInstance: z.boolean().optional(),
         sidebarHideGroupedFriends: z.boolean().optional(),
         sidebarSameInstanceAboveFavorites: z.boolean().optional(),
+        sidebarDivideByFriendGroup: z.boolean().optional(),
+        sidebarFavoriteGroups: z
+            .array(favoriteFriendGroupKeySchema)
+            .max(100)
+            .refine((values) => new Set(values).size === values.length)
+            .optional(),
+        sidebarFavoriteGroupOrder: z
+            .array(favoriteFriendGroupKeySchema)
+            .max(100)
+            .refine((values) => new Set(values).size === values.length)
+            .optional(),
         sidebarSortMethods: z
             .array(z.enum(sidebarSortMethods))
             .max(3)
@@ -111,6 +122,9 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         sidebarGroupByInstance: settings?.sidebarGroupByInstance ?? true,
         sidebarHideGroupedFriends: settings?.sidebarHideGroupedFriends ?? false,
         sidebarSameInstanceAboveFavorites: settings?.sidebarSameInstanceAboveFavorites ?? false,
+        sidebarDivideByFriendGroup: settings?.sidebarDivideByFriendGroup ?? true,
+        sidebarFavoriteGroups: settings?.sidebarFavoriteGroups ?? [],
+        sidebarFavoriteGroupOrder: settings?.sidebarFavoriteGroupOrder ?? [],
         sidebarSortMethods: settings?.sidebarSortMethods ?? ["Sort Private to Bottom", "Sort by Last Active"],
         sidebarCollapsedSections: settings?.sidebarCollapsedSections ?? [],
         sidebarTab: settings?.sidebarTab ?? "friends",

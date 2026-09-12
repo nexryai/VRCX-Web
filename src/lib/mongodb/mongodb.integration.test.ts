@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -50,6 +50,9 @@ describe("MongoDB application repositories", () => {
             sidebarHideGroupedFriends: false,
             sidebarSameInstanceAboveFavorites: false,
             sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"],
+            sidebarDivideByFriendGroup: true,
+            sidebarFavoriteGroups: [],
+            sidebarFavoriteGroupOrder: [],
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
             favoriteCardSpacing: { avatar: 1, friend: 1, world: 1 },
             moderationFilters: [],
@@ -371,9 +374,9 @@ describe("MongoDB application repositories", () => {
 
     test("projects the selected remote friend groups together with all local favorites", async () => {
         const { upsertCachedUser } = await import("./user-repository");
-        const { upsertFavoriteProjection } = await import("./projection-repository");
+        const { upsertFavoriteGroupProjection, upsertFavoriteProjection } = await import("./projection-repository");
         const { addLocalFavorite, createLocalFavoriteGroup } = await import("./local-favorites-repository");
-        const { listSelectedFavoriteFriendIds } = await import("./friend-favorites-repository");
+        const { listSelectedFavoriteFriendIds, listSidebarFavoriteFriendGroups } = await import("./friend-favorites-repository");
         const { collections } = await import("./collections");
         const { getMongoDatabase } = await import("./client");
         const ownerId = "usr_00000000-0000-0000-0000-000000000171";
@@ -382,6 +385,8 @@ describe("MongoDB application repositories", () => {
         const localId = "usr_00000000-0000-0000-0000-000000000174";
         await upsertFavoriteProjection(ownerId, { id: "fvrt_first", favoriteId: firstId, type: "friend", tags: ["group_0"] });
         await upsertFavoriteProjection(ownerId, { id: "fvrt_second", favoriteId: secondId, type: "friend", tags: ["group_1"] });
+        await upsertFavoriteGroupProjection(ownerId, { id: "friend:group_0", name: "group_0", displayName: "Best Friends", type: "friend" });
+        await upsertFavoriteGroupProjection(ownerId, { id: "friend:group_1", name: "group_1", displayName: "Friends", type: "friend" });
         await upsertCachedUser(ownerId, { id: localId, displayName: "Local Friend" }, "lookup");
         const localGroup = await createLocalFavoriteGroup(ownerId, "friend", "Local Circle");
         expect((await addLocalFavorite(ownerId, localGroup.groupId, "friend", localId)).status).toBe("ok");
@@ -392,6 +397,12 @@ describe("MongoDB application repositories", () => {
 
         await appSettings.updateOne({ _id: "singleton" }, { $set: { localFavoriteFriendsGroups: [`local:${localGroup.groupId}`] } });
         expect(new Set(await listSelectedFavoriteFriendIds(ownerId))).toEqual(new Set([firstId, secondId, localId]));
+        expect(await listSidebarFavoriteFriendGroups(ownerId)).toEqual([
+            { key: "friend:group_0", displayName: "Best Friends", local: false, friendIds: [firstId] },
+            { key: "friend:group_1", displayName: "Friends", local: false, friendIds: [secondId] },
+            { key: `local:${localGroup.groupId}`, displayName: "Local Circle", local: true, friendIds: [localId] },
+        ]);
+        expect(await listSidebarFavoriteFriendGroups("usr_00000000-0000-0000-0000-000000000179")).toEqual([]);
         await appSettings.updateOne({ _id: "singleton" }, { $set: { localFavoriteFriendsGroups: [] } });
     });
 

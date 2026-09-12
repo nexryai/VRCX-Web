@@ -22,6 +22,9 @@ describe("application settings boundary", () => {
             sidebarGroupByInstance: true,
             sidebarHideGroupedFriends: false,
             sidebarSameInstanceAboveFavorites: false,
+            sidebarDivideByFriendGroup: true,
+            sidebarFavoriteGroups: [],
+            sidebarFavoriteGroupOrder: [],
             sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"],
             mutualGraphLayoutIterations: 800,
             mutualGraphExcludedFriendIds: [],
@@ -59,6 +62,8 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ sidebarSortMethods: ["Sort by Status", "Sort by Location"] }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ sidebarSortMethods: ["Sort by Status", "Sort by Status"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ sidebarSortMethods: ["Sort by Time in Instance"] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ sidebarFavoriteGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ sidebarFavoriteGroupOrder: ["friend:group_0", "friend:group_0"] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ localFavoriteFriendsGroups: ["friend:group_0", "local:lfg_00000000-0000-0000-0000-000000000001"] }).success).toBe(true);
     });
 

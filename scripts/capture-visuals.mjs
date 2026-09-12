@@ -14,6 +14,9 @@ const captures = [
     { name: "feed", path: "/feed", readyText: "Own status is now recorded" },
     { name: "sidebar-instance-groups", path: "/feed", readyText: "Same Instance ― 1", desktopOnly: true },
     { name: "sidebar-settings", path: "/feed", readyText: "Sort by Last Active", sidebarSettings: true, desktopOnly: true },
+    { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
+    { name: "sidebar-favorite-selector", path: "/feed", readyText: "Event Crew", sidebarSettings: true, sidebarFavoriteSelector: true, desktopOnly: true },
+    { name: "sidebar-favorite-order", path: "/feed", readyText: "Edit Group Order", sidebarSettings: true, sidebarFavoriteOrder: true, desktopOnly: true },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
     { name: "friend-list-note-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Note", query: "world-building meetup" } },
@@ -886,6 +889,31 @@ for (const width of widths) {
             if (!(await trigger.evaluate((element) => document.activeElement === element))) throw new Error("Sidebar settings did not restore trigger focus after Escape.");
             await trigger.click();
             await page.getByRole("button", { name: "Advanced", exact: true }).click();
+        }
+        if (capture.sidebarFavoriteSelector) {
+            const settings = page.getByRole("dialog", { name: "Sidebar settings", exact: true });
+            const selector = settings.locator("details");
+            await selector.locator("summary").click();
+            await page.getByRole("menu", { name: "Sidebar Favorite Groups", exact: true }).waitFor();
+            await page.keyboard.press("Escape");
+            await page.getByRole("menu", { name: "Sidebar Favorite Groups", exact: true }).waitFor({ state: "hidden" });
+            if (!(await selector.locator("summary").evaluate((element) => document.activeElement === element))) throw new Error("Sidebar favorite-group selector did not restore summary focus after Escape.");
+            await selector.locator("summary").click();
+        }
+        if (capture.sidebarFavoriteOrder) {
+            const openOrder = async () => {
+                await page.getByRole("button", { name: "Edit Group Order", exact: true }).click();
+                await page.getByRole("dialog", { name: "Edit Group Order", exact: true }).waitFor();
+            };
+            await openOrder();
+            await page.keyboard.press("Escape");
+            await page.getByRole("dialog", { name: "Edit Group Order", exact: true }).waitFor({ state: "detached" });
+            const settingsTrigger = page.getByRole("button", { name: "Sidebar settings", exact: true });
+            if (!(await settingsTrigger.evaluate((element) => document.activeElement === element))) throw new Error("Favorite-group order dialog did not restore sidebar-settings focus after Escape.");
+            await settingsTrigger.click();
+            const advanced = page.getByRole("button", { name: "Advanced", exact: true });
+            if ((await advanced.getAttribute("aria-expanded")) !== "true") await advanced.click();
+            await openOrder();
         }
         if (capture.customNavigation) {
             if (width < 768) await page.getByRole("button", { name: "Open navigation", exact: true }).click();

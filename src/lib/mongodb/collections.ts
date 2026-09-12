@@ -62,6 +62,9 @@ export type AppSettingsDocument = {
     sidebarGroupByInstance: boolean;
     sidebarHideGroupedFriends: boolean;
     sidebarSameInstanceAboveFavorites: boolean;
+    sidebarDivideByFriendGroup: boolean;
+    sidebarFavoriteGroups: string[];
+    sidebarFavoriteGroupOrder: string[];
     sidebarSortMethods: SidebarSortMethod[];
     sidebarCollapsedSections: Array<"active" | "favorite" | "me" | "offline" | "online" | "same-instance">;
     sidebarTab: "friends" | "groups";
