@@ -539,6 +539,18 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 51,
+        name: "add-sidebar-icon-frame-cosmetics",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ sidebarCosmetics: { $exists: false } }, { $set: { sidebarCosmetics: false, updatedAt } }),
+                c.cosmeticIconFrameSnapshots.createIndex({ ownerId: 1 }, { unique: true, name: "owner_unique" }),
+                c.cosmeticIconFrameSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

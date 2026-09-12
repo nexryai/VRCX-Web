@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -51,6 +51,7 @@ describe("MongoDB application repositories", () => {
             sidebarSameInstanceAboveFavorites: false,
             sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"],
             sidebarDivideByFriendGroup: true,
+            sidebarCosmetics: false,
             sidebarFavoriteGroups: [],
             sidebarFavoriteGroupOrder: [],
             favoriteCardScale: { avatar: 1, friend: 1, world: 1 },
@@ -76,6 +77,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("avatar_moderations").indexExists(["owner_target_type_unique", "owner_active_updated"])).toBe(true);
         expect(await database.collection("avatar_gallery_snapshots").indexExists(["owner_avatar_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("avatar_style_snapshots").indexExists(["owner_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("cosmetic_icon_frame_snapshots").indexExists(["owner_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("tools_group_calendar_snapshots").indexExists(["owner_month_unique", "owner_observed"])).toBe(true);
@@ -563,6 +565,25 @@ describe("MongoDB application repositories", () => {
         await replaceAvatarStyleSnapshot(otherOwnerId, []);
         expect(await getAvatarStyleSnapshot(ownerId)).toMatchObject({ ownerId, styles: [style] });
         expect(await getAvatarStyleSnapshot(otherOwnerId)).toMatchObject({ ownerId: otherOwnerId, styles: [] });
+    });
+
+    test("stores and refreshes complete icon-frame snapshots per owner", async () => {
+        const { getCosmeticIconFrameSnapshot, replaceCosmeticIconFrameSnapshot, shouldRefreshCosmeticIconFrames } = await import("./cosmetics-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000077";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000078";
+        const oldObservedAt = new Date("2026-08-01T00:00:00.000Z");
+        const now = new Date("2026-08-03T00:00:00.000Z");
+        const frame = { id: "icon-frame-one", metadata: { assets: [{ type: "mainAnimation", url: "https://assets.vrchat.com/frame.webp" }] } };
+
+        expect(await shouldRefreshCosmeticIconFrames(ownerId, now)).toBe(true);
+        await replaceCosmeticIconFrameSnapshot(ownerId, [frame], oldObservedAt);
+        await replaceCosmeticIconFrameSnapshot(otherOwnerId, [], now);
+        expect(await getCosmeticIconFrameSnapshot(ownerId)).toMatchObject({ ownerId, frames: [frame], observedAt: oldObservedAt });
+        expect(await getCosmeticIconFrameSnapshot(otherOwnerId)).toMatchObject({ ownerId: otherOwnerId, frames: [] });
+        expect(await shouldRefreshCosmeticIconFrames(ownerId, now)).toBe(true);
+        await replaceCosmeticIconFrameSnapshot(ownerId, [], now);
+        expect(await shouldRefreshCosmeticIconFrames(ownerId, new Date(now.getTime() + 1_000))).toBe(false);
+        expect(await getCosmeticIconFrameSnapshot(ownerId)).toMatchObject({ frames: [] });
     });
 
     test("stores filtered group audit-log snapshots per owner", async () => {

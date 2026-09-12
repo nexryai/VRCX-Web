@@ -15,6 +15,7 @@ export const vrchatUserSchema = z
         currentAvatarImageUrl: z.string().optional(),
         currentAvatarThumbnailImageUrl: z.string().optional(),
         currentAvatar: z.string().optional(),
+        iconFrame: z.string().optional(),
         hasSharedConnectionsOptOut: z.boolean().optional(),
         bio: z.string().optional(),
         bioLinks: z.array(z.string()).optional(),
@@ -65,6 +66,27 @@ export const vrchatUserSchema = z
     .passthrough();
 
 export type VrchatUser = z.infer<typeof vrchatUserSchema>;
+
+export const vrchatCosmeticIconFrameAssetSchema = z
+    .object({
+        type: z.string().min(1).max(64),
+        url: z.url(),
+        totalDurationMs: z.number().finite().nonnegative().max(60_000).optional(),
+    })
+    .passthrough();
+
+export const vrchatCosmeticIconFrameSchema = z
+    .object({
+        id: z.string().min(1).max(256),
+        metadata: z
+            .object({
+                assets: z.array(vrchatCosmeticIconFrameAssetSchema).max(20).default([]),
+            })
+            .passthrough(),
+    })
+    .passthrough();
+
+export type VrchatCosmeticIconFrame = z.infer<typeof vrchatCosmeticIconFrameSchema>;
 
 export const vrchatWorldSchema = z
     .object({

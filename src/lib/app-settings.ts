@@ -30,6 +30,7 @@ export const appSettingsUpdateSchema = z
         sidebarHideGroupedFriends: z.boolean().optional(),
         sidebarSameInstanceAboveFavorites: z.boolean().optional(),
         sidebarDivideByFriendGroup: z.boolean().optional(),
+        sidebarCosmetics: z.boolean().optional(),
         sidebarFavoriteGroups: z
             .array(favoriteFriendGroupKeySchema)
             .max(100)
@@ -123,6 +124,7 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         sidebarHideGroupedFriends: settings?.sidebarHideGroupedFriends ?? false,
         sidebarSameInstanceAboveFavorites: settings?.sidebarSameInstanceAboveFavorites ?? false,
         sidebarDivideByFriendGroup: settings?.sidebarDivideByFriendGroup ?? true,
+        sidebarCosmetics: settings?.sidebarCosmetics ?? false,
         sidebarFavoriteGroups: settings?.sidebarFavoriteGroups ?? [],
         sidebarFavoriteGroupOrder: settings?.sidebarFavoriteGroupOrder ?? [],
         sidebarSortMethods: settings?.sidebarSortMethods ?? ["Sort Private to Bottom", "Sort by Last Active"],

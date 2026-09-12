@@ -41,6 +41,12 @@ describe("VRChat response decoding", () => {
         expect(isAllowedVrchatEndpoint(`avatars/avtr_${uuid}/impostor/delete/all`)).toBe(false);
     });
 
+    it("allowlists only the icon-frame cosmetics index", () => {
+        expect(isAllowedVrchatEndpoint("cosmetics/index/iconFrame")).toBe(true);
+        expect(isAllowedVrchatEndpoint("cosmetics/index/profileEffect")).toBe(false);
+        expect(isAllowedVrchatEndpoint("cosmetics/index/iconFrame/private")).toBe(false);
+    });
+
     it("allowlists only the fixed World Dialog publication child", () => {
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}/publish`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}/publish/other`)).toBe(false);

@@ -82,15 +82,16 @@ pnpm dependencies:licenses
 
 The workspace permits an install script only for the test-only `mongodb-memory-server` package. Next.js image support resolves `sharp` without running its install script, and the `nanoid` override is the minimum patched release required by the current Next.js/PostCSS dependency chain.
 
-For deterministic responsive screenshots, start the development-only MongoDB fixture in one terminal and capture the ported reference screens in another:
+For deterministic responsive screenshots, start the development-only MongoDB fixture in one terminal and run the browser capture from the matching official Playwright container in another. This keeps browser binaries and native Playwright dependencies off the host:
 
 ```bash
-pnpm exec playwright install chromium
 pnpm visual:fixture
-pnpm visual:capture
+docker run --rm --network host --ipc=host -v "$PWD:/work" -w /work \
+  -e PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+  mcr.microsoft.com/playwright:v1.62.1-noble node scripts/capture-visuals.mjs
 ```
 
-The capture command writes ignored images under `.visual/` for Friends Locations, Feed, the desktop friends-sidebar grouped/settings/favorite-group states, Friend Log, Friend List and its Note/Memo filtered states, User Dialog, World Dialog, Group Dialog, Avatar Dialog, their favorite-group choosers, Notifications, Game Log, Search, Favorite Friends and its transfer dialogs, Favorite Worlds, Favorite Avatars, Moderation, My Avatars, Mutual Friends, Hot Worlds and its friend-detail sheet, custom navigation and pinned tools, and Settings states at 360, 768, 1280, and 1920 pixels wide, and fails on page-level horizontal overflow. Desktop-only sidebar cases are skipped below the shell's 1280-pixel sidebar breakpoint. Set `VRCX_VISUAL_ONLY` to comma-separated capture names or `VRCX_VISUAL_WIDTHS` to comma-separated viewport widths when running a focused subset. The fixture uses only synthetic records and disables the always-on monitor in development; production startup cannot use this bypass. These images make the current port reproducible but do not replace matched screenshots from the running VRCX reference application.
+The capture command writes ignored images under `.visual/` for Friends Locations, Feed, the desktop friends-sidebar grouped/settings/favorite-group/cosmetics states, Friend Log, Friend List and its Note/Memo filtered states, User Dialog, World Dialog, Group Dialog, Avatar Dialog, their favorite-group choosers, Notifications, Game Log, Search, Favorite Friends and its transfer dialogs, Favorite Worlds, Favorite Avatars, Moderation, My Avatars, Mutual Friends, Hot Worlds and its friend-detail sheet, custom navigation and pinned tools, and Settings states at 360, 768, 1280, and 1920 pixels wide, and fails on page-level horizontal overflow. Desktop-only sidebar cases are skipped below the shell's 1280-pixel sidebar breakpoint. Set `VRCX_VISUAL_ONLY` to comma-separated capture names or `VRCX_VISUAL_WIDTHS` to comma-separated viewport widths when running a focused subset. Pass those variables into the container with additional `-e` flags. The fixture uses only synthetic records and disables the always-on monitor in development; production startup cannot use this bypass. These images make the current port reproducible but do not replace matched screenshots from the running VRCX reference application.
 
 MongoDB migrations are versioned in `schema_migrations` and run automatically and idempotently when the application first accesses the database. `GET /api/health` is the deployment health probe; it returns HTTP 503 without exposing driver details when MongoDB is unavailable.
 

@@ -7,6 +7,7 @@ import { enrichGameSession, observeGameSession } from "@/lib/game-log/session-re
 import { isGroupInstanceFor } from "@/lib/group-instances";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { collections, type FriendSnapshotDocument } from "@/lib/mongodb/collections";
+import { replaceCosmeticIconFrameSnapshot, shouldRefreshCosmeticIconFrames } from "@/lib/mongodb/cosmetics-repository";
 import { replaceGroupMemberships } from "@/lib/mongodb/entity-repository";
 import { replaceAllCachedGroupInstances } from "@/lib/mongodb/group-dialog-repository";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
@@ -17,6 +18,7 @@ import { type NotificationSource, replaceActiveNotifications } from "@/lib/notif
 import { requestVrchat, VrchatApiError, type VrchatCookies } from "@/lib/vrchat/client";
 import {
     type VrchatAvatarModeration,
+    type VrchatCosmeticIconFrame,
     type VrchatFavorite,
     type VrchatFavoriteGroup,
     type VrchatGroupInstance,
@@ -24,6 +26,7 @@ import {
     type VrchatPlayerModeration,
     type VrchatUser,
     vrchatAvatarModerationSchema,
+    vrchatCosmeticIconFrameSchema,
     vrchatFavoriteGroupSchema,
     vrchatFavoriteSchema,
     vrchatGroupInstancesResponseSchema,
@@ -173,6 +176,20 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
     currentCookies = hiddenNotifications.cookies;
     const favoriteState = await fetchFavoriteState(currentCookies);
     currentCookies = favoriteState.cookies;
+
+    let iconFrames: { frames: VrchatCosmeticIconFrame[]; observedAt: Date } | null = null;
+    if (await shouldRefreshCosmeticIconFrames(user.id)) {
+        try {
+            const iconFrameResponse = await requestVrchat<unknown>("cosmetics/index/iconFrame", { cookies: currentCookies });
+            currentCookies = { ...currentCookies, ...iconFrameResponse.cookies };
+            iconFrames = { frames: z.array(vrchatCosmeticIconFrameSchema).max(5_000).parse(iconFrameResponse.data), observedAt: new Date() };
+        } catch (error) {
+            // Cosmetics are a complete, slowly changing index. A throttled or
+            // transiently unavailable refresh must not erase the last usable
+            // snapshot or fail higher-value friend/session reconciliation.
+            if (!(error instanceof VrchatApiError) || (error.status !== 429 && error.status !== 502)) throw error;
+        }
+    }
     await updateStoredVrchatCookies(currentCookies, { activeUserId: user.id, authCookie: cookies.auth });
 
     const remotelyPresentIds = new Set(online.users.map((friend) => friend.id));
@@ -209,6 +226,7 @@ async function reconcileRemoteStateUnlocked(cookies: VrchatCookies, expectedOwne
         replaceFavoriteGroupProjection(user.id, favoriteState.groups, observedAt),
         replaceModerationProjection(user.id, favoriteState.moderations, observedAt),
         replaceAvatarModerationProjection(user.id, favoriteState.avatarModerations, observedAt),
+        ...(iconFrames ? [replaceCosmeticIconFrameSnapshot(user.id, iconFrames.frames, iconFrames.observedAt)] : []),
     ]);
     const changes = previous.length ? diffFriendSnapshots(previous, current, observedAt.toISOString()) : [];
     const snapshotOperations = reconciledFriends.map((friend) => {

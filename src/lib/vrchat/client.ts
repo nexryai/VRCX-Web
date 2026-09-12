@@ -20,6 +20,7 @@ const allowedEndpoints = [
     "auth/user/playermoderations",
     "auth/user/unplayermoderate",
     "config",
+    "cosmetics/index/iconFrame",
     "calendar",
     "calendar/featured",
     "calendar/following",

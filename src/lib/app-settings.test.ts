@@ -23,6 +23,7 @@ describe("application settings boundary", () => {
             sidebarHideGroupedFriends: false,
             sidebarSameInstanceAboveFavorites: false,
             sidebarDivideByFriendGroup: true,
+            sidebarCosmetics: false,
             sidebarFavoriteGroups: [],
             sidebarFavoriteGroupOrder: [],
             sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"],

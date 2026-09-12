@@ -29,6 +29,7 @@ const friends = [
     {
         id: "usr_00000000-0000-0000-0000-000000000002",
         displayName: "Aoi Sample",
+        iconFrame: "icon-frame-visual-blue",
         username: "aoi_sample",
         state: "online",
         status: "join me",
@@ -123,6 +124,7 @@ const ownedAvatars = [
 const currentUser = {
     id: ownerId,
     displayName: "Visual Operator",
+    iconFrame: "icon-frame-visual-blue",
     state: "online",
     status: "online",
     statusDescription: "VRCX browser port",
@@ -198,6 +200,7 @@ await database.collection("app_settings").insertOne({
     sidebarHideGroupedFriends: false,
     sidebarSameInstanceAboveFavorites: false,
     sidebarDivideByFriendGroup: true,
+    sidebarCosmetics: false,
     sidebarFavoriteGroups: [],
     sidebarFavoriteGroupOrder: [],
     sidebarSortMethods: ["Sort Private to Bottom", "Sort by Last Active"],
@@ -235,6 +238,13 @@ await database.collection("monitor_state").insertOne({ _id: "singleton", schemaV
 await database.collection("users").insertOne({ _id: `${ownerId}:${ownerId}`, ownerId, userId: ownerId, user: currentUser, source: "auth", observedAt: now, updatedAt: now });
 await database.collection("self_snapshots").insertOne({ _id: ownerId, ownerId, userId: ownerId, online: true, user: currentUser, observedAt: now, updatedAt: now });
 await database.collection("friend_snapshots").insertMany(friends.map((user) => ({ _id: `${ownerId}:${user.id}`, ownerId, friendId: user.id, online: user.state === "online", user, observedAt: now, updatedAt: now })));
+await database.collection("cosmetic_icon_frame_snapshots").insertOne({
+    _id: ownerId,
+    ownerId,
+    frames: [{ id: "icon-frame-visual-blue", metadata: { assets: [{ type: "mainAnimation", url: "https://assets.vrchat.com/visual-fixture/icon-frame-blue.svg" }] } }],
+    observedAt: now,
+    updatedAt: now,
+});
 await database.collection("favorites").insertMany([
     { _id: `${ownerId}:fvrt_visual_friend`, ownerId, recordId: "fvrt_visual_friend", objectId: friends[0].id, favoriteType: "friend", favorite: { id: "fvrt_visual_friend", favoriteId: friends[0].id, type: "friend", tags: ["group_0"] }, active: true, observedAt: now, updatedAt: now },
     { _id: `${ownerId}:fvrt_visual_world`, ownerId, recordId: "fvrt_visual_world", objectId: favoriteWorld.id, favoriteType: "world", favorite: { id: "fvrt_visual_world", favoriteId: favoriteWorld.id, type: "world", tags: ["worlds1"] }, active: true, observedAt: now, updatedAt: now },

@@ -11,7 +11,7 @@ import { loadSidebarFavoriteFriendGroups } from "@/lib/friend-favorites-client";
 import { locationLabel } from "@/lib/friends";
 import { normalizeSidebarFavoriteGroupKeys, orderSidebarFavoriteGroups, resolveSidebarFavoriteGroupKeys, type SidebarFavoriteGroup } from "@/lib/sidebar-favorite-groups";
 import { groupSidebarFriendInstances, type SidebarSortMethod, sidebarSortMethods, sortSidebarFriends } from "@/lib/sidebar-friends";
-import type { VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatCosmeticIconFrame, VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
@@ -28,6 +28,8 @@ export function FriendsSidebar() {
     const [hideGroupedFriends, setHideGroupedFriends] = useState(false);
     const [sameInstanceAboveFavorites, setSameInstanceAboveFavorites] = useState(false);
     const [divideByFavoriteGroup, setDivideByFavoriteGroup] = useState(true);
+    const [showCosmetics, setShowCosmetics] = useState(false);
+    const [iconFrames, setIconFrames] = useState<VrchatCosmeticIconFrame[]>([]);
     const [favoriteGroups, setFavoriteGroups] = useState<SidebarFavoriteGroup[]>([]);
     const [selectedFavoriteGroups, setSelectedFavoriteGroups] = useState<string[]>([]);
     const [favoriteGroupOrder, setFavoriteGroupOrder] = useState<string[]>([]);
@@ -46,12 +48,18 @@ export function FriendsSidebar() {
     useEffect(() => {
         const controller = new AbortController();
         async function loadSidebarData() {
-            const [settingsResponse, favoriteGroups, groupsResponse] = await Promise.all([fetch("/api/settings", { cache: "no-store", signal: controller.signal }), loadSidebarFavoriteFriendGroups(controller.signal), fetch("/api/groups", { cache: "no-store", signal: controller.signal })]);
+            const [settingsResponse, favoriteGroups, groupsResponse, iconFramesResponse] = await Promise.all([
+                fetch("/api/settings", { cache: "no-store", signal: controller.signal }),
+                loadSidebarFavoriteFriendGroups(controller.signal),
+                fetch("/api/groups", { cache: "no-store", signal: controller.signal }),
+                fetch("/api/cosmetics/icon-frames", { cache: "no-store", signal: controller.signal }),
+            ]);
             const settings = (await settingsResponse.json()) as {
                 sidebarGroupByInstance?: boolean;
                 sidebarHideGroupedFriends?: boolean;
                 sidebarSameInstanceAboveFavorites?: boolean;
                 sidebarDivideByFriendGroup?: boolean;
+                sidebarCosmetics?: boolean;
                 sidebarFavoriteGroups?: string[];
                 sidebarFavoriteGroupOrder?: string[];
                 sidebarSortMethods?: SidebarSortMethod[];
@@ -60,10 +68,13 @@ export function FriendsSidebar() {
                 notificationLayout?: "notification-center" | "table";
             };
             const groupPayload = (await groupsResponse.json()) as { groups?: VrchatGroup[] };
+            const iconFramePayload = (await iconFramesResponse.json()) as { frames?: VrchatCosmeticIconFrame[] };
             setGroupByInstance(settings.sidebarGroupByInstance === true);
             setHideGroupedFriends(settings.sidebarHideGroupedFriends === true);
             setSameInstanceAboveFavorites(settings.sidebarSameInstanceAboveFavorites === true);
             setDivideByFavoriteGroup(settings.sidebarDivideByFriendGroup !== false);
+            setShowCosmetics(settings.sidebarCosmetics === true);
+            setIconFrames(iconFramePayload.frames ?? []);
             setSelectedFavoriteGroups(settings.sidebarFavoriteGroups ?? []);
             setFavoriteGroupOrder(settings.sidebarFavoriteGroupOrder ?? []);
             setSortMethods(settings.sidebarSortMethods ?? ["Sort Private to Bottom", "Sort by Last Active"]);
@@ -187,6 +198,8 @@ export function FriendsSidebar() {
         return { favorite, dividedFavorites, favoriteCount: divideByFavoriteGroup ? dividedFavorites.reduce((count, group) => count + group.friends.length, 0) : favorite.length, online, active, offline, instanceGroups };
     }, [allFriends, divideByFavoriteGroup, favoriteGroupOrder, favoriteGroups, friends, groupByInstance, hideGroupedFriends, search, selectedFavoriteGroups, sortMethods]);
 
+    const iconFramesById = useMemo(() => new Map(iconFrames.map((frame) => [frame.id, frame])), [iconFrames]);
+
     function save(update: object) {
         void fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(update) });
     }
@@ -237,7 +250,7 @@ export function FriendsSidebar() {
                             <span className="truncate">{group.label}</span>
                             <span className="ml-1">({group.friends.length})</span>
                         </div>
-                        {renderFriends(group.friends, openUser)}
+                        {renderFriends(group.friends, openUser, showCosmetics, iconFramesById)}
                     </div>
                 ))}
             </SidebarSection>
@@ -341,6 +354,18 @@ export function FriendsSidebar() {
                                         className="size-4 accent-primary"
                                     />
                                 </label>
+                                <label className="mt-3 flex items-center justify-between gap-3">
+                                    <span>Show Cosmetics</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={showCosmetics}
+                                        onChange={(event) => {
+                                            setShowCosmetics(event.target.checked);
+                                            save({ sidebarCosmetics: event.target.checked });
+                                        }}
+                                        className="size-4 accent-primary"
+                                    />
+                                </label>
                                 <div className="my-3 border-t border-border" />
                                 <button type="button" onClick={() => setAdvancedOpen((value) => !value)} aria-expanded={advancedOpen} className="flex w-full items-center gap-1 py-1 text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                                     <ChevronDown className={`size-3.5 transition-transform ${advancedOpen ? "" : "-rotate-90"}`} />
@@ -404,30 +429,32 @@ export function FriendsSidebar() {
                     ) : (
                         <>
                             <SidebarSection label="Me" section="me" count={1} collapsed={collapsed.has("me")} toggle={toggleSection}>
-                                <SidebarUser user={currentUser} openUser={openUser} />
+                                <SidebarUser user={currentUser} openUser={openUser} showCosmetics={showCosmetics} iconFrames={iconFramesById} />
                             </SidebarSection>
                             {sameInstanceAboveFavorites ? sameInstanceSection : null}
                             {sections.favoriteCount ? (
                                 <SidebarSection label="Favorites" section="favorite" count={sections.favoriteCount} collapsed={collapsed.has("favorite")} toggle={toggleSection}>
                                     {divideByFavoriteGroup
-                                        ? sections.dividedFavorites.map((group) => <FavoriteGroupSection key={group.key} group={group} collapsed={collapsedFavoriteGroups.has(group.key)} toggle={() => toggleFavoriteGroupCollapsed(group.key)} openUser={openUser} />)
-                                        : renderFriends(sections.favorite, openUser)}
+                                        ? sections.dividedFavorites.map((group) => (
+                                              <FavoriteGroupSection key={group.key} group={group} collapsed={collapsedFavoriteGroups.has(group.key)} toggle={() => toggleFavoriteGroupCollapsed(group.key)} openUser={openUser} showCosmetics={showCosmetics} iconFrames={iconFramesById} />
+                                          ))
+                                        : renderFriends(sections.favorite, openUser, showCosmetics, iconFramesById)}
                                 </SidebarSection>
                             ) : null}
                             {!sameInstanceAboveFavorites ? sameInstanceSection : null}
                             {sections.online.length ? (
                                 <SidebarSection label="Online" section="online" count={sections.online.length} collapsed={collapsed.has("online")} toggle={toggleSection}>
-                                    {renderFriends(sections.online, openUser)}
+                                    {renderFriends(sections.online, openUser, showCosmetics, iconFramesById)}
                                 </SidebarSection>
                             ) : null}
                             {sections.active.length ? (
                                 <SidebarSection label="Active" section="active" count={sections.active.length} collapsed={collapsed.has("active")} toggle={toggleSection}>
-                                    {renderFriends(sections.active, openUser)}
+                                    {renderFriends(sections.active, openUser, showCosmetics, iconFramesById)}
                                 </SidebarSection>
                             ) : null}
                             {sections.offline.length ? (
                                 <SidebarSection label="Offline" section="offline" count={sections.offline.length} collapsed={collapsed.has("offline")} toggle={toggleSection}>
-                                    {renderFriends(sections.offline, openUser)}
+                                    {renderFriends(sections.offline, openUser, showCosmetics, iconFramesById)}
                                 </SidebarSection>
                             ) : null}
                         </>
@@ -472,7 +499,7 @@ function SidebarSection({ label, section, count, collapsed, toggle, children }: 
     );
 }
 
-function FavoriteGroupSection({ group, collapsed, toggle, openUser }: { group: SidebarFavoriteGroup & { friends: VrchatUser[] }; collapsed: boolean; toggle: () => void; openUser: (userId: string) => void }) {
+function FavoriteGroupSection({ group, collapsed, toggle, openUser, showCosmetics, iconFrames }: { group: SidebarFavoriteGroup & { friends: VrchatUser[] }; collapsed: boolean; toggle: () => void; openUser: (userId: string) => void; showCosmetics: boolean; iconFrames: Map<string, VrchatCosmeticIconFrame> }) {
     return (
         <div>
             <button type="button" onClick={toggle} className="flex w-full items-center pt-1 pb-1 pl-1 text-xs">
@@ -481,7 +508,7 @@ function FavoriteGroupSection({ group, collapsed, toggle, openUser }: { group: S
                     {group.displayName} ― {group.friends.length}
                 </span>
             </button>
-            {collapsed ? null : <div className="pb-2">{renderFriends(group.friends, openUser)}</div>}
+            {collapsed ? null : <div className="pb-2">{renderFriends(group.friends, openUser, showCosmetics, iconFrames)}</div>}
         </div>
     );
 }
@@ -609,10 +636,10 @@ function FavoriteGroupOrderDialog({ groups, persistedOrder, close, reset, confir
     );
 }
 
-function SidebarUser({ user, openUser }: { user: VrchatUser; openUser: (userId: string) => void }) {
+function SidebarUser({ user, openUser, showCosmetics, iconFrames }: { user: VrchatUser; openUser: (userId: string) => void; showCosmetics: boolean; iconFrames: Map<string, VrchatCosmeticIconFrame> }) {
     return (
         <button type="button" onClick={() => openUser(user.id)} className="flex w-full items-center p-1.5 text-left text-[13px] hover:rounded-lg hover:bg-muted/50">
-            <FriendAvatar friend={user} />
+            <FriendAvatar friend={user} iconFrame={showCosmetics && user.iconFrame ? iconFrames.get(user.iconFrame) : undefined} />
             <span className="ml-2.5 min-w-0 flex-1">
                 <span className="block truncate font-medium leading-[18px]">{user.displayName}</span>
                 <span className="block truncate text-xs text-muted-foreground">{locationLabel(user) || user.statusDescription}</span>
@@ -621,8 +648,8 @@ function SidebarUser({ user, openUser }: { user: VrchatUser; openUser: (userId: 
     );
 }
 
-function renderFriends(friends: VrchatUser[], openUser: (userId: string) => void) {
-    return friends.map((friend) => <SidebarUser key={friend.id} user={friend} openUser={openUser} />);
+function renderFriends(friends: VrchatUser[], openUser: (userId: string) => void, showCosmetics: boolean, iconFrames: Map<string, VrchatCosmeticIconFrame>) {
+    return friends.map((friend) => <SidebarUser key={friend.id} user={friend} openUser={openUser} showCosmetics={showCosmetics} iconFrames={iconFrames} />);
 }
 
 function GroupList({ groups, search, openGroup }: { groups: VrchatGroup[]; search: string; openGroup: (groupId: string) => void }) {

@@ -15,6 +15,7 @@ const captures = [
     { name: "sidebar-instance-groups", path: "/feed", readyText: "Same Instance ― 1", desktopOnly: true },
     { name: "sidebar-settings", path: "/feed", readyText: "Sort by Last Active", sidebarSettings: true, desktopOnly: true },
     { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
+    { name: "sidebar-cosmetics", path: "/feed", readyText: "Aoi Sample", sidebarCosmetics: true, desktopOnly: true },
     { name: "sidebar-favorite-selector", path: "/feed", readyText: "Event Crew", sidebarSettings: true, sidebarFavoriteSelector: true, desktopOnly: true },
     { name: "sidebar-favorite-order", path: "/feed", readyText: "Edit Group Order", sidebarSettings: true, sidebarFavoriteOrder: true, desktopOnly: true },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
@@ -184,6 +185,21 @@ for (const width of widths) {
                 const friends = (payload.friends || []).map((friend) => (friend.displayName === "Aoi Sample" ? { ...friend, statusDescription: "Discord: aoi_sample" } : friend));
                 return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ friends }) });
             });
+        }
+        if (capture.sidebarCosmetics) {
+            await page.route("**/api/settings", async (route) => {
+                if (route.request().method() !== "GET") return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+                const response = await route.fetch();
+                const payload = await response.json();
+                return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, sidebarCosmetics: true }) });
+            });
+            await page.route("https://assets.vrchat.com/visual-fixture/icon-frame-blue.svg", (route) =>
+                route.fulfill({
+                    status: 200,
+                    contentType: "image/svg+xml",
+                    body: '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><defs><linearGradient id="g"><stop stop-color="#00b8ff"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs><circle cx="64" cy="64" r="55" fill="none" stroke="url(#g)" stroke-width="7"/><path d="m23 38 12 1 4-12 8 10M105 90l-12-1-4 12-8-10" fill="none" stroke="#d7f5ff" stroke-width="4" stroke-linecap="round"/></svg>',
+                }),
+            );
         }
         if (capture.searchQuery) {
             await page.route("**/api/search/config", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ worldRows: [{ index: 0, name: "Featured", sortHeading: "featured" }] }) }));
@@ -437,6 +453,17 @@ for (const width of widths) {
             });
         }
         await page.goto(`http://localhost:${port}${capture.path}`, { waitUntil: "domcontentloaded" });
+        if (capture.sidebarCosmetics) {
+            const frames = page.locator('[data-icon-frame="icon-frame-visual-blue"]');
+            await frames.first().waitFor({ state: "attached" });
+            await page.getByRole("button", { name: "Sidebar settings", exact: true }).click();
+            const toggle = page.getByLabel("Show Cosmetics", { exact: true });
+            await toggle.uncheck();
+            await frames.first().waitFor({ state: "detached" });
+            await toggle.check();
+            await frames.first().waitFor({ state: "attached" });
+            await page.keyboard.press("Escape");
+        }
         if (capture.friendListSearch) {
             const filterSummary = page.getByText("Filter fields", { exact: true });
             await filterSummary.click();

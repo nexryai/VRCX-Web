@@ -10,6 +10,7 @@ import type {
     VrchatAvatar,
     VrchatAvatarModeration,
     VrchatAvatarStyle,
+    VrchatCosmeticIconFrame,
     VrchatFavorite,
     VrchatFavoriteGroup,
     VrchatFile,
@@ -63,6 +64,7 @@ export type AppSettingsDocument = {
     sidebarHideGroupedFriends: boolean;
     sidebarSameInstanceAboveFavorites: boolean;
     sidebarDivideByFriendGroup: boolean;
+    sidebarCosmetics: boolean;
     sidebarFavoriteGroups: string[];
     sidebarFavoriteGroupOrder: string[];
     sidebarSortMethods: SidebarSortMethod[];
@@ -228,6 +230,14 @@ export type AvatarStyleSnapshotDocument = {
     _id: string;
     ownerId: string;
     styles: VrchatAvatarStyle[];
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type CosmeticIconFrameSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    frames: VrchatCosmeticIconFrame[];
     observedAt: Date;
     updatedAt: Date;
 };
@@ -545,6 +555,7 @@ export type Collections = {
     personalFileSnapshots: Collection<PersonalFileSnapshotDocument>;
     avatarGallerySnapshots: Collection<AvatarGallerySnapshotDocument>;
     avatarStyleSnapshots: Collection<AvatarStyleSnapshotDocument>;
+    cosmeticIconFrameSnapshots: Collection<CosmeticIconFrameSnapshotDocument>;
     groupMembers: Collection<GroupMemberDocument>;
     groupBanSnapshots: Collection<GroupBanSnapshotDocument>;
     groupInviteSnapshots: Collection<GroupInviteSnapshotDocument>;
@@ -587,6 +598,7 @@ export function collections(db: Db): Collections {
         personalFileSnapshots: db.collection<PersonalFileSnapshotDocument>("personal_file_snapshots"),
         avatarGallerySnapshots: db.collection<AvatarGallerySnapshotDocument>("avatar_gallery_snapshots"),
         avatarStyleSnapshots: db.collection<AvatarStyleSnapshotDocument>("avatar_style_snapshots"),
+        cosmeticIconFrameSnapshots: db.collection<CosmeticIconFrameSnapshotDocument>("cosmetic_icon_frame_snapshots"),
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupBanSnapshots: db.collection<GroupBanSnapshotDocument>("group_ban_snapshots"),
         groupInviteSnapshots: db.collection<GroupInviteSnapshotDocument>("group_invite_snapshots"),
