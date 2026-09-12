@@ -16,6 +16,7 @@ const captures = [
     { name: "sidebar-settings", path: "/feed", readyText: "Sort by Last Active", sidebarSettings: true, desktopOnly: true },
     { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
     { name: "sidebar-cosmetics", path: "/feed", readyText: "Aoi Sample", sidebarCosmetics: true, desktopOnly: true },
+    { name: "sidebar-group-instances", path: "/feed", readyText: "Aoi Sample", sidebarGroupInstances: true, desktopOnly: true },
     { name: "sidebar-favorite-selector", path: "/feed", readyText: "Event Crew", sidebarSettings: true, sidebarFavoriteSelector: true, desktopOnly: true },
     { name: "sidebar-favorite-order", path: "/feed", readyText: "Edit Group Order", sidebarSettings: true, sidebarFavoriteOrder: true, desktopOnly: true },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
@@ -463,6 +464,16 @@ for (const width of widths) {
             await toggle.check();
             await frames.first().waitFor({ state: "attached" });
             await page.keyboard.press("Escape");
+        }
+        if (capture.sidebarGroupInstances) {
+            await page.getByText("Aoi Sample", { exact: true }).last().waitFor();
+            await page.getByRole("tab").nth(1).click();
+            const header = page.getByRole("button", { name: /VRCX Test Group.*–/ }).first();
+            await header.waitFor();
+            await page.getByText("Remote Group Lounge · #Community Hub", { exact: true }).waitFor();
+            await header.click();
+            await page.getByText("Remote Group Lounge · #Community Hub", { exact: true }).waitFor({ state: "detached" });
+            await header.click();
         }
         if (capture.friendListSearch) {
             const filterSummary = page.getByText("Filter fields", { exact: true });

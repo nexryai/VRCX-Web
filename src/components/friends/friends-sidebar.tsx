@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ArrowDown, ArrowUp, Check, ChevronDown, GripVertical, RefreshCw, Search, Settings, User } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, GripVertical, RefreshCw, Search, Settings, Users } from "lucide-react";
 
 import { useCurrentUser } from "@/components/current-user-provider";
 import { NotificationCenter } from "@/components/notifications/notification-center";
@@ -11,12 +11,13 @@ import { loadSidebarFavoriteFriendGroups } from "@/lib/friend-favorites-client";
 import { locationLabel } from "@/lib/friends";
 import { normalizeSidebarFavoriteGroupKeys, orderSidebarFavoriteGroups, resolveSidebarFavoriteGroupKeys, type SidebarFavoriteGroup } from "@/lib/sidebar-favorite-groups";
 import { groupSidebarFriendInstances, type SidebarSortMethod, sidebarSortMethods, sortSidebarFriends } from "@/lib/sidebar-friends";
-import type { VrchatCosmeticIconFrame, VrchatGroup, VrchatUser } from "@/lib/vrchat/types";
+import type { VrchatCosmeticIconFrame, VrchatGroup, VrchatGroupInstance, VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
 type SectionKey = "active" | "favorite" | "me" | "offline" | "online" | "same-instance";
 type SidebarTab = "friends" | "groups";
+type SidebarGroupInstances = { group: VrchatGroup; instances: VrchatGroupInstance[]; sidebarOrder?: number; observedAt: string };
 
 export function FriendsSidebar() {
     const currentUser = useCurrentUser();
@@ -39,7 +40,7 @@ export function FriendsSidebar() {
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [collapsed, setCollapsed] = useState<Set<SectionKey>>(new Set());
     const [tab, setTab] = useState<SidebarTab>("friends");
-    const [groups, setGroups] = useState<VrchatGroup[]>([]);
+    const [sidebarGroups, setSidebarGroups] = useState<SidebarGroupInstances[]>([]);
     const [notificationLayout, setNotificationLayout] = useState<"notification-center" | "table">("notification-center");
     const searchRef = useRef<HTMLInputElement>(null);
     const settingsRef = useRef<HTMLDivElement>(null);
@@ -51,7 +52,7 @@ export function FriendsSidebar() {
             const [settingsResponse, favoriteGroups, groupsResponse, iconFramesResponse] = await Promise.all([
                 fetch("/api/settings", { cache: "no-store", signal: controller.signal }),
                 loadSidebarFavoriteFriendGroups(controller.signal),
-                fetch("/api/groups", { cache: "no-store", signal: controller.signal }),
+                fetch("/api/groups?scope=sidebar", { cache: "no-store", signal: controller.signal }),
                 fetch("/api/cosmetics/icon-frames", { cache: "no-store", signal: controller.signal }),
             ]);
             const settings = (await settingsResponse.json()) as {
@@ -67,7 +68,7 @@ export function FriendsSidebar() {
                 sidebarTab?: SidebarTab;
                 notificationLayout?: "notification-center" | "table";
             };
-            const groupPayload = (await groupsResponse.json()) as { groups?: VrchatGroup[] };
+            const groupPayload = (await groupsResponse.json()) as { groups?: SidebarGroupInstances[] };
             const iconFramePayload = (await iconFramesResponse.json()) as { frames?: VrchatCosmeticIconFrame[] };
             setGroupByInstance(settings.sidebarGroupByInstance === true);
             setHideGroupedFriends(settings.sidebarHideGroupedFriends === true);
@@ -82,7 +83,7 @@ export function FriendsSidebar() {
             setTab(settings.sidebarTab ?? "friends");
             setNotificationLayout(settings.notificationLayout ?? "notification-center");
             setFavoriteGroups(favoriteGroups);
-            setGroups(groupPayload.groups ?? []);
+            setSidebarGroups(groupPayload.groups ?? []);
         }
         void loadSidebarData().catch(() => undefined);
         return () => controller.abort();
@@ -416,16 +417,19 @@ export function FriendsSidebar() {
 
                 <div className="mb-1 flex shrink-0 rounded-md bg-muted p-1" role="tablist">
                     <button type="button" role="tab" aria-selected={tab === "friends"} onClick={() => selectTab("friends")} className={`h-7 flex-1 rounded-sm text-xs font-medium ${tab === "friends" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>
-                        Friends <span className="ml-2">{allFriends.length}</span>
+                        Friends{" "}
+                        <span className="ml-2">
+                            ({friends.length}/{allFriends.length})
+                        </span>
                     </button>
                     <button type="button" role="tab" aria-selected={tab === "groups"} onClick={() => selectTab("groups")} className={`h-7 flex-1 rounded-sm text-xs font-medium ${tab === "groups" ? "bg-background shadow-sm" : "text-muted-foreground"}`}>
-                        Groups <span className="ml-2">{groups.length}</span>
+                        Groups <span className="ml-2">({sidebarGroups.reduce((count, group) => count + group.instances.length, 0)})</span>
                     </button>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
                     {tab === "groups" ? (
-                        <GroupList groups={groups} search={search} openGroup={openGroup} />
+                        <GroupList groups={sidebarGroups} search={search} openGroup={openGroup} />
                     ) : (
                         <>
                             <SidebarSection label="Me" section="me" count={1} collapsed={collapsed.has("me")} toggle={toggleSection}>
@@ -652,21 +656,56 @@ function renderFriends(friends: VrchatUser[], openUser: (userId: string) => void
     return friends.map((friend) => <SidebarUser key={friend.id} user={friend} openUser={openUser} showCosmetics={showCosmetics} iconFrames={iconFrames} />);
 }
 
-function GroupList({ groups, search, openGroup }: { groups: VrchatGroup[]; search: string; openGroup: (groupId: string) => void }) {
+function GroupList({ groups, search, openGroup }: { groups: SidebarGroupInstances[]; search: string; openGroup: (groupId: string) => void }) {
+    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const query = search.trim().toLocaleLowerCase();
-    const visible = groups.filter((group) => !query || `${group.name} ${group.shortCode || ""} ${group.description || ""}`.toLocaleLowerCase().includes(query));
+    const visible = groups
+        .map((section) => ({
+            ...section,
+            visibleInstances: section.instances.filter((instance) => !instance.location.includes("~ageGate") && (!query || `${section.group.name} ${instance.world.name} ${instance.displayName || ""} ${instance.location}`.toLocaleLowerCase().includes(query))),
+        }))
+        .filter((section) => !query || section.visibleInstances.length || `${section.group.name} ${section.group.shortCode || ""}`.toLocaleLowerCase().includes(query));
+
+    function toggle(groupId: string) {
+        setCollapsed((current) => {
+            const next = new Set(current);
+            next.has(groupId) ? next.delete(groupId) : next.add(groupId);
+            return next;
+        });
+    }
+
     return (
-        <div className="pt-2">
-            {visible.map((group) => (
-                <button key={group.id} type="button" onClick={() => openGroup(group.id)} className="flex w-full items-center gap-2 rounded-lg p-1.5 text-left text-[13px] hover:bg-muted/50">
-                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                        <VrchatImage src={group.iconUrl} alt="" className="size-full object-cover" fallback={<User className="size-4 text-muted-foreground" />} />
-                    </span>
-                    <span className="min-w-0">
-                        <span className="block truncate font-medium">{group.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">{group.shortCode || `${group.memberCount ?? 0} members`}</span>
-                    </span>
-                </button>
+        <div className="px-0.5 py-2.5">
+            {visible.map((section, index) => (
+                <section key={section.group.id}>
+                    <button type="button" onClick={() => toggle(section.group.id)} className={`flex w-full items-center pb-1.5 text-xs ${index ? "pt-2.5" : ""}`}>
+                        <ChevronDown className={`size-4 transition-transform ${collapsed.has(section.group.id) ? "-rotate-90" : ""}`} />
+                        <span className="ml-1.5 truncate">
+                            {section.group.name} – {section.instances.length}
+                        </span>
+                    </button>
+                    {collapsed.has(section.group.id)
+                        ? null
+                        : section.visibleInstances.map((instance) => (
+                              <button key={instance.id} type="button" onClick={() => openGroup(instance.ownerId)} className="flex w-full items-center p-1.5 text-left text-[13px] hover:rounded-lg hover:bg-muted/50">
+                                  <span className="mr-2.5 flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                                      <VrchatImage src={section.group.iconUrl} alt="" className="size-full object-cover" fallback={<Users className="size-4 text-muted-foreground" />} />
+                                  </span>
+                                  <span className="min-w-0 flex-1 overflow-hidden">
+                                      <span className="block truncate font-medium leading-[18px]">
+                                          {section.group.name}{" "}
+                                          <span className="ml-1.5 font-normal">
+                                              ({instance.userCount ?? 0}/{instance.capacity ?? 0})
+                                          </span>
+                                      </span>
+                                      <span className="block truncate text-xs text-muted-foreground" title={instance.location}>
+                                          {instance.world.name}
+                                          {instance.displayName ? ` · #${instance.displayName}` : ""}
+                                      </span>
+                                  </span>
+                              </button>
+                          ))}
+                </section>
             ))}
         </div>
     );

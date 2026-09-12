@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isGroupInstanceFor } from "@/lib/group-instances";
 import { groupGalleryIdSchema } from "@/lib/vrchat/ids";
 import {
     type VrchatGroupAuditLog,
@@ -13,7 +14,9 @@ import {
     vrchatGroupAuditLogSchema,
     vrchatGroupGalleryImageSchema,
     vrchatGroupGallerySchema,
+    vrchatGroupInstanceSchema,
     vrchatGroupMemberSchema,
+    vrchatGroupSchema,
 } from "@/lib/vrchat/types";
 import { getMongoDatabase } from "./client";
 import { collections } from "./collections";
@@ -198,6 +201,23 @@ export async function getCachedGroupInstances(ownerId: string, groupId: string) 
     return { instances: document.instances, upstreamFetchedAt: document.upstreamFetchedAt, observedAt: document.observedAt };
 }
 
+export async function listSidebarGroupInstances(ownerId: string) {
+    await ensureMongoSchema();
+    const c = collections(await getMongoDatabase());
+    const snapshots = await c.groupInstanceSnapshots.find({ ownerId, "instances.0": { $exists: true } }).toArray();
+    const groupIds = snapshots.map((snapshot) => snapshot.groupId);
+    const groups = groupIds.length ? await c.groups.find({ ownerId, groupId: { $in: groupIds }, membershipActive: true }).toArray() : [];
+    const groupById = new Map(groups.map((document) => [document.groupId, vrchatGroupSchema.parse(document.group)]));
+    return snapshots
+        .flatMap((snapshot) => {
+            const group = groupById.get(snapshot.groupId);
+            if (!group) return [];
+            const instances = snapshot.instances.map((instance) => vrchatGroupInstanceSchema.parse(instance)).filter((instance) => isGroupInstanceFor(instance, snapshot.groupId));
+            return instances.length ? [{ group, instances, sidebarOrder: snapshot.sidebarOrder, observedAt: snapshot.observedAt }] : [];
+        })
+        .toSorted((left, right) => (left.sidebarOrder ?? Number.MAX_SAFE_INTEGER) - (right.sidebarOrder ?? Number.MAX_SAFE_INTEGER) || left.group.name.localeCompare(right.group.name));
+}
+
 export async function replaceCachedGroupInstances(ownerId: string, groupId: string, instances: VrchatGroupInstance[], upstreamFetchedAt?: string, observedAt = new Date()) {
     await ensureMongoSchema();
     const snapshot = { ownerId, groupId, instances, observedAt, updatedAt: observedAt };
@@ -209,10 +229,14 @@ export async function replaceAllCachedGroupInstances(ownerId: string, groupIds: 
     const collection = collections(await getMongoDatabase()).groupInstanceSnapshots;
     const uniqueGroupIds = Array.from(new Set(groupIds));
     const byGroupId = Map.groupBy(instances, (instance) => instance.ownerId);
+    const sidebarOrderByGroupId = new Map<string, number>();
+    for (const instance of instances) {
+        if (!sidebarOrderByGroupId.has(instance.ownerId)) sidebarOrderByGroupId.set(instance.ownerId, sidebarOrderByGroupId.size);
+    }
     if (uniqueGroupIds.length) {
         await collection.bulkWrite(
-            uniqueGroupIds.map((groupId) => {
-                const snapshot = { ownerId, groupId, instances: byGroupId.get(groupId) || [], observedAt, updatedAt: observedAt };
+            uniqueGroupIds.map((groupId, groupIndex) => {
+                const snapshot = { ownerId, groupId, instances: byGroupId.get(groupId) || [], sidebarOrder: sidebarOrderByGroupId.get(groupId) ?? sidebarOrderByGroupId.size + groupIndex, observedAt, updatedAt: observedAt };
                 return {
                     updateOne: {
                         filter: { _id: `${ownerId}:${groupId}` },

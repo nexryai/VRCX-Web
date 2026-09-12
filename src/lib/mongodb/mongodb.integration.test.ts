@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -79,6 +79,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("avatar_style_snapshots").indexExists(["owner_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("cosmetic_icon_frame_snapshots").indexExists(["owner_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("group_instance_snapshots").indexExists("owner_sidebar_order")).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("tools_group_calendar_snapshots").indexExists(["owner_month_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_gallery_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -600,7 +601,7 @@ describe("MongoDB application repositories", () => {
     });
 
     test("replaces complete group-instance snapshots without crossing owners", async () => {
-        const { getCachedGroupInstances, replaceAllCachedGroupInstances, replaceCachedGroupInstances } = await import("./group-dialog-repository");
+        const { getCachedGroupInstances, listSidebarGroupInstances, replaceAllCachedGroupInstances, replaceCachedGroupInstances } = await import("./group-dialog-repository");
         const ownerId = "usr_00000000-0000-0000-0000-000000000055";
         const otherOwnerId = "usr_00000000-0000-0000-0000-000000000056";
         const groupId = "grp_00000000-0000-0000-0000-000000000057";
@@ -618,13 +619,22 @@ describe("MongoDB application repositories", () => {
         const firstObservedAt = new Date("2026-08-09T10:00:00.000Z");
         await replaceCachedGroupInstances(ownerId, groupId, [instance], "2026-08-09T09:59:59.000Z", firstObservedAt);
         await replaceCachedGroupInstances(otherOwnerId, groupId, [instance]);
+        const { collections: getCollections } = await import("./collections");
+        const c = getCollections(await (await import("./client")).getMongoDatabase());
+        await c.groups.insertMany([
+            { _id: `${ownerId}:${groupId}`, ownerId, groupId, group: { id: groupId, name: "Owner Group" }, source: "membership", membershipActive: true, observedAt: firstObservedAt, updatedAt: firstObservedAt },
+            { _id: `${otherOwnerId}:${groupId}`, ownerId: otherOwnerId, groupId, group: { id: groupId, name: "Other Group" }, source: "membership", membershipActive: true, observedAt: firstObservedAt, updatedAt: firstObservedAt },
+        ]);
 
         expect(await getCachedGroupInstances(ownerId, groupId)).toEqual({ instances: [instance], upstreamFetchedAt: "2026-08-09T09:59:59.000Z", observedAt: firstObservedAt });
         expect((await getCachedGroupInstances(otherOwnerId, groupId))?.instances).toEqual([instance]);
+        expect(await listSidebarGroupInstances(ownerId)).toEqual([{ group: { id: groupId, name: "Owner Group" }, instances: [instance], observedAt: firstObservedAt, sidebarOrder: undefined }]);
+        expect((await listSidebarGroupInstances(otherOwnerId))[0]?.group.name).toBe("Other Group");
 
         const secondGroupId = "grp_00000000-0000-0000-0000-000000000059";
         await replaceCachedGroupInstances(ownerId, secondGroupId, [{ ...instance, ownerId: secondGroupId, location: `${worldId}:456~group(${secondGroupId})`, id: `${worldId}:456~group(${secondGroupId})` }]);
         await replaceAllCachedGroupInstances(ownerId, [groupId], [instance], "2026-08-09T10:02:00.000Z", new Date("2026-08-09T10:02:01.000Z"));
+        expect((await listSidebarGroupInstances(ownerId))[0]?.sidebarOrder).toBe(0);
         expect(await getCachedGroupInstances(ownerId, secondGroupId)).toBeNull();
         expect((await getCachedGroupInstances(otherOwnerId, groupId))?.instances).toEqual([instance]);
 

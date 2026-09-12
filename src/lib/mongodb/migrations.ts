@@ -551,6 +551,13 @@ const migrations: Migration[] = [
             ]);
         },
     },
+    {
+        version: 52,
+        name: "add-sidebar-group-instance-order",
+        async apply(c) {
+            await c.groupInstanceSnapshots.createIndex({ ownerId: 1, sidebarOrder: 1 }, { name: "owner_sidebar_order" });
+        },
+    },
 ];
 
 async function applyMigrations() {

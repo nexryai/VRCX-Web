@@ -291,6 +291,7 @@ export type GroupInstanceSnapshotDocument = {
     ownerId: string;
     groupId: string;
     instances: VrchatGroupInstance[];
+    sidebarOrder?: number;
     upstreamFetchedAt?: string;
     observedAt: Date;
     updatedAt: Date;
