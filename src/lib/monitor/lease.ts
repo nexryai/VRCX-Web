@@ -42,7 +42,7 @@ export async function prepareMonitorIdentity(leaderId: string, ownerId: string):
     await collections(await getMongoDatabase()).monitorState.updateOne(
         { _id: "singleton", leaderId, leaseExpiresAt: { $gt: now }, ownerId: { $ne: ownerId } },
         {
-            $set: { ownerId, pipelineSequence: 0, status: "starting", pipelineConnected: false, updatedAt: now },
+            $set: { ownerId, pipelineSequence: 0, pipelineRecentEventAt: [], status: "starting", pipelineConnected: false, updatedAt: now },
             $unset: { lastPipelineEventKey: "", lastPipelineEventType: "", lastPipelineEventAt: "", lastReconciledAt: "", lastAvatarCleanupAt: "", lastAvatarAutoCleanupAt: "", lastAvatarCleanupDeleted: "", lastAvatarCleanupError: "", lastError: "" },
         },
     );
@@ -55,6 +55,7 @@ export async function advanceMonitorPipelineCursor(leaderId: string, event: { ow
         { _id: "singleton", leaderId, leaseExpiresAt: { $gt: committedAt }, ownerId: event.ownerId },
         {
             $inc: { pipelineSequence: 1 },
+            $push: { pipelineRecentEventAt: { $each: [event.observedAt], $slice: -6_000 } },
             $set: {
                 lastPipelineEventKey: event.key,
                 lastPipelineEventType: event.type,

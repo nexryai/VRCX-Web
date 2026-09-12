@@ -3,12 +3,16 @@ import { NextResponse } from "next/server";
 import { getMongoDatabase } from "@/lib/mongodb/client";
 import { collections } from "@/lib/mongodb/collections";
 import { ensureMongoSchema } from "@/lib/mongodb/migrations";
+import { buildPipelineRateSamples } from "@/lib/status-bar";
 import { getVrchatRateLimitSnapshot } from "@/lib/vrchat/rate-limit";
 
 export async function GET() {
     await ensureMongoSchema();
     const state = await collections(await getMongoDatabase()).monitorState.findOne({ _id: "singleton" }, { projection: { leaderId: 0, lastPipelineEventKey: 0 } });
     const rateLimit = getVrchatRateLimitSnapshot();
+    const sampledAt = new Date();
+    const pipelineRecentEventAt = state?.pipelineRecentEventAt ?? [];
+    const pipelineRateSamples = buildPipelineRateSamples(pipelineRecentEventAt, sampledAt);
     const response = NextResponse.json({
         status: state?.status ?? "idle",
         pipelineConnected: state?.pipelineConnected ?? false,
@@ -19,6 +23,12 @@ export async function GET() {
               }
             : undefined,
         lastPipelineEventAt: state?.lastPipelineEventAt?.toISOString(),
+        pipelineRate: {
+            samples: pipelineRateSamples,
+            totalLastMinute: pipelineRateSamples.reduce((total, count) => total + count, 0),
+            sampledAt: sampledAt.toISOString(),
+            truncated: pipelineRecentEventAt.length >= 6_000 && pipelineRecentEventAt[0] >= new Date(sampledAt.getTime() - 60_000),
+        },
         lastReconciledAt: state?.lastReconciledAt?.toISOString(),
         monitorStartedAt: state?.monitorStartedAt?.toISOString(),
         vrchatService:

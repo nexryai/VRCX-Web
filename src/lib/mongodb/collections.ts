@@ -119,6 +119,7 @@ export type MonitorStateDocument = {
     status: "idle" | "starting" | "healthy" | "reconnecting" | "authentication-required" | "error";
     pipelineConnected: boolean;
     pipelineSequence: number;
+    pipelineRecentEventAt: Date[];
     lastPipelineEventKey?: string;
     lastPipelineEventType?: string;
     lastPipelineEventAt?: Date;

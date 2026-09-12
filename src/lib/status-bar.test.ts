@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAppUptime, formatClock, formatUtcHour, normalizeUtcHour } from "./status-bar";
+import { buildPipelineRateSamples, formatAppUptime, formatClock, formatUtcHour, normalizeUtcHour } from "./status-bar";
 
 describe("status bar utilities", () => {
     it("normalizes and labels the same integer UTC range as VRCX", () => {
@@ -20,5 +20,15 @@ describe("status bar utilities", () => {
     it("formats monitor uptime without wrapping after 24 hours", () => {
         expect(formatAppUptime(0)).toBe("00:00:00");
         expect(formatAppUptime(90_061.9)).toBe("25:01:01");
+    });
+
+    it("buckets only the latest 60 seconds of Pipeline observations", () => {
+        const now = new Date("2026-09-13T12:01:00.900Z");
+        const samples = buildPipelineRateSamples([new Date("2026-09-13T12:00:01.100Z"), new Date("2026-09-13T12:00:59.100Z"), new Date("2026-09-13T12:00:59.900Z"), new Date("2026-09-13T12:01:00.100Z"), new Date("2026-09-13T12:01:01.000Z")], now);
+        expect(samples).toHaveLength(60);
+        expect(samples[0]).toBe(1);
+        expect(samples[58]).toBe(2);
+        expect(samples[59]).toBe(1);
+        expect(samples.reduce((total, count) => total + count, 0)).toBe(4);
     });
 });

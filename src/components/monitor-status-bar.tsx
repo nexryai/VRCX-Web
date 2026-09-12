@@ -8,6 +8,7 @@ import { formatAppUptime, formatClock, formatUtcHour, type StatusBarVisibility }
 type MonitorStatus = {
     status: "idle" | "starting" | "healthy" | "reconnecting" | "authentication-required" | "error";
     pipelineConnected: boolean;
+    pipelineRate?: { samples: number[]; totalLastMinute: number; sampledAt: string; truncated: boolean };
     lastPipelineEventAt?: string;
     lastReconciledAt?: string;
     monitorStartedAt?: string;
@@ -43,6 +44,39 @@ const clockSlots = [
     { id: "clock-two", index: 1 },
     { id: "clock-three", index: 2 },
 ] as const;
+
+function PipelineSparkline({ samples }: { samples: number[] }) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        const width = 48;
+        const height = 12;
+        const deviceScale = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(width * deviceScale);
+        canvas.height = Math.floor(height * deviceScale);
+        context.setTransform(deviceScale, 0, 0, deviceScale, 0, 0);
+        context.clearRect(0, 0, width, height);
+        const foreground = getComputedStyle(document.documentElement).getPropertyValue("--foreground").trim();
+        context.globalAlpha = 0.75;
+        context.strokeStyle = !foreground ? "#cfd3dc" : foreground.startsWith("#") || foreground.startsWith("rgb") || foreground.startsWith("hsl") || foreground.startsWith("oklch") ? foreground : `hsl(${foreground})`;
+        context.lineWidth = 1;
+        context.beginPath();
+        const maximum = Math.max(...samples, 1);
+        const step = width / Math.max(1, samples.length - 1);
+        samples.forEach((count, index) => {
+            const x = index * step;
+            const y = height - (count / maximum) * (height - 2);
+            if (index === 0) context.moveTo(x, y);
+            else context.lineTo(x, y);
+        });
+        context.stroke();
+        context.globalAlpha = 1;
+    }, [samples]);
+    return <canvas ref={canvasRef} className="h-3 w-12 shrink-0 rounded-sm" aria-hidden="true" />;
+}
 
 export function MonitorStatusBar() {
     const [status, setStatus] = useState<MonitorStatus>({ status: "idle", pipelineConnected: false });
@@ -176,9 +210,15 @@ export function MonitorStatusBar() {
                         </div>
                     ) : null}
                     {visibility.ws ? (
-                        <div className={itemClass} title={`Last Pipeline event: ${time(status.lastPipelineEventAt)}`}>
+                        <div className={itemClass} title={`WebSocket: ${status.pipelineConnected ? "Connected" : "Disconnected"}. Last Pipeline event: ${time(status.lastPipelineEventAt)}${status.pipelineRate?.truncated ? ". Rate is truncated." : ""}`}>
                             <span className={`size-2 rounded-full ${status.pipelineConnected ? "bg-status-online" : "bg-status-offline"}`} />
                             <span className="text-[11px] text-foreground">WebSocket</span>
+                            {status.pipelineRate ? (
+                                <>
+                                    <PipelineSparkline samples={status.pipelineRate.samples} />
+                                    <span className="text-foreground">{status.pipelineRate.totalLastMinute} avg/min</span>
+                                </>
+                            ) : null}
                         </div>
                     ) : null}
                     {visibility.sync ? (

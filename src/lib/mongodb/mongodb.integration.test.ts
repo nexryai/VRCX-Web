@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -93,7 +93,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("recent_actions").indexExists(["owner_user_action_unique", "expires_at_ttl"])).toBe(true);
         expect(await database.collection("notifications").indexExists("owner_browser_delivery")).toBe(true);
         expect(await database.collection("notifications").indexExists("owner_source_first_observed")).toBe(true);
-        expect(await databaseCollections.monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0 });
+        expect(await databaseCollections.monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 0, pipelineRecentEventAt: [] });
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({ avatarAutoCleanupDays: 0 });
     });
 
@@ -269,7 +269,7 @@ describe("MongoDB application repositories", () => {
         expect((await monitorState.findOne({ _id: "singleton" }))?.lastPipelineEventKey).toBeUndefined();
         await updateMonitorHealth("monitor-a", { ownerId: "usr_00000000-0000-0000-0000-000000000001" });
         expect(await advanceMonitorPipelineCursor("monitor-a", { ownerId: "usr_00000000-0000-0000-0000-000000000001", key: "event-key", type: "friend-online", observedAt: new Date(firstTick.getTime() + 1_000) })).toBe(true);
-        expect(await monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 1, lastPipelineEventKey: "event-key", lastPipelineEventType: "friend-online" });
+        expect(await monitorState.findOne({ _id: "singleton" })).toMatchObject({ pipelineSequence: 1, pipelineRecentEventAt: [new Date(firstTick.getTime() + 1_000)], lastPipelineEventKey: "event-key", lastPipelineEventType: "friend-online" });
         expect(await acquireMonitorLease("monitor-b", new Date(firstTick.getTime() + 60_001))).toBe(true);
         expect(await acquireMonitorLease("monitor-a", new Date(firstTick.getTime() + 60_002))).toBe(false);
         expect(await advanceMonitorPipelineCursor("monitor-a", { ownerId: "usr_00000000-0000-0000-0000-000000000001", key: "stale-key", type: "friend-offline", observedAt: new Date(firstTick.getTime() + 63_000) })).toBe(false);

@@ -577,6 +577,13 @@ const migrations: Migration[] = [
             );
         },
     },
+    {
+        version: 54,
+        name: "add-pipeline-rate-history",
+        async apply(c) {
+            await c.monitorState.updateMany({ pipelineRecentEventAt: { $exists: false } }, { $set: { pipelineRecentEventAt: [], updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

@@ -244,6 +244,7 @@ await database.collection("monitor_state").insertOne({
     status: "healthy",
     pipelineConnected: true,
     pipelineSequence: 12,
+    pipelineRecentEventAt: [3, 7, 9, 15, 16, 16, 22, 31, 34, 34, 34, 42, 48, 51, 57].map((seconds) => new Date(now.getTime() - seconds * 1_000)),
     lastPipelineEventAt: now,
     lastReconciledAt: now,
     monitorStartedAt: new Date(now.getTime() - 3_723_000),

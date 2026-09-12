@@ -1211,6 +1211,7 @@ for (const width of widths) {
         await page.waitForTimeout(250);
         await page.screenshot({ path: `${output}/${capture.name}-${width}.png`, fullPage: true });
         const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth }));
+        await page.unrouteAll({ behavior: "ignoreErrors" });
         await browser.close();
         if (overflow.width > overflow.viewport) {
             throw new Error(`${capture.name} has page-level horizontal overflow: ${overflow.width}px > ${overflow.viewport}px`);

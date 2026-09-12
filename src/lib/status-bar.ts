@@ -32,3 +32,13 @@ export function formatAppUptime(elapsedSeconds: number): string {
     const seconds = (safe % 60).toString().padStart(2, "0");
     return `${hours}:${minutes}:${seconds}`;
 }
+
+export function buildPipelineRateSamples(events: Date[], now: Date): number[] {
+    const samples = Array.from({ length: 60 }, () => 0);
+    const endSecond = Math.floor(now.getTime() / 1_000);
+    for (const event of events) {
+        const age = endSecond - Math.floor(event.getTime() / 1_000);
+        if (age >= 0 && age < samples.length) samples[samples.length - 1 - age] += 1;
+    }
+    return samples;
+}
