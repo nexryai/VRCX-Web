@@ -17,6 +17,7 @@ const captures = [
     { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
     { name: "sidebar-cosmetics", path: "/feed", readyText: "Aoi Sample", sidebarCosmetics: true, desktopOnly: true },
     { name: "sidebar-group-instances", path: "/feed", readyText: "Aoi Sample", sidebarGroupInstances: true, desktopOnly: true },
+    { name: "sidebar-age-gated", path: "/settings", readyText: "Age Restricted Lounge · #Adults Only", clickText: "Interface", sidebarAgeGated: true, desktopOnly: true },
     { name: "status-bar", path: "/feed", readyText: "Servers", statusBar: true },
     { name: "status-bar-incident", path: "/feed", readyText: "VRChat Server Issues", statusBarIncident: true, desktopOnly: true },
     { name: "status-bar-context", path: "/feed", readyText: "Clocks", statusBarContext: true, desktopOnly: true },
@@ -205,6 +206,57 @@ for (const width of widths) {
                     body: '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><defs><linearGradient id="g"><stop stop-color="#00b8ff"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs><circle cx="64" cy="64" r="55" fill="none" stroke="url(#g)" stroke-width="7"/><path d="m23 38 12 1 4-12 8 10M105 90l-12-1-4 12-8-10" fill="none" stroke="#d7f5ff" stroke-width="4" stroke-linecap="round"/></svg>',
                 }),
             );
+        }
+        if (capture.sidebarAgeGated) {
+            let ageGatedVisibilityEnabled = false;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && body.isAgeGatedInstancesVisible === true) ageGatedVisibilityEnabled = true;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && !ageGatedVisibilityEnabled) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, isAgeGatedInstancesVisible: false }) });
+                }
+                return route.fulfill({ response });
+            });
+            await page.route("**/api/groups?scope=sidebar", async (route) => {
+                const response = await route.fetch();
+                const payload = await response.json();
+                const group = payload.groups?.[0];
+                if (!group?.instances?.[0]) throw new Error("The age-gated sidebar fixture requires a populated group instance snapshot.");
+                const source = group.instances[0];
+                const instanceId = `9999~group(${group.group.id})~groupAccessType(public)~ageGate~region(jp)`;
+                const location = `wrld_00000000-0000-0000-0000-000000000099:${instanceId}`;
+                return route.fulfill({
+                    response,
+                    contentType: "application/json",
+                    body: JSON.stringify({
+                        groups: [
+                            {
+                                ...group,
+                                instances: [
+                                    ...group.instances,
+                                    {
+                                        ...source,
+                                        id: location,
+                                        location,
+                                        instanceId,
+                                        worldId: "wrld_00000000-0000-0000-0000-000000000099",
+                                        displayName: "Adults Only",
+                                        region: "jp",
+                                        userCount: 4,
+                                        world: { id: "wrld_00000000-0000-0000-0000-000000000099", name: "Age Restricted Lounge", capacity: 40, recommendedCapacity: 32 },
+                                    },
+                                ],
+                            },
+                            ...payload.groups.slice(1),
+                        ],
+                    }),
+                });
+            });
         }
         if (capture.statusBar) {
             await page.route("**/api/monitor/status", async (route) => {
@@ -963,6 +1015,21 @@ for (const width of widths) {
         }
         if (capture.clickText) {
             await page.getByText(capture.clickText, { exact: true }).first().click();
+        }
+        if (capture.sidebarAgeGated) {
+            const ageGatedWorld = page.getByText("Age Restricted Lounge · #Adults Only", { exact: true });
+            const toggle = page.getByRole("switch", { name: "Show Age-Gated Instances", exact: true });
+            await toggle.waitFor();
+            if ((await toggle.getAttribute("aria-checked")) !== "false") throw new Error("The age-gated visibility fixture did not restore the disabled switch state.");
+            if (await ageGatedWorld.count()) throw new Error("An age-gated group instance was visible while the VRCX visibility setting was disabled.");
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await toggle.click();
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.isAgeGatedInstancesVisible !== true) throw new Error("The age-gated instance visibility setting did not persist in MongoDB.");
+            await page.goto(`http://localhost:${port}/feed`, { waitUntil: "domcontentloaded" });
+            await page.getByRole("tab").nth(1).click();
+            await ageGatedWorld.waitFor();
         }
         if (capture.sidebarSettings) {
             const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });

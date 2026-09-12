@@ -37,6 +37,7 @@ import {
     XCircle,
 } from "lucide-react";
 
+import { useAgeGatedInstancesVisible } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { GalleryFilePicker } from "@/components/groups/gallery-file-picker";
@@ -813,6 +814,7 @@ function GroupInfo({
     onOpenPreviousInstances: () => void;
     previousInstancesButton: React.RefObject<HTMLButtonElement | null>;
 }) {
+    const showAgeGatedInstances = useAgeGatedInstancesVisible();
     const rooms = new Map<string, { instance?: VrchatGroupInstance; users: VrchatUser[] }>();
     for (const instance of instances) rooms.set(instance.location, { instance, users: [] });
     for (const friend of friends) {
@@ -821,7 +823,9 @@ function GroupInfo({
         room.users.push(friend);
         rooms.set(friend.location, room);
     }
-    const visibleRooms = Array.from(rooms, ([location, room]) => ({ location, ...room })).toSorted((a, b) => b.users.length - a.users.length || (b.instance?.userCount || 0) - (a.instance?.userCount || 0) || a.location.localeCompare(b.location));
+    const visibleRooms = Array.from(rooms, ([location, room]) => ({ location, ...room }))
+        .filter((room) => showAgeGatedInstances || !room.location.includes("~ageGate"))
+        .toSorted((a, b) => b.users.length - a.users.length || (b.instance?.userCount || 0) - (a.instance?.userCount || 0) || a.location.localeCompare(b.location));
     const links = (group.links || []).map((link) => safeExternalHttpUrl(link)).filter(Boolean);
     return (
         <div>
@@ -849,7 +853,7 @@ function GroupInfo({
                         <div key={room.location} className="mt-1.5 w-full">
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="max-w-full truncate rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground" title={room.location}>
-                                    {room.instance?.world.name || locationLabel(room.users[0])}
+                                    {room.instance?.world.name || locationLabel(room.users[0], showAgeGatedInstances)}
                                     {room.instance?.displayName ? ` · #${room.instance.displayName}` : ""}
                                 </span>
                                 {room.instance?.userCount ? (

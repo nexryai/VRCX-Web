@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Apple, Clipboard, Ellipsis, ExternalLink, Eye, History, ImageIcon, Loader2, Monitor, Pencil, Plus, RefreshCw, Smartphone, Trash2, Upload, User, X } from "lucide-react";
 
+import { useAgeGatedInstancesVisible } from "@/components/appearance-settings-provider";
 import { AvatarImageCropDialog } from "@/components/avatars/avatar-image-crop-dialog";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
@@ -881,7 +882,9 @@ function WorldInfo({ world, copy, copied, onOpenPreviousInstances, previousInsta
 }
 
 function WorldInstances({ world, friends, openUser }: { world: VrchatWorld; friends: VrchatUser[]; openUser: (id: string) => void }) {
-    const instances = worldInstances(world);
+    const showAgeGatedInstances = useAgeGatedInstancesVisible();
+    const instances = worldInstances(world).filter((instance) => showAgeGatedInstances || !instance.id.includes("~ageGate"));
+    const visibleFriends = friends.filter((friend) => showAgeGatedInstances || !friend.location?.includes("~ageGate"));
     return (
         <div>
             <div className="mb-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -902,14 +905,14 @@ function WorldInstances({ world, friends, openUser }: { world: VrchatWorld; frie
                                 <span className="break-all font-mono text-[10px] text-muted-foreground">{instance.id}</span>
                                 <span className="shrink-0 text-xs">{instance.occupants} occupants</span>
                             </div>
-                            <FriendTiles friends={friends.filter((friend) => friend.location === `${world.id}:${instance.id}`)} openUser={openUser} />
+                            <FriendTiles friends={visibleFriends.filter((friend) => friend.location === `${world.id}:${instance.id}`)} openUser={openUser} />
                         </section>
                     ))}
                 </div>
-            ) : friends.length ? (
+            ) : visibleFriends.length ? (
                 <section className="rounded-lg bg-background p-3">
                     <p className="text-xs text-muted-foreground">Instances observed from the current friend projection</p>
-                    <FriendTiles friends={friends} openUser={openUser} />
+                    <FriendTiles friends={visibleFriends} openUser={openUser} />
                 </section>
             ) : (
                 <div className="flex min-h-48 items-center justify-center text-xs text-muted-foreground">No remotely visible instances.</div>

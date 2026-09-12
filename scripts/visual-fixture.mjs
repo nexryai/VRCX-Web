@@ -234,6 +234,7 @@ await database.collection("app_settings").insertOne({
     statusBarVisibility: { servers: true, ws: true, monitor: true, sync: true, rateLimit: true, uptime: true },
     statusBarClockCount: 2,
     statusBarClocks: [9, 0, -5],
+    isAgeGatedInstancesVisible: false,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });

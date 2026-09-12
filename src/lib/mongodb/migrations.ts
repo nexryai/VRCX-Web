@@ -584,6 +584,13 @@ const migrations: Migration[] = [
             await c.monitorState.updateMany({ pipelineRecentEventAt: { $exists: false } }, { $set: { pipelineRecentEventAt: [], updatedAt: new Date() } });
         },
     },
+    {
+        version: 55,
+        name: "add-age-gated-instance-visibility",
+        async apply(c) {
+            await c.appSettings.updateMany({ isAgeGatedInstancesVisible: { $exists: false } }, { $set: { isAgeGatedInstancesVisible: false, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

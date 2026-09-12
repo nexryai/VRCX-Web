@@ -31,6 +31,7 @@ describe("application settings boundary", () => {
             mutualGraphExcludedFriendIds: [],
             statusBarVisibility: { servers: true, ws: true, monitor: true, sync: true, rateLimit: true, uptime: true },
             statusBarClockCount: 2,
+            isAgeGatedInstancesVisible: false,
         });
     });
 
@@ -71,6 +72,7 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ statusBarClockCount: 3, statusBarClocks: [9, 0, -5] }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ statusBarClockCount: 4 }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ statusBarClocks: [15, 0, -5] }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ isAgeGatedInstancesVisible: true }).success).toBe(true);
     });
 
     it("accepts only the versioned settings backup format", () => {

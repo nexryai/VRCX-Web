@@ -15,6 +15,12 @@ describe("friend location helpers", () => {
         expect(locationLabel(makeFriend("usr_1", "A", "wrld_1:123", "Example World"))).toBe("Example World");
     });
 
+    it("hides age-gated locations by default and reveals them only after opt-in", () => {
+        const friend = makeFriend("usr_1", "A", "wrld_1:123~ageGate", "Age Restricted World");
+        expect(locationLabel(friend)).toBe("Restricted");
+        expect(locationLabel(friend, true)).toBe("Age Restricted World");
+    });
+
     it("groups locations by size and friends by display name", () => {
         const groups = groupFriendsByLocation([makeFriend("usr_1", "Zulu", "private"), makeFriend("usr_2", "Alpha", "private"), makeFriend("usr_3", "Beta", "wrld_1", "A World")]);
 

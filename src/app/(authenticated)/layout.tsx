@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
+import { AppearanceSettingsProvider } from "@/components/appearance-settings-provider";
 import { CurrentUserProvider } from "@/components/current-user-provider";
 import { FriendsProvider } from "@/components/friends/friends-provider";
 import { FriendsSidebar } from "@/components/friends/friends-sidebar";
@@ -16,11 +17,13 @@ export default async function AuthenticatedLayout({ children }: { children: Reac
 
     return (
         <CurrentUserProvider user={session.user}>
-            <FriendsProvider>
-                <AppShell version={process.env.npm_package_version || "0.1.0"} aside={<FriendsSidebar />}>
-                    {children}
-                </AppShell>
-            </FriendsProvider>
+            <AppearanceSettingsProvider>
+                <FriendsProvider>
+                    <AppShell version={process.env.npm_package_version || "0.1.0"} aside={<FriendsSidebar />}>
+                        {children}
+                    </AppShell>
+                </FriendsProvider>
+            </AppearanceSettingsProvider>
         </CurrentUserProvider>
     );
 }

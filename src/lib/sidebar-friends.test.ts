@@ -33,4 +33,11 @@ describe("VRCX sidebar friend ordering", () => {
         const malformed = "wrld_------------------------------------:1";
         expect(groupSidebarFriendInstances([friend("a", "A", { location: malformed }), friend("b", "B", { location: malformed })], [])).toEqual([]);
     });
+
+    it("uses the restricted VRCX label for repeated age-gated instances until opted in", () => {
+        const location = "wrld_00000000-0000-0000-0000-000000000001:1~ageGate";
+        const rows = [friend("a", "A", { location, world: { name: "Age Restricted World" } }), friend("b", "B", { location, world: { name: "Age Restricted World" } })];
+        expect(groupSidebarFriendInstances(rows, [], false)[0]?.label).toBe("Restricted");
+        expect(groupSidebarFriendInstances(rows, [], true)[0]?.label).toBe("Age Restricted World");
+    });
 });

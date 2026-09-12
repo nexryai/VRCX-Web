@@ -4,7 +4,8 @@ export function friendImage(friend: VrchatUser) {
     return friend.userIcon || friend.profilePicOverride || friend.currentAvatarThumbnailImageUrl || friend.currentAvatarImageUrl || "";
 }
 
-export function locationLabel(friend: VrchatUser) {
+export function locationLabel(friend: VrchatUser, showAgeGatedInstances = false) {
+    if (!showAgeGatedInstances && (friend.location?.includes("~ageGate") || friend.travelingToLocation?.includes("~ageGate"))) return "Restricted";
     if (friend.world?.name) {
         return friend.world.name;
     }
@@ -20,10 +21,10 @@ export function locationLabel(friend: VrchatUser) {
     return friend.location;
 }
 
-export function groupFriendsByLocation(friends: VrchatUser[]) {
+export function groupFriendsByLocation(friends: VrchatUser[], showAgeGatedInstances = false) {
     const groups = new Map<string, VrchatUser[]>();
     for (const friend of friends) {
-        const label = locationLabel(friend);
+        const label = locationLabel(friend, showAgeGatedInstances);
         const existing = groups.get(label);
         if (existing) {
             existing.push(friend);

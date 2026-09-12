@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarDays, Clipboard, Clock, ExternalLink, History, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
+import { useAgeGatedInstancesVisible } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
@@ -518,6 +519,8 @@ function UserNoteField({ user, onNoteChange }: { user: VrchatUser; onNoteChange:
 }
 
 function InfoTab({ user, onNoteChange, onMemoChange, onOpenPreviousInstances, previousInstancesButton }: { user: VrchatUser; onNoteChange: (note: string) => void; onMemoChange: (memo: string) => void; onOpenPreviousInstances: () => void; previousInstancesButton: React.RefObject<HTMLButtonElement | null> }) {
+    const showAgeGatedInstances = useAgeGatedInstancesVisible();
+    const locationRestricted = !showAgeGatedInstances && Boolean(user.location?.includes("~ageGate") || user.travelingToLocation?.includes("~ageGate"));
     return (
         <div className="space-y-2">
             <section className="rounded-xl bg-background p-1.5">
@@ -530,11 +533,11 @@ function InfoTab({ user, onNoteChange, onMemoChange, onOpenPreviousInstances, pr
                     <div className="min-w-0 flex-1">
                         <p className="flex items-start gap-1.5 text-sm">
                             <MapPin className="mt-0.5 size-4 shrink-0 text-primary" />
-                            <span className="break-all">{locationLabel(user)}</span>
+                            <span className="break-all">{locationLabel(user, showAgeGatedInstances)}</span>
                         </p>
-                        {user.location && !["private", "offline", "traveling"].includes(user.location) ? <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{user.location}</p> : null}
+                        {user.location && !locationRestricted && !["private", "offline", "traveling"].includes(user.location) ? <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{user.location}</p> : null}
                     </div>
-                    <VrchatImage src={user.world?.thumbnailImageUrl} alt="" className="h-16 w-24 rounded-lg object-cover" loading="lazy" />
+                    <VrchatImage src={locationRestricted ? undefined : user.world?.thumbnailImageUrl} alt="" className="h-16 w-24 rounded-lg object-cover" loading="lazy" />
                 </div>
                 <button ref={previousInstancesButton} type="button" onClick={onOpenPreviousInstances} className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
                     <History className="size-3.5" /> Previous Instances
