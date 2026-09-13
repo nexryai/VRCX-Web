@@ -246,6 +246,9 @@ await database.collection("app_settings").insertOne({
     dtHour12: false,
     dtIsoFormat: false,
     weekStartsOn: 1,
+    displayVRCProfileThemes: true,
+    displayVRCProfileBackgrounds: false,
+    profileBackgroundOpacity: 0.5,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });
@@ -275,6 +278,22 @@ await database.collection("cosmetic_icon_frame_snapshots").insertOne({
     _id: ownerId,
     ownerId,
     frames: [{ id: "icon-frame-visual-blue", metadata: { assets: [{ type: "mainAnimation", url: "https://assets.vrchat.com/visual-fixture/icon-frame-blue.svg" }] } }],
+    observedAt: now,
+    updatedAt: now,
+});
+await database.collection("public_profile_snapshots").insertOne({
+    _id: `${ownerId}:${friends[0].id}`,
+    ownerId,
+    userId: friends[0].id,
+    profile: {
+        id: friends[0].id,
+        backgroundType: "gradient",
+        backgroundGradientTop: "312e81",
+        backgroundGradientBottom: "0f766e",
+        themeButtonColor: "0ea5e9",
+        themeIconColor: "f59e0b",
+        themeSubtextColor: "a7f3d0",
+    },
     observedAt: now,
     updatedAt: now,
 });

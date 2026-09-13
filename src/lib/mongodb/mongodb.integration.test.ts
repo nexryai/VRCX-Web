@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -78,6 +78,9 @@ describe("MongoDB application repositories", () => {
             dtHour12: false,
             dtIsoFormat: false,
             weekStartsOn: 1,
+            displayVRCProfileThemes: true,
+            displayVRCProfileBackgrounds: false,
+            profileBackgroundOpacity: 0.5,
         });
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner", "owner_world_started", "owner_group_started"]);
         expect(sessionIndexes).toBe(true);
@@ -92,6 +95,7 @@ describe("MongoDB application repositories", () => {
         expect(await database.collection("avatar_gallery_snapshots").indexExists(["owner_avatar_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("avatar_style_snapshots").indexExists(["owner_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("cosmetic_icon_frame_snapshots").indexExists(["owner_unique", "owner_observed"])).toBe(true);
+        expect(await database.collection("public_profile_snapshots").indexExists(["owner_user_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
         expect(await database.collection("group_instance_snapshots").indexExists("owner_sidebar_order")).toBe(true);
         expect(await database.collection("group_calendar_snapshots").indexExists(["owner_group_unique", "owner_observed"])).toBe(true);
@@ -635,6 +639,17 @@ describe("MongoDB application repositories", () => {
         await replaceCosmeticIconFrameSnapshot(ownerId, [], now);
         expect(await shouldRefreshCosmeticIconFrames(ownerId, new Date(now.getTime() + 1_000))).toBe(false);
         expect(await getCosmeticIconFrameSnapshot(ownerId)).toMatchObject({ frames: [] });
+    });
+
+    test("stores public profiles without crossing owners", async () => {
+        const { getCachedPublicProfile, replaceCachedPublicProfile } = await import("./public-profile-repository");
+        const ownerId = "usr_00000000-0000-0000-0000-000000000079";
+        const otherOwnerId = "usr_00000000-0000-0000-0000-000000000080";
+        const userId = "usr_00000000-0000-0000-0000-000000000081";
+        await replaceCachedPublicProfile(ownerId, userId, { id: userId, backgroundType: "gradient", themeIconColor: "112233" });
+        await replaceCachedPublicProfile(otherOwnerId, userId, { id: userId, backgroundType: "default" });
+        expect(await getCachedPublicProfile(ownerId, userId)).toMatchObject({ ownerId, userId, profile: { backgroundType: "gradient", themeIconColor: "112233" } });
+        expect(await getCachedPublicProfile(otherOwnerId, userId)).toMatchObject({ ownerId: otherOwnerId, profile: { backgroundType: "default" } });
     });
 
     test("stores filtered group audit-log snapshots per owner", async () => {

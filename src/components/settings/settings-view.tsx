@@ -32,6 +32,9 @@ type SettingsState = Required<
         | "dtHour12"
         | "dtIsoFormat"
         | "weekStartsOn"
+        | "displayVRCProfileThemes"
+        | "displayVRCProfileBackgrounds"
+        | "profileBackgroundOpacity"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -76,6 +79,9 @@ const defaults: SettingsState = {
     dtHour12: false,
     dtIsoFormat: false,
     weekStartsOn: 1,
+    displayVRCProfileThemes: true,
+    displayVRCProfileBackgrounds: false,
+    profileBackgroundOpacity: 0.5,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -639,6 +645,26 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
                 </SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="User Dialog">
+                <SettingsRow label="VRChat Profile Themes">
+                    <Switch checked={settings.displayVRCProfileThemes} label="VRChat Profile Themes" change={(displayVRCProfileThemes) => void change({ displayVRCProfileThemes })} />
+                </SettingsRow>
+                <SettingsRow label="VRChat Profile Backgrounds" description="Show profile backgrounds in user dialog, e.g. color gradient or VRC+ background.">
+                    <Switch checked={settings.displayVRCProfileBackgrounds} label="VRChat Profile Backgrounds" change={(displayVRCProfileBackgrounds) => void change({ displayVRCProfileBackgrounds })} />
+                </SettingsRow>
+                {settings.displayVRCProfileBackgrounds ? (
+                    <SettingsRow label="Profile Background Opacity" description="Higher values will impact text readability.">
+                        <input
+                            type="number"
+                            min={0}
+                            max={1}
+                            step={0.1}
+                            value={settings.profileBackgroundOpacity}
+                            onChange={(event) => void change({ profileBackgroundOpacity: Number(event.target.value) })}
+                            className="h-8 w-32 rounded-md border border-input bg-background px-2 text-xs"
+                            aria-label="Profile Background Opacity"
+                        />
+                    </SettingsRow>
+                ) : null}
                 <SettingsRow label="VRChat Notes" description="Shows notes stored in VRChat">
                     <Switch checked={!settings.hideUserNotes} label="VRChat Notes" change={(visible) => void change({ hideUserNotes: !visible })} />
                 </SettingsRow>

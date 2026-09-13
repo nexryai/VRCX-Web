@@ -67,6 +67,27 @@ export const vrchatUserSchema = z
 
 export type VrchatUser = z.infer<typeof vrchatUserSchema>;
 
+const profileHexSchema = z.string().regex(/^#?[0-9a-f]{6}$/i);
+
+export const vrchatPublicProfileSchema = z
+    .object({
+        id: z.string(),
+        backgroundType: z.enum(["default", "gradient", "texture"]).default("default"),
+        backgroundTextureId: z.string().max(128).optional(),
+        backgroundGradientTop: profileHexSchema.optional(),
+        backgroundGradientBottom: profileHexSchema.optional(),
+        themeButtonColor: profileHexSchema.optional(),
+        themeIconColor: profileHexSchema.optional(),
+        themeSubtextColor: profileHexSchema.optional(),
+        iconFrame: z.string().optional(),
+        nameplateEffect: z.string().optional(),
+        profileEffect: z.string().optional(),
+        isEconomyCreator: z.boolean().optional(),
+    })
+    .passthrough();
+
+export type VrchatPublicProfile = z.infer<typeof vrchatPublicProfileSchema>;
+
 export const vrchatCosmeticIconFrameAssetSchema = z
     .object({
         type: z.string().min(1).max(64),

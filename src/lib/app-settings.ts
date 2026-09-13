@@ -125,6 +125,9 @@ export const appSettingsUpdateSchema = z
         dtHour12: z.boolean().optional(),
         dtIsoFormat: z.boolean().optional(),
         weekStartsOn: z.union([z.literal(0), z.literal(1), z.literal(6)]).optional(),
+        displayVRCProfileThemes: z.boolean().optional(),
+        displayVRCProfileBackgrounds: z.boolean().optional(),
+        profileBackgroundOpacity: z.number().min(0).max(1).optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -205,5 +208,8 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         dtHour12: settings?.dtHour12 ?? false,
         dtIsoFormat: settings?.dtIsoFormat ?? false,
         weekStartsOn: settings?.weekStartsOn === 0 || settings?.weekStartsOn === 6 ? settings.weekStartsOn : 1,
+        displayVRCProfileThemes: settings?.displayVRCProfileThemes ?? true,
+        displayVRCProfileBackgrounds: settings?.displayVRCProfileBackgrounds ?? false,
+        profileBackgroundOpacity: settings?.profileBackgroundOpacity ?? 0.5,
     };
 }

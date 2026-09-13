@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarDays, Clipboard, Clock, ExternalLink, History, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
-import { useAgeGatedInstancesVisible, useDateTimeSettings, useShowInstanceIdInLocation, useUserNoteVisibility } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useDateTimeSettings, usePublicProfileAppearance, useShowInstanceIdInLocation, useUserNoteVisibility } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
@@ -14,7 +14,8 @@ import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { formatVrcxDate } from "@/lib/date-format";
 import { friendImage, locationLabel, statusColor, statusIndicatorKind } from "@/lib/friends";
-import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
+import { invertedProfileThemeColor, publicProfileBackgroundStyle, readableProfileThemeColor } from "@/lib/public-profile-appearance";
+import type { VrchatGroup, VrchatPublicProfile, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
 
@@ -28,6 +29,7 @@ function userLanguages(user: VrchatUser) {
 
 export function UserDialog({ userId, onClose }: { userId: string; onClose: () => void }) {
     const { showUserNotes, showUserMemos } = useUserNoteVisibility();
+    const profileAppearance = usePublicProfileAppearance();
     const currentUser = useCurrentUser();
     const { friends, openUser, openWorld, openGroup, removeFriend, patchFriendMetadata, refresh: refreshFriends } = useFriends();
     const [user, setUser] = useState<VrchatUser | null>(null);
@@ -47,6 +49,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
     const [previousInstancesOpen, setPreviousInstancesOpen] = useState(false);
     const [recentFriendRequestAt, setRecentFriendRequestAt] = useState("");
     const [recentActionSettings, setRecentActionSettings] = useState({ enabled: false, minutes: 60 });
+    const [publicProfile, setPublicProfile] = useState<VrchatPublicProfile | null>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const previousInstancesButton = useRef<HTMLButtonElement>(null);
     const friendsRef = useRef(friends);
@@ -66,6 +69,13 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
         setActivity([]);
         setPreviousInstancesOpen(false);
         setRecentFriendRequestAt("");
+        setPublicProfile(null);
+        void fetch(`/api/users/${encodeURIComponent(userId)}/profile?refresh=true`, { cache: "no-store", signal: controller.signal })
+            .then(async (response) => {
+                const payload = (await response.json()) as { profile?: VrchatPublicProfile };
+                if (response.ok && payload.profile) setPublicProfile(payload.profile);
+            })
+            .catch(() => undefined);
         fetch(`/api/users/${encodeURIComponent(userId)}`, { cache: "no-store", signal: controller.signal })
             .then(async (response) => {
                 const payload = (await response.json()) as { error?: string; recentFriendRequestAt?: string; user?: VrchatUser };
@@ -222,10 +232,25 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
 
     const isFriend = user?.isFriend === true || friends.some((friend) => friend.id === userId);
     const visibleTabs = tabs.filter((tab) => tab !== "Mutual" || isFriend);
+    const dialogStyle = profileAppearance.showBackgrounds ? publicProfileBackgroundStyle(publicProfile, profileAppearance.backgroundOpacity, profileAppearance.isDarkMode) : undefined;
+    const profileTheme = profileAppearance.showThemes
+        ? {
+              button: readableProfileThemeColor(publicProfile?.themeButtonColor, "var(--primary)", profileAppearance.isDarkMode),
+              icon: readableProfileThemeColor(publicProfile?.themeIconColor, "var(--muted-foreground)", profileAppearance.isDarkMode),
+              subtext: readableProfileThemeColor(publicProfile?.themeSubtextColor, "var(--muted-foreground)", profileAppearance.isDarkMode),
+          }
+        : undefined;
     return (
         <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-4" role="presentation">
             <button type="button" className="absolute inset-0 bg-black/65 backdrop-blur-sm" onClick={onClose} aria-label="Close user details" />
-            <section role="dialog" aria-modal="true" aria-labelledby="user-dialog-title" className="relative flex h-[100dvh] w-full flex-col overflow-hidden border-border bg-background p-2 shadow-2xl sm:h-[min(88dvh,780px)] sm:max-w-6xl sm:rounded-xl sm:border">
+            <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="user-dialog-title"
+                data-public-profile-background={profileAppearance.showBackgrounds ? publicProfile?.backgroundType : undefined}
+                style={dialogStyle}
+                className="relative flex h-[100dvh] w-full flex-col overflow-hidden border-border bg-background p-2 shadow-2xl sm:h-[min(88dvh,780px)] sm:max-w-6xl sm:rounded-xl sm:border"
+            >
                 <h2 id="user-dialog-title" className="sr-only">
                     {user?.displayName || "User details"}
                 </h2>
@@ -255,6 +280,7 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                 sendFriendRequest={sendFriendRequest}
                                 cancelFriendRequest={cancelFriendRequest}
                                 recentFriendRequest={recentActionSettings.enabled && Date.parse(recentFriendRequestAt) + recentActionSettings.minutes * 60_000 > Date.now()}
+                                theme={profileTheme}
                             />
                         </aside>
                         <div className="flex min-h-[28rem] min-w-0 flex-1 flex-col md:min-h-0">
@@ -326,9 +352,10 @@ type SummaryProps = {
     sendFriendRequest: () => Promise<void>;
     cancelFriendRequest: () => Promise<void>;
     recentFriendRequest: boolean;
+    theme?: { button: string; icon: string; subtext: string };
 };
 
-function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removing, copyUserId, setConfirming, unfriend, sendFriendRequest, cancelFriendRequest, recentFriendRequest }: SummaryProps) {
+function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removing, copyUserId, setConfirming, unfriend, sendFriendRequest, cancelFriendRequest, recentFriendRequest, theme }: SummaryProps) {
     // VRCX always uses userIcon for User Dialog's profile icon, independently
     // from the list-avatar Profile Icons preference.
     const image = friendImage(user, true);
@@ -355,17 +382,21 @@ function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removi
                 <div className="min-w-0">
                     <div className="flex flex-wrap items-baseline gap-1">
                         <h3 className="break-words font-bold">{user.displayName}</h3>
-                        {user.pronouns ? <span className="font-mono text-[10px] text-muted-foreground">{user.pronouns}</span> : null}
+                        {user.pronouns ? (
+                            <span className="font-mono text-[10px] text-muted-foreground" style={{ color: theme?.subtext }}>
+                                {user.pronouns}
+                            </span>
+                        ) : null}
                     </div>
                     {user.username ? <p className="font-mono text-[10px] text-muted-foreground">{user.username}</p> : null}
-                    <p className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <p className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground" style={{ color: theme?.subtext }}>
                         <span className="vrcx-status-indicator mt-1 size-2 shrink-0 rounded-full" data-user-status={statusIndicatorKind(user.status)} style={{ backgroundColor: statusColor(user.status) }} aria-hidden="true" />
                         {user.statusDescription || user.state || user.status || "Offline"}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-1 text-[10px]">
                     <span className="inline-flex h-5 items-center gap-1 rounded border border-border px-1.5">
-                        <Shield className="size-3" />
+                        <Shield className="size-3" style={{ color: theme?.icon }} />
                         {trustLevelFromTags(user.tags)}
                     </span>
                     {user.platform || user.last_platform ? <span className="inline-flex h-5 items-center rounded border border-border px-1.5 uppercase">{user.platform || user.last_platform}</span> : null}
@@ -395,7 +426,7 @@ function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removi
                 ) : null}
                 {!isCurrentUser && isFriend ? (
                     <div className="flex justify-end border-t border-border pt-2">
-                        <FavoriteAction kind="friend" objectId={user.id} label={user.displayName} />
+                        <FavoriteAction kind="friend" objectId={user.id} label={user.displayName} triggerStyle={theme ? { backgroundColor: theme.button, color: theme.button === "var(--primary)" ? "var(--background)" : invertedProfileThemeColor(theme.button) } : undefined} />
                     </div>
                 ) : null}
                 <div className="grid grid-cols-2 gap-2 border-t border-border pt-2">

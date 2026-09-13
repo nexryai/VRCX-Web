@@ -14,6 +14,10 @@ type AppearanceSettings = {
     dtHour12: boolean;
     dtIsoFormat: boolean;
     weekStartsOn: 0 | 1 | 6;
+    theme: "dark" | "light";
+    displayVRCProfileThemes: boolean;
+    displayVRCProfileBackgrounds: boolean;
+    profileBackgroundOpacity: number;
 };
 
 const defaultAppearanceSettings: AppearanceSettings = {
@@ -28,6 +32,10 @@ const defaultAppearanceSettings: AppearanceSettings = {
     dtHour12: false,
     dtIsoFormat: false,
     weekStartsOn: 1,
+    theme: "dark",
+    displayVRCProfileThemes: true,
+    displayVRCProfileBackgrounds: false,
+    profileBackgroundOpacity: 0.5,
 };
 const AppearanceSettingsContext = createContext<AppearanceSettings>(defaultAppearanceSettings);
 
@@ -51,6 +59,10 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                     dtHour12: value.dtHour12 === true,
                     dtIsoFormat: value.dtIsoFormat === true,
                     weekStartsOn: value.weekStartsOn === 0 || value.weekStartsOn === 6 ? value.weekStartsOn : 1,
+                    theme: value.theme === "light" ? "light" : "dark",
+                    displayVRCProfileThemes: value.displayVRCProfileThemes !== false,
+                    displayVRCProfileBackgrounds: value.displayVRCProfileBackgrounds === true,
+                    profileBackgroundOpacity: typeof value.profileBackgroundOpacity === "number" ? value.profileBackgroundOpacity : 0.5,
                 }),
             )
             .catch(() => undefined);
@@ -68,6 +80,10 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                 dtHour12: value && typeof value.dtHour12 === "boolean" ? value.dtHour12 : current.dtHour12,
                 dtIsoFormat: value && typeof value.dtIsoFormat === "boolean" ? value.dtIsoFormat : current.dtIsoFormat,
                 weekStartsOn: value && (value.weekStartsOn === 0 || value.weekStartsOn === 1 || value.weekStartsOn === 6) ? value.weekStartsOn : current.weekStartsOn,
+                theme: value?.theme === "dark" || value?.theme === "light" ? value.theme : current.theme,
+                displayVRCProfileThemes: value && typeof value.displayVRCProfileThemes === "boolean" ? value.displayVRCProfileThemes : current.displayVRCProfileThemes,
+                displayVRCProfileBackgrounds: value && typeof value.displayVRCProfileBackgrounds === "boolean" ? value.displayVRCProfileBackgrounds : current.displayVRCProfileBackgrounds,
+                profileBackgroundOpacity: value && typeof value.profileBackgroundOpacity === "number" ? value.profileBackgroundOpacity : current.profileBackgroundOpacity,
             }));
         }
         window.addEventListener("vrcx:settings", applySettings);
@@ -118,4 +134,14 @@ export function useMemoNicknamesVisible() {
 export function useDateTimeSettings() {
     const settings = useContext(AppearanceSettingsContext);
     return { hour12: settings.dtHour12, iso: settings.dtIsoFormat, weekStartsOn: settings.weekStartsOn };
+}
+
+export function usePublicProfileAppearance() {
+    const settings = useContext(AppearanceSettingsContext);
+    return {
+        showThemes: settings.displayVRCProfileThemes,
+        showBackgrounds: settings.displayVRCProfileBackgrounds,
+        backgroundOpacity: settings.profileBackgroundOpacity,
+        isDarkMode: settings.theme === "dark",
+    };
 }

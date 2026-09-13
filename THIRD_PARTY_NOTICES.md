@@ -2,7 +2,7 @@
 
 ## VRCX
 
-This project ports and adapts portions of VRCX, including visual design tokens, accessible status-mask assets, and the VRCX application icon.
+This project ports and adapts portions of VRCX, including visual design tokens, public-profile color/background logic and asset mappings, accessible status-mask assets, and the VRCX application icon.
 
 Source: `https://github.com/vrcx-team/VRCX`
 

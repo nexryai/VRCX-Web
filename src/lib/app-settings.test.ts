@@ -43,6 +43,9 @@ describe("application settings boundary", () => {
             dtHour12: false,
             dtIsoFormat: false,
             weekStartsOn: 1,
+            displayVRCProfileThemes: true,
+            displayVRCProfileBackgrounds: false,
+            profileBackgroundOpacity: 0.5,
         });
     });
 
@@ -93,6 +96,8 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ hideNicknames: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ dtHour12: true, dtIsoFormat: true, weekStartsOn: 6 }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ weekStartsOn: 2 }).success).toBe(false);
+        expect(appSettingsUpdateSchema.safeParse({ displayVRCProfileThemes: false, displayVRCProfileBackgrounds: true, profileBackgroundOpacity: 0.8 }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ profileBackgroundOpacity: 1.1 }).success).toBe(false);
     });
 
     it("accepts only the versioned settings backup format", () => {

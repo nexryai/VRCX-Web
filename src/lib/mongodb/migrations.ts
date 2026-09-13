@@ -650,6 +650,20 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ weekStartsOn: { $exists: false } }, { $set: { weekStartsOn: 1, updatedAt: new Date() } });
         },
     },
+    {
+        version: 64,
+        name: "add-public-profile-appearance",
+        async apply(c) {
+            const updatedAt = new Date();
+            await Promise.all([
+                c.appSettings.updateMany({ displayVRCProfileThemes: { $exists: false } }, { $set: { displayVRCProfileThemes: true, updatedAt } }),
+                c.appSettings.updateMany({ displayVRCProfileBackgrounds: { $exists: false } }, { $set: { displayVRCProfileBackgrounds: false, updatedAt } }),
+                c.appSettings.updateMany({ profileBackgroundOpacity: { $exists: false } }, { $set: { profileBackgroundOpacity: 0.5, updatedAt } }),
+                c.publicProfileSnapshots.createIndex({ ownerId: 1, userId: 1 }, { unique: true, name: "owner_user_unique" }),
+                c.publicProfileSnapshots.createIndex({ ownerId: 1, observedAt: -1 }, { name: "owner_observed" }),
+            ]);
+        },
+    },
 ];
 
 async function applyMigrations() {

@@ -47,6 +47,12 @@ describe("VRChat response decoding", () => {
         expect(isAllowedVrchatEndpoint("cosmetics/index/iconFrame/private")).toBe(false);
     });
 
+    it("allowlists only fixed public profile resources", () => {
+        expect(isAllowedVrchatEndpoint(`profile/usr_${uuid}`)).toBe(true);
+        expect(isAllowedVrchatEndpoint(`profile/usr_${uuid}/private`)).toBe(false);
+        expect(isAllowedVrchatEndpoint("profile/not-a-user")).toBe(false);
+    });
+
     it("allowlists only the fixed World Dialog publication child", () => {
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}/publish`)).toBe(true);
         expect(isAllowedVrchatEndpoint(`worlds/wrld_${uuid}/publish/other`)).toBe(false);

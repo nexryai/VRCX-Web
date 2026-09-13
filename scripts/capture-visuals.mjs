@@ -37,6 +37,7 @@ const captures = [
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
     { name: "user-dialog-notes-hidden", path: "/settings", readyText: "Current instance", clickText: "Interface", hideUserFields: true, favoriteKind: "friend" },
     { name: "user-dialog-instance-id", path: "/settings", readyText: "The Great Pug · #12345", clickText: "Interface", showInstanceId: true, favoriteKind: "friend" },
+    { name: "user-dialog-profile-appearance", path: "/settings", readyText: "Current instance", clickText: "Interface", profileAppearance: true, favoriteKind: "friend" },
     { name: "user-dialog-recent-action", path: "/search", readyText: "Add Friend", searchQuery: "sample creator", recentActionUser: true },
     { name: "previous-instances-user", path: "/social/friend-list", readyText: "Remote user", clickText: "Aoi Sample", previousInstances: "user" },
     { name: "user-favorite-dialog", path: "/social/friend-list", readyText: "VRChat Favorites", clickText: "Aoi Sample", favoriteKind: "friend", favoriteActionLabel: "Manage favorites for Aoi Sample" },
@@ -384,6 +385,33 @@ for (const width of widths) {
                 }
                 return route.fulfill({ response });
             });
+        }
+        if (capture.profileAppearance) {
+            let themesEnabled = true;
+            let backgroundsEnabled = false;
+            let backgroundOpacity = 0.5;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && typeof body.displayVRCProfileThemes === "boolean") themesEnabled = body.displayVRCProfileThemes;
+                    if (response.ok() && typeof body.displayVRCProfileBackgrounds === "boolean") backgroundsEnabled = body.displayVRCProfileBackgrounds;
+                    if (response.ok() && typeof body.profileBackgroundOpacity === "number") backgroundOpacity = body.profileBackgroundOpacity;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET") {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, displayVRCProfileThemes: themesEnabled, displayVRCProfileBackgrounds: backgroundsEnabled, profileBackgroundOpacity: backgroundOpacity }) });
+                }
+                return route.fulfill({ response });
+            });
+            await page.route("**/api/users/*/profile?*", (route) =>
+                route.fulfill({
+                    status: 200,
+                    contentType: "application/json",
+                    body: JSON.stringify({ profile: { id: "usr_00000000-0000-0000-0000-000000000002", backgroundType: "gradient", backgroundGradientTop: "312e81", backgroundGradientBottom: "0f766e", themeButtonColor: "0ea5e9", themeIconColor: "f59e0b", themeSubtextColor: "a7f3d0" } }),
+                }),
+            );
         }
         if (capture.memoNicknames) {
             let nicknamesHidden = false;
@@ -1301,6 +1329,38 @@ for (const width of widths) {
             await dialog.getByText("Current instance", { exact: true }).waitFor();
             if (await dialog.getByPlaceholder("Add a VRChat note").count()) throw new Error("User Dialog displayed VRChat Notes while disabled.");
             if (await dialog.getByPlaceholder("Add a private memo").count()) throw new Error("User Dialog displayed VRCX Memos while disabled.");
+        }
+        if (capture.profileAppearance) {
+            const themeToggle = page.getByRole("switch", { name: "VRChat Profile Themes", exact: true });
+            const backgroundToggle = page.getByRole("switch", { name: "VRChat Profile Backgrounds", exact: true });
+            await themeToggle.waitFor();
+            if ((await themeToggle.getAttribute("aria-checked")) !== "true" || (await backgroundToggle.getAttribute("aria-checked")) !== "false") throw new Error("Public profile appearance defaults did not match VRCX.");
+            const backgroundSaved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await backgroundToggle.click();
+            await backgroundSaved;
+            await backgroundToggle.waitFor({ state: "visible" });
+            const stateAfterClick = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (stateAfterClick.displayVRCProfileBackgrounds !== true) throw new Error(`VRChat Profile Backgrounds click saved the wrong state: ${JSON.stringify(stateAfterClick)}`);
+            await page.unroute("**/api/settings");
+            await page.evaluate(() => fetch("/api/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ profileBackgroundOpacity: 0.5 }) }));
+            await page.goto(`http://localhost:${port}/settings`, { waitUntil: "domcontentloaded" });
+            await page.getByText("Interface", { exact: true }).first().click();
+            const opacity = page.locator('input[aria-label="Profile Background Opacity"]');
+            await opacity.waitFor();
+            const opacitySaved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await opacity.fill("0.8");
+            await opacitySaved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.displayVRCProfileThemes !== true || savedSettings.displayVRCProfileBackgrounds !== true || savedSettings.profileBackgroundOpacity !== 0.8) throw new Error(`Public profile appearance did not persist in MongoDB: ${JSON.stringify(savedSettings)}`);
+            await page.goto(`http://localhost:${port}/social/friend-list`, { waitUntil: "domcontentloaded" });
+            await page.getByText("Aoi Sample", { exact: true }).first().click();
+            const dialog = page.getByRole("dialog", { name: "Aoi Sample", exact: true });
+            await dialog.getByText("Current instance", { exact: true }).waitFor();
+            if ((await dialog.getAttribute("data-public-profile-background")) !== "gradient") throw new Error("User Dialog did not apply the public profile gradient.");
+            const backgroundImage = await dialog.evaluate((element) => getComputedStyle(element).backgroundImage);
+            if (!backgroundImage.includes("linear-gradient")) throw new Error(`User Dialog public profile background was missing: ${backgroundImage}`);
+            const themedStatus = dialog.locator("p").filter({ hasText: "Building a new world" }).first();
+            if ((await themedStatus.evaluate((element) => getComputedStyle(element).color)) === "rgb(161, 161, 170)") throw new Error("User Dialog did not apply the VRChat profile theme color.");
         }
         if (capture.memoNicknames) {
             const nickname = page.getByText("Aoi Sample (Met through the browser-port test crew.)", { exact: true });

@@ -25,6 +25,7 @@ import type {
     VrchatGroupPost,
     VrchatNotification,
     VrchatPlayerModeration,
+    VrchatPublicProfile,
     VrchatUser,
     VrchatWorld,
 } from "@/lib/vrchat/types";
@@ -114,6 +115,9 @@ export type AppSettingsDocument = {
     dtHour12: boolean;
     dtIsoFormat: boolean;
     weekStartsOn: 0 | 1 | 6;
+    displayVRCProfileThemes: boolean;
+    displayVRCProfileBackgrounds: boolean;
+    profileBackgroundOpacity: number;
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];
@@ -263,6 +267,15 @@ export type CosmeticIconFrameSnapshotDocument = {
     _id: string;
     ownerId: string;
     frames: VrchatCosmeticIconFrame[];
+    observedAt: Date;
+    updatedAt: Date;
+};
+
+export type PublicProfileSnapshotDocument = {
+    _id: string;
+    ownerId: string;
+    userId: string;
+    profile: VrchatPublicProfile;
     observedAt: Date;
     updatedAt: Date;
 };
@@ -582,6 +595,7 @@ export type Collections = {
     avatarGallerySnapshots: Collection<AvatarGallerySnapshotDocument>;
     avatarStyleSnapshots: Collection<AvatarStyleSnapshotDocument>;
     cosmeticIconFrameSnapshots: Collection<CosmeticIconFrameSnapshotDocument>;
+    publicProfileSnapshots: Collection<PublicProfileSnapshotDocument>;
     groupMembers: Collection<GroupMemberDocument>;
     groupBanSnapshots: Collection<GroupBanSnapshotDocument>;
     groupInviteSnapshots: Collection<GroupInviteSnapshotDocument>;
@@ -625,6 +639,7 @@ export function collections(db: Db): Collections {
         avatarGallerySnapshots: db.collection<AvatarGallerySnapshotDocument>("avatar_gallery_snapshots"),
         avatarStyleSnapshots: db.collection<AvatarStyleSnapshotDocument>("avatar_style_snapshots"),
         cosmeticIconFrameSnapshots: db.collection<CosmeticIconFrameSnapshotDocument>("cosmetic_icon_frame_snapshots"),
+        publicProfileSnapshots: db.collection<PublicProfileSnapshotDocument>("public_profile_snapshots"),
         groupMembers: db.collection<GroupMemberDocument>("group_members"),
         groupBanSnapshots: db.collection<GroupBanSnapshotDocument>("group_ban_snapshots"),
         groupInviteSnapshots: db.collection<GroupInviteSnapshotDocument>("group_invite_snapshots"),

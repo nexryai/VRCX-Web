@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Check, Loader2, Star, X } from "lucide-react";
 
@@ -50,7 +50,7 @@ function matchesKind(kind: FavoriteKind, type: string) {
     return kind === "world" ? type === "world" || type === "vrcPlusWorld" : type === kind;
 }
 
-export function FavoriteAction({ kind, objectId, label }: { kind: FavoriteKind; objectId: string; label: string }) {
+export function FavoriteAction({ kind, objectId, label, triggerStyle }: { kind: FavoriteKind; objectId: string; label: string; triggerStyle?: CSSProperties }) {
     const closeButtonRef = useRef<HTMLButtonElement>(null);
     const [records, setRecords] = useState<VrchatFavorite[]>([]);
     const [remoteGroups, setRemoteGroups] = useState<VrchatFavoriteGroup[]>([]);
@@ -175,6 +175,7 @@ export function FavoriteAction({ kind, objectId, label }: { kind: FavoriteKind; 
                 type="button"
                 onClick={() => setOpen(true)}
                 disabled={loading}
+                style={triggerStyle}
                 className={`inline-flex size-9 items-center justify-center rounded-full border disabled:opacity-40 ${hasFavorite ? "border-primary bg-primary/15 text-primary" : "border-input hover:bg-muted"}`}
                 aria-label={`Manage favorites for ${label}`}
             >
