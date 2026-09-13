@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 
 import { ArrowLeft, ArrowRight, Loader2, Trash2, User, Users } from "lucide-react";
 
+import { useProfileIconsAsAvatar } from "@/components/appearance-settings-provider";
 import { trustLevelFromTags } from "@/lib/activity-log";
 import { friendImage } from "@/lib/friends";
 import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
@@ -252,10 +253,11 @@ export function SearchView() {
 }
 
 function UserResults({ users, openUser }: { users: VrchatUser[]; openUser: (id: string) => void }) {
+    const displayProfileIcon = useProfileIconsAsAvatar();
     return (
         <div>
             {users.map((user) => {
-                const image = friendImage(user);
+                const image = friendImage(user, displayProfileIcon);
                 return (
                     <button key={user.id} type="button" onClick={() => openUser(user.id)} className="flex w-full min-w-0 cursor-pointer items-center gap-3 rounded-none px-3 py-2 text-left hover:bg-muted">
                         <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">

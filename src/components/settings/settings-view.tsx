@@ -25,6 +25,7 @@ type SettingsState = Required<
         | "isDataTableStriped"
         | "accessibleStatusIndicators"
         | "hideUnfriends"
+        | "displayVRCPlusIconsAsAvatar"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -62,6 +63,7 @@ const defaults: SettingsState = {
     isDataTableStriped: false,
     accessibleStatusIndicators: false,
     hideUnfriends: false,
+    displayVRCPlusIconsAsAvatar: true,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -616,6 +618,9 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
                         ]}
                         change={(theme) => void change({ theme })}
                     />
+                </SettingsRow>
+                <SettingsRow label="Profile Icons" description="Use profile icons when available.">
+                    <Switch checked={settings.displayVRCPlusIconsAsAvatar} label="Profile Icons" change={(displayVRCPlusIconsAsAvatar) => void change({ displayVRCPlusIconsAsAvatar })} />
                 </SettingsRow>
                 <SettingsRow label="Show Age-Gated Instances" description="Show age-restricted instances. When disabled, these instances are hidden and shown as restricted.">
                     <Switch checked={settings.isAgeGatedInstancesVisible} label="Show Age-Gated Instances" change={(isAgeGatedInstancesVisible) => void change({ isAgeGatedInstancesVisible })} />

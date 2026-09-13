@@ -1,7 +1,8 @@
 import type { VrchatUser } from "./vrchat/types";
 
-export function friendImage(friend: VrchatUser) {
-    return friend.userIcon || friend.profilePicOverride || friend.currentAvatarThumbnailImageUrl || friend.currentAvatarImageUrl || "";
+/** Closely translates VRCX shared/utils/user.js userImage priority. */
+export function friendImage(friend: VrchatUser, displayProfileIcon: boolean) {
+    return (displayProfileIcon ? friend.userIcon : undefined) || friend.profilePicOverride || friend.currentAvatarThumbnailImageUrl || friend.currentAvatarImageUrl || "";
 }
 
 export function locationLabel(friend: VrchatUser, showAgeGatedInstances = false, showInstanceId = false) {

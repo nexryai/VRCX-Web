@@ -30,7 +30,7 @@ describe("MongoDB application repositories", () => {
         const database = await getMongoDatabase();
         const databaseCollections = collections(database);
         const migrations = await databaseCollections.schemaMigrations.find().sort({ _id: 1 }).toArray();
-        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59]);
+        expect(migrations.map((migration) => migration._id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60]);
         expect(await databaseCollections.appSettings.findOne({ _id: "singleton" })).toMatchObject({
             notificationFilters: [],
             notificationTablePageSize: 20,
@@ -71,6 +71,7 @@ describe("MongoDB application repositories", () => {
             isDataTableStriped: false,
             accessibleStatusIndicators: false,
             hideUnfriends: false,
+            displayVRCPlusIconsAsAvatar: true,
         });
         const sessionIndexes = await database.collection("game_sessions").indexExists(["owner_started", "one_open_session_per_owner", "owner_world_started", "owner_group_started"]);
         expect(sessionIndexes).toBe(true);

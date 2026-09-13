@@ -12,6 +12,7 @@ await mkdir(output, { recursive: true });
 const captures = [
     { name: "friends-locations", path: "/friends-locations", readyText: "Aoi Sample" },
     { name: "friends-locations-accessible-status", path: "/settings", readyText: "Aoi Sample", clickText: "Interface", accessibleStatuses: true },
+    { name: "friends-locations-profile-icons-disabled", path: "/settings", readyText: "Aoi Sample", clickText: "Interface", profileIcons: true },
     { name: "feed", path: "/feed", readyText: "Own status is now recorded" },
     { name: "feed-striped", path: "/settings", readyText: "Own status is now recorded", clickText: "Interface", stripedTable: true },
     { name: "sidebar-instance-groups", path: "/feed", readyText: "Same Instance ― 1", desktopOnly: true },
@@ -324,6 +325,42 @@ for (const width of widths) {
                     return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, accessibleStatusIndicators: false }) });
                 }
                 return route.fulfill({ response });
+            });
+        }
+        if (capture.profileIcons) {
+            let profileIconsEnabled = true;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && body.displayVRCPlusIconsAsAvatar === false) profileIconsEnabled = false;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && profileIconsEnabled) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, displayVRCPlusIconsAsAvatar: true }) });
+                }
+                return route.fulfill({ response });
+            });
+            await page.route("**/api/friends?*", async (route) => {
+                const response = await route.fetch();
+                const payload = await response.json();
+                return route.fulfill({
+                    response,
+                    contentType: "application/json",
+                    body: JSON.stringify({
+                        ...payload,
+                        friends: (payload.friends || []).map((friend) => (friend.displayName === "Aoi Sample" ? { ...friend, userIcon: "https://assets.vrchat.com/visual-fixture/profile-icon.svg", profilePicOverride: "https://assets.vrchat.com/visual-fixture/profile-avatar.svg" } : friend)),
+                    }),
+                });
+            });
+            await page.route("https://assets.vrchat.com/visual-fixture/profile-*.svg", (route) => {
+                const icon = route.request().url().endsWith("profile-icon.svg");
+                return route.fulfill({
+                    status: 200,
+                    contentType: "image/svg+xml",
+                    body: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" fill="${icon ? "#e11d48" : "#0891b2"}"/><path d="M24 104c4-25 19-38 40-38s36 13 40 38M64 58a20 20 0 1 0 0-40 20 20 0 0 0 0 40" fill="none" stroke="#fff" stroke-width="10"/></svg>`,
+                });
             });
         }
         if (capture.statusBar) {
@@ -1155,6 +1192,20 @@ for (const width of widths) {
             await page.getByText("Aoi Sample", { exact: true }).first().waitFor();
             const masks = await page.locator(".vrcx-status-indicator").evaluateAll((indicators) => Object.fromEntries(indicators.map((indicator) => [indicator.getAttribute("data-user-status"), getComputedStyle(indicator).maskImage])));
             if (!masks.joinme?.includes("joinme.svg") || !masks.askme?.includes("askme.svg") || masks.joinme === masks.askme) throw new Error(`Accessible status masks were not distinct: ${JSON.stringify(masks)}`);
+        }
+        if (capture.profileIcons) {
+            const toggle = page.getByRole("switch", { name: "Profile Icons", exact: true });
+            await toggle.waitFor();
+            if ((await toggle.getAttribute("aria-checked")) !== "true") throw new Error("The Profile Icons fixture did not restore VRCX's enabled default.");
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await toggle.click();
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.displayVRCPlusIconsAsAvatar !== false) throw new Error("Profile Icons did not persist in MongoDB.");
+            await page.goto(`http://localhost:${port}/friends-locations`, { waitUntil: "domcontentloaded" });
+            await page.getByText("Aoi Sample", { exact: true }).first().waitFor();
+            await page.locator('img[src="https://assets.vrchat.com/visual-fixture/profile-avatar.svg"]').first().waitFor();
+            if (await page.locator('img[src="https://assets.vrchat.com/visual-fixture/profile-icon.svg"]').count()) throw new Error("A profile icon remained visible after Profile Icons was disabled.");
         }
         if (capture.sidebarSettings) {
             const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });

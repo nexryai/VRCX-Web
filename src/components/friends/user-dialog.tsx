@@ -331,7 +331,9 @@ type SummaryProps = {
 };
 
 function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removing, copyUserId, setConfirming, unfriend, sendFriendRequest, cancelFriendRequest, recentFriendRequest }: SummaryProps) {
-    const image = friendImage(user);
+    // VRCX always uses userIcon for User Dialog's profile icon, independently
+    // from the list-avatar Profile Icons preference.
+    const image = friendImage(user, true);
     const bannerColor = user.bannerColor && /^[0-9a-f]{6}$/i.test(user.bannerColor) ? `#${user.bannerColor}` : undefined;
     return (
         <div className="overflow-hidden rounded-xl bg-card">

@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-type AppearanceSettings = { isAgeGatedInstancesVisible: boolean; showInstanceIdInLocation: boolean; isDataTableStriped: boolean; accessibleStatusIndicators: boolean };
+type AppearanceSettings = { isAgeGatedInstancesVisible: boolean; showInstanceIdInLocation: boolean; isDataTableStriped: boolean; accessibleStatusIndicators: boolean; displayVRCPlusIconsAsAvatar: boolean };
 
-const defaultAppearanceSettings: AppearanceSettings = { isAgeGatedInstancesVisible: false, showInstanceIdInLocation: false, isDataTableStriped: false, accessibleStatusIndicators: false };
+const defaultAppearanceSettings: AppearanceSettings = { isAgeGatedInstancesVisible: false, showInstanceIdInLocation: false, isDataTableStriped: false, accessibleStatusIndicators: false, displayVRCPlusIconsAsAvatar: true };
 const AppearanceSettingsContext = createContext<AppearanceSettings>(defaultAppearanceSettings);
 
 export function AppearanceSettingsProvider({ children }: { children: React.ReactNode }) {
@@ -14,7 +14,15 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
         const controller = new AbortController();
         void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
             .then((response) => response.json() as Promise<Partial<AppearanceSettings>>)
-            .then((value) => setSettings({ isAgeGatedInstancesVisible: value.isAgeGatedInstancesVisible === true, showInstanceIdInLocation: value.showInstanceIdInLocation === true, isDataTableStriped: value.isDataTableStriped === true, accessibleStatusIndicators: value.accessibleStatusIndicators === true }))
+            .then((value) =>
+                setSettings({
+                    isAgeGatedInstancesVisible: value.isAgeGatedInstancesVisible === true,
+                    showInstanceIdInLocation: value.showInstanceIdInLocation === true,
+                    isDataTableStriped: value.isDataTableStriped === true,
+                    accessibleStatusIndicators: value.accessibleStatusIndicators === true,
+                    displayVRCPlusIconsAsAvatar: value.displayVRCPlusIconsAsAvatar !== false,
+                }),
+            )
             .catch(() => undefined);
         function applySettings(event: Event) {
             const value = (event as CustomEvent<Partial<AppearanceSettings>>).detail;
@@ -23,6 +31,7 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                 showInstanceIdInLocation: value && typeof value.showInstanceIdInLocation === "boolean" ? value.showInstanceIdInLocation : current.showInstanceIdInLocation,
                 isDataTableStriped: value && typeof value.isDataTableStriped === "boolean" ? value.isDataTableStriped : current.isDataTableStriped,
                 accessibleStatusIndicators: value && typeof value.accessibleStatusIndicators === "boolean" ? value.accessibleStatusIndicators : current.accessibleStatusIndicators,
+                displayVRCPlusIconsAsAvatar: value && typeof value.displayVRCPlusIconsAsAvatar === "boolean" ? value.displayVRCPlusIconsAsAvatar : current.displayVRCPlusIconsAsAvatar,
             }));
         }
         window.addEventListener("vrcx:settings", applySettings);
@@ -55,4 +64,8 @@ export function useAgeGatedInstancesVisible() {
 
 export function useShowInstanceIdInLocation() {
     return useContext(AppearanceSettingsContext).showInstanceIdInLocation;
+}
+
+export function useProfileIconsAsAvatar() {
+    return useContext(AppearanceSettingsContext).displayVRCPlusIconsAsAvatar;
 }

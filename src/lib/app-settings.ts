@@ -118,6 +118,7 @@ export const appSettingsUpdateSchema = z
         isDataTableStriped: z.boolean().optional(),
         accessibleStatusIndicators: z.boolean().optional(),
         hideUnfriends: z.boolean().optional(),
+        displayVRCPlusIconsAsAvatar: z.boolean().optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -191,5 +192,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         isDataTableStriped: settings?.isDataTableStriped ?? false,
         accessibleStatusIndicators: settings?.accessibleStatusIndicators ?? false,
         hideUnfriends: settings?.hideUnfriends ?? false,
+        displayVRCPlusIconsAsAvatar: settings?.displayVRCPlusIconsAsAvatar ?? true,
     };
 }

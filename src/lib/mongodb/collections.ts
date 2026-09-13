@@ -107,6 +107,7 @@ export type AppSettingsDocument = {
     isDataTableStriped: boolean;
     accessibleStatusIndicators: boolean;
     hideUnfriends: boolean;
+    displayVRCPlusIconsAsAvatar: boolean;
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];

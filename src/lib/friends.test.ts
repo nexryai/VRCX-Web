@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupFriendsByLocation, locationLabel, statusIndicatorKind } from "./friends";
+import { friendImage, groupFriendsByLocation, locationLabel, statusIndicatorKind } from "./friends";
 import type { VrchatUser } from "./vrchat/types";
 
 const makeFriend = (id: string, displayName: string, location: string, worldName?: string): VrchatUser => ({
@@ -11,6 +11,12 @@ const makeFriend = (id: string, displayName: string, location: string, worldName
 });
 
 describe("friend location helpers", () => {
+    it("uses a profile icon only when the VRCX preference is enabled", () => {
+        const user = { ...makeFriend("usr_1", "A", "offline"), userIcon: "icon", profilePicOverride: "profile", currentAvatarThumbnailImageUrl: "avatar" };
+        expect(friendImage(user, true)).toBe("icon");
+        expect(friendImage(user, false)).toBe("profile");
+    });
+
     it("prefers the returned world name over a raw location id", () => {
         expect(locationLabel(makeFriend("usr_1", "A", "wrld_1:123", "Example World"))).toBe("Example World");
     });

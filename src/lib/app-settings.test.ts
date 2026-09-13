@@ -36,6 +36,7 @@ describe("application settings boundary", () => {
             isDataTableStriped: false,
             accessibleStatusIndicators: false,
             hideUnfriends: false,
+            displayVRCPlusIconsAsAvatar: true,
         });
     });
 
@@ -81,6 +82,7 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ isDataTableStriped: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ accessibleStatusIndicators: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ hideUnfriends: true }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ displayVRCPlusIconsAsAvatar: false }).success).toBe(true);
     });
 
     it("accepts only the versioned settings backup format", () => {

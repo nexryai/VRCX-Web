@@ -619,6 +619,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ hideUnfriends: { $exists: false } }, { $set: { hideUnfriends: false, updatedAt: new Date() } });
         },
     },
+    {
+        version: 60,
+        name: "add-profile-icons-as-avatar",
+        async apply(c) {
+            await c.appSettings.updateMany({ displayVRCPlusIconsAsAvatar: { $exists: false } }, { $set: { displayVRCPlusIconsAsAvatar: true, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

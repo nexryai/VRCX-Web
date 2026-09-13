@@ -1,12 +1,13 @@
 import { User } from "lucide-react";
 
+import { useProfileIconsAsAvatar } from "@/components/appearance-settings-provider";
 import { IconFrame } from "@/components/icon-frame";
 import { VrchatImage } from "@/components/vrchat-image";
 import { friendImage, statusColor, statusIndicatorKind } from "@/lib/friends";
 import type { VrchatCosmeticIconFrame, VrchatUser } from "@/lib/vrchat/types";
 
 export function FriendAvatar({ friend, iconFrame, size = "md", showStatus = true }: { friend: VrchatUser; iconFrame?: VrchatCosmeticIconFrame; size?: "sm" | "md"; showStatus?: boolean }) {
-    const image = friendImage(friend);
+    const image = friendImage(friend, useProfileIconsAsAvatar());
     const sizeClass = size === "sm" ? "size-8" : "size-9";
 
     return (
