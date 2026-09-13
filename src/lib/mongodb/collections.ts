@@ -108,6 +108,8 @@ export type AppSettingsDocument = {
     accessibleStatusIndicators: boolean;
     hideUnfriends: boolean;
     displayVRCPlusIconsAsAvatar: boolean;
+    hideUserNotes: boolean;
+    hideUserMemos: boolean;
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];

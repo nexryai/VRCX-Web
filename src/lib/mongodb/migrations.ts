@@ -626,6 +626,14 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ displayVRCPlusIconsAsAvatar: { $exists: false } }, { $set: { displayVRCPlusIconsAsAvatar: true, updatedAt: new Date() } });
         },
     },
+    {
+        version: 61,
+        name: "add-user-note-visibility",
+        async apply(c) {
+            await c.appSettings.updateMany({ hideUserNotes: { $exists: false } }, { $set: { hideUserNotes: false, updatedAt: new Date() } });
+            await c.appSettings.updateMany({ hideUserMemos: { $exists: false } }, { $set: { hideUserMemos: false, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

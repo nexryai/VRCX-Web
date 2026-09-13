@@ -119,6 +119,8 @@ export const appSettingsUpdateSchema = z
         accessibleStatusIndicators: z.boolean().optional(),
         hideUnfriends: z.boolean().optional(),
         displayVRCPlusIconsAsAvatar: z.boolean().optional(),
+        hideUserNotes: z.boolean().optional(),
+        hideUserMemos: z.boolean().optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -193,5 +195,7 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         accessibleStatusIndicators: settings?.accessibleStatusIndicators ?? false,
         hideUnfriends: settings?.hideUnfriends ?? false,
         displayVRCPlusIconsAsAvatar: settings?.displayVRCPlusIconsAsAvatar ?? true,
+        hideUserNotes: settings?.hideUserNotes ?? false,
+        hideUserMemos: settings?.hideUserMemos ?? false,
     };
 }

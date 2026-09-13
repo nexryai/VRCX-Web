@@ -33,6 +33,7 @@ const captures = [
     { name: "friend-list-note-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Note", query: "world-building meetup" } },
     { name: "friend-list-memo-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Memo", query: "browser-port test crew" } },
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
+    { name: "user-dialog-notes-hidden", path: "/settings", readyText: "Current instance", clickText: "Interface", hideUserFields: true, favoriteKind: "friend" },
     { name: "user-dialog-instance-id", path: "/settings", readyText: "The Great Pug · #12345", clickText: "Interface", showInstanceId: true, favoriteKind: "friend" },
     { name: "user-dialog-recent-action", path: "/search", readyText: "Add Friend", searchQuery: "sample creator", recentActionUser: true },
     { name: "previous-instances-user", path: "/social/friend-list", readyText: "Remote user", clickText: "Aoi Sample", previousInstances: "user" },
@@ -361,6 +362,24 @@ for (const width of widths) {
                     contentType: "image/svg+xml",
                     body: `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" fill="${icon ? "#e11d48" : "#0891b2"}"/><path d="M24 104c4-25 19-38 40-38s36 13 40 38M64 58a20 20 0 1 0 0-40 20 20 0 0 0 0 40" fill="none" stroke="#fff" stroke-width="10"/></svg>`,
                 });
+            });
+        }
+        if (capture.hideUserFields) {
+            let notesHidden = false;
+            let memosHidden = false;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && typeof body.hideUserNotes === "boolean") notesHidden = body.hideUserNotes;
+                    if (response.ok() && typeof body.hideUserMemos === "boolean") memosHidden = body.hideUserMemos;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && !(notesHidden && memosHidden)) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, hideUserNotes: false, hideUserMemos: false }) });
+                }
+                return route.fulfill({ response });
             });
         }
         if (capture.statusBar) {
@@ -1206,6 +1225,29 @@ for (const width of widths) {
             await page.getByText("Aoi Sample", { exact: true }).first().waitFor();
             await page.locator('img[src="https://assets.vrchat.com/visual-fixture/profile-avatar.svg"]').first().waitFor();
             if (await page.locator('img[src="https://assets.vrchat.com/visual-fixture/profile-icon.svg"]').count()) throw new Error("A profile icon remained visible after Profile Icons was disabled.");
+        }
+        if (capture.hideUserFields) {
+            for (const label of ["VRChat Notes", "VRCX Memos"]) {
+                const toggle = page.getByRole("switch", { name: label, exact: true });
+                await toggle.waitFor();
+                if ((await toggle.getAttribute("aria-checked")) !== "true") throw new Error(`${label} did not restore VRCX's visible default.`);
+                const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+                await toggle.click();
+                await saved;
+            }
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.hideUserNotes !== true || savedSettings.hideUserMemos !== true) throw new Error(`User note visibility did not persist in MongoDB: ${JSON.stringify({ hideUserNotes: savedSettings.hideUserNotes, hideUserMemos: savedSettings.hideUserMemos })}`);
+            const retained = await page.evaluate(async () => {
+                const [user, memo] = await Promise.all([fetch("/api/users/usr_00000000-0000-0000-0000-000000000002", { cache: "no-store" }).then((response) => response.json()), fetch("/api/memos/user/usr_00000000-0000-0000-0000-000000000002", { cache: "no-store" }).then((response) => response.json())]);
+                return { note: user.user?.note, memo: memo.memo };
+            });
+            if (!retained.note || !retained.memo) throw new Error(`Hiding user fields removed stored data: ${JSON.stringify(retained)}`);
+            await page.goto(`http://localhost:${port}/social/friend-list`, { waitUntil: "domcontentloaded" });
+            await page.getByText("Aoi Sample", { exact: true }).first().click();
+            const dialog = page.getByRole("dialog", { name: "Aoi Sample", exact: true });
+            await dialog.getByText("Current instance", { exact: true }).waitFor();
+            if (await dialog.getByPlaceholder("Add a VRChat note").count()) throw new Error("User Dialog displayed VRChat Notes while disabled.");
+            if (await dialog.getByPlaceholder("Add a private memo").count()) throw new Error("User Dialog displayed VRCX Memos while disabled.");
         }
         if (capture.sidebarSettings) {
             const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });

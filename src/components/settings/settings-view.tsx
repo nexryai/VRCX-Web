@@ -26,6 +26,8 @@ type SettingsState = Required<
         | "accessibleStatusIndicators"
         | "hideUnfriends"
         | "displayVRCPlusIconsAsAvatar"
+        | "hideUserNotes"
+        | "hideUserMemos"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -64,6 +66,8 @@ const defaults: SettingsState = {
     accessibleStatusIndicators: false,
     hideUnfriends: false,
     displayVRCPlusIconsAsAvatar: true,
+    hideUserNotes: false,
+    hideUserMemos: false,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -624,6 +628,14 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
                 </SettingsRow>
                 <SettingsRow label="Show Age-Gated Instances" description="Show age-restricted instances. When disabled, these instances are hidden and shown as restricted.">
                     <Switch checked={settings.isAgeGatedInstancesVisible} label="Show Age-Gated Instances" change={(isAgeGatedInstancesVisible) => void change({ isAgeGatedInstancesVisible })} />
+                </SettingsRow>
+            </SettingsGroup>
+            <SettingsGroup title="User Dialog">
+                <SettingsRow label="VRChat Notes" description="Shows notes stored in VRChat">
+                    <Switch checked={!settings.hideUserNotes} label="VRChat Notes" change={(visible) => void change({ hideUserNotes: !visible })} />
+                </SettingsRow>
+                <SettingsRow label="VRCX Memos" description="Shows notes saved locally in VRCX">
+                    <Switch checked={!settings.hideUserMemos} label="VRCX Memos" change={(visible) => void change({ hideUserMemos: !visible })} />
                 </SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Display">

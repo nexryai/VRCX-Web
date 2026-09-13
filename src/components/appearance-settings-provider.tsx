@@ -2,9 +2,25 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-type AppearanceSettings = { isAgeGatedInstancesVisible: boolean; showInstanceIdInLocation: boolean; isDataTableStriped: boolean; accessibleStatusIndicators: boolean; displayVRCPlusIconsAsAvatar: boolean };
+type AppearanceSettings = {
+    isAgeGatedInstancesVisible: boolean;
+    showInstanceIdInLocation: boolean;
+    isDataTableStriped: boolean;
+    accessibleStatusIndicators: boolean;
+    displayVRCPlusIconsAsAvatar: boolean;
+    hideUserNotes: boolean;
+    hideUserMemos: boolean;
+};
 
-const defaultAppearanceSettings: AppearanceSettings = { isAgeGatedInstancesVisible: false, showInstanceIdInLocation: false, isDataTableStriped: false, accessibleStatusIndicators: false, displayVRCPlusIconsAsAvatar: true };
+const defaultAppearanceSettings: AppearanceSettings = {
+    isAgeGatedInstancesVisible: false,
+    showInstanceIdInLocation: false,
+    isDataTableStriped: false,
+    accessibleStatusIndicators: false,
+    displayVRCPlusIconsAsAvatar: true,
+    hideUserNotes: false,
+    hideUserMemos: false,
+};
 const AppearanceSettingsContext = createContext<AppearanceSettings>(defaultAppearanceSettings);
 
 export function AppearanceSettingsProvider({ children }: { children: React.ReactNode }) {
@@ -21,6 +37,8 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                     isDataTableStriped: value.isDataTableStriped === true,
                     accessibleStatusIndicators: value.accessibleStatusIndicators === true,
                     displayVRCPlusIconsAsAvatar: value.displayVRCPlusIconsAsAvatar !== false,
+                    hideUserNotes: value.hideUserNotes === true,
+                    hideUserMemos: value.hideUserMemos === true,
                 }),
             )
             .catch(() => undefined);
@@ -32,6 +50,8 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                 isDataTableStriped: value && typeof value.isDataTableStriped === "boolean" ? value.isDataTableStriped : current.isDataTableStriped,
                 accessibleStatusIndicators: value && typeof value.accessibleStatusIndicators === "boolean" ? value.accessibleStatusIndicators : current.accessibleStatusIndicators,
                 displayVRCPlusIconsAsAvatar: value && typeof value.displayVRCPlusIconsAsAvatar === "boolean" ? value.displayVRCPlusIconsAsAvatar : current.displayVRCPlusIconsAsAvatar,
+                hideUserNotes: value && typeof value.hideUserNotes === "boolean" ? value.hideUserNotes : current.hideUserNotes,
+                hideUserMemos: value && typeof value.hideUserMemos === "boolean" ? value.hideUserMemos : current.hideUserMemos,
             }));
         }
         window.addEventListener("vrcx:settings", applySettings);
@@ -68,4 +88,9 @@ export function useShowInstanceIdInLocation() {
 
 export function useProfileIconsAsAvatar() {
     return useContext(AppearanceSettingsContext).displayVRCPlusIconsAsAvatar;
+}
+
+export function useUserNoteVisibility() {
+    const settings = useContext(AppearanceSettingsContext);
+    return { showUserNotes: !settings.hideUserNotes, showUserMemos: !settings.hideUserMemos };
 }

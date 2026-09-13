@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarDays, Clipboard, Clock, ExternalLink, History, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
-import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation, useUserNoteVisibility } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
@@ -32,6 +32,7 @@ function userLanguages(user: VrchatUser) {
 }
 
 export function UserDialog({ userId, onClose }: { userId: string; onClose: () => void }) {
+    const { showUserNotes, showUserMemos } = useUserNoteVisibility();
     const currentUser = useCurrentUser();
     const { friends, openUser, openWorld, openGroup, removeFriend, patchFriendMetadata, refresh: refreshFriends } = useFriends();
     const [user, setUser] = useState<VrchatUser | null>(null);
@@ -291,6 +292,8 @@ export function UserDialog({ userId, onClose }: { userId: string; onClose: () =>
                                 {!tabLoading && activeTab === "Info" ? (
                                     <InfoTab
                                         user={user}
+                                        showUserNotes={showUserNotes}
+                                        showUserMemos={showUserMemos}
                                         onNoteChange={(note) => {
                                             setUser((current) => (current ? { ...current, note } : current));
                                             patchFriendMetadata(user.id, { note });
@@ -520,15 +523,31 @@ function UserNoteField({ user, onNoteChange }: { user: VrchatUser; onNoteChange:
     );
 }
 
-function InfoTab({ user, onNoteChange, onMemoChange, onOpenPreviousInstances, previousInstancesButton }: { user: VrchatUser; onNoteChange: (note: string) => void; onMemoChange: (memo: string) => void; onOpenPreviousInstances: () => void; previousInstancesButton: React.RefObject<HTMLButtonElement | null> }) {
+function InfoTab({
+    user,
+    showUserNotes,
+    showUserMemos,
+    onNoteChange,
+    onMemoChange,
+    onOpenPreviousInstances,
+    previousInstancesButton,
+}: {
+    user: VrchatUser;
+    showUserNotes: boolean;
+    showUserMemos: boolean;
+    onNoteChange: (note: string) => void;
+    onMemoChange: (memo: string) => void;
+    onOpenPreviousInstances: () => void;
+    previousInstancesButton: React.RefObject<HTMLButtonElement | null>;
+}) {
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
     const showInstanceId = useShowInstanceIdInLocation();
     const locationRestricted = !showAgeGatedInstances && Boolean(user.location?.includes("~ageGate") || user.travelingToLocation?.includes("~ageGate"));
     return (
         <div className="space-y-2">
             <section className="rounded-xl bg-background p-1.5">
-                <UserNoteField key={user.id} user={user} onNoteChange={onNoteChange} />
-                <MemoField entityType="user" entityId={user.id} onMemoChange={onMemoChange} />
+                {showUserNotes ? <UserNoteField key={user.id} user={user} onNoteChange={onNoteChange} /> : null}
+                {showUserMemos ? <MemoField entityType="user" entityId={user.id} onMemoChange={onMemoChange} /> : null}
             </section>
             <section className="rounded-xl bg-background p-3">
                 <SectionTitle>Current instance</SectionTitle>

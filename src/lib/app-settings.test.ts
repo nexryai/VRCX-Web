@@ -37,6 +37,8 @@ describe("application settings boundary", () => {
             accessibleStatusIndicators: false,
             hideUnfriends: false,
             displayVRCPlusIconsAsAvatar: true,
+            hideUserNotes: false,
+            hideUserMemos: false,
         });
     });
 
@@ -83,6 +85,7 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ accessibleStatusIndicators: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ hideUnfriends: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ displayVRCPlusIconsAsAvatar: false }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ hideUserNotes: true, hideUserMemos: true }).success).toBe(true);
     });
 
     it("accepts only the versioned settings backup format", () => {
