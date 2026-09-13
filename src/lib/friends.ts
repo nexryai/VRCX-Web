@@ -5,6 +5,12 @@ export function friendImage(friend: VrchatUser, displayProfileIcon: boolean) {
     return (displayProfileIcon ? friend.userIcon : undefined) || friend.profilePicOverride || friend.currentAvatarThumbnailImageUrl || friend.currentAvatarImageUrl || "";
 }
 
+/** VRCX uses the first memo line as the optional sidebar nickname. */
+export function friendDisplayName(friend: Pick<VrchatUser, "displayName"> & { $memo?: string }, showMemoNickname: boolean) {
+    const nickname = friend.$memo?.split(/\r?\n/, 1)[0]?.trim();
+    return showMemoNickname && nickname ? `${friend.displayName} (${nickname})` : friend.displayName;
+}
+
 export function locationLabel(friend: VrchatUser, showAgeGatedInstances = false, showInstanceId = false) {
     if (!showAgeGatedInstances && (friend.location?.includes("~ageGate") || friend.travelingToLocation?.includes("~ageGate"))) return "Restricted";
     const location = friend.location === "traveling" ? friend.travelingToLocation : friend.location;

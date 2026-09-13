@@ -634,6 +634,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ hideUserMemos: { $exists: false } }, { $set: { hideUserMemos: false, updatedAt: new Date() } });
         },
     },
+    {
+        version: 62,
+        name: "add-friend-memo-nicknames",
+        async apply(c) {
+            await c.appSettings.updateMany({ hideNicknames: { $exists: false } }, { $set: { hideNicknames: false, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

@@ -19,6 +19,7 @@ const captures = [
     { name: "sidebar-settings", path: "/feed", readyText: "Sort by Last Active", sidebarSettings: true, desktopOnly: true },
     { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
     { name: "sidebar-cosmetics", path: "/feed", readyText: "Aoi Sample", sidebarCosmetics: true, desktopOnly: true },
+    { name: "sidebar-memo-nicknames-disabled", path: "/settings", readyText: "Aoi Sample", clickText: "Interface", memoNicknames: true, desktopOnly: true },
     { name: "sidebar-group-instances", path: "/feed", readyText: "Aoi Sample", sidebarGroupInstances: true, desktopOnly: true },
     { name: "sidebar-age-gated", path: "/settings", readyText: "Age Restricted Lounge · #Adults Only", clickText: "Interface", sidebarAgeGated: true, desktopOnly: true },
     { name: "status-bar", path: "/feed", readyText: "Servers", statusBar: true },
@@ -378,6 +379,22 @@ for (const width of widths) {
                 if (route.request().method() === "GET" && !(notesHidden && memosHidden)) {
                     const payload = await response.json();
                     return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, hideUserNotes: false, hideUserMemos: false }) });
+                }
+                return route.fulfill({ response });
+            });
+        }
+        if (capture.memoNicknames) {
+            let nicknamesHidden = false;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && body.hideNicknames === true) nicknamesHidden = true;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && !nicknamesHidden) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, hideNicknames: false }) });
                 }
                 return route.fulfill({ response });
             });
@@ -1248,6 +1265,21 @@ for (const width of widths) {
             await dialog.getByText("Current instance", { exact: true }).waitFor();
             if (await dialog.getByPlaceholder("Add a VRChat note").count()) throw new Error("User Dialog displayed VRChat Notes while disabled.");
             if (await dialog.getByPlaceholder("Add a private memo").count()) throw new Error("User Dialog displayed VRCX Memos while disabled.");
+        }
+        if (capture.memoNicknames) {
+            const nickname = page.getByText("Aoi Sample (Met through the browser-port test crew.)", { exact: true });
+            await nickname.first().waitFor();
+            const toggle = page.getByRole("switch", { name: "Friend Memo Nicknames", exact: true });
+            await toggle.waitFor();
+            if ((await toggle.getAttribute("aria-checked")) !== "true") throw new Error("Friend Memo Nicknames did not restore VRCX's visible default.");
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await toggle.click();
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.hideNicknames !== true) throw new Error("Friend Memo Nicknames did not persist in MongoDB.");
+            await page.goto(`http://localhost:${port}/feed`, { waitUntil: "domcontentloaded" });
+            await page.getByText("Aoi Sample", { exact: true }).first().waitFor();
+            if (await nickname.count()) throw new Error("The memo nickname remained visible after Friend Memo Nicknames was disabled.");
         }
         if (capture.sidebarSettings) {
             const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });

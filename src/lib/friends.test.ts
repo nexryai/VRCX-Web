@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { friendImage, groupFriendsByLocation, locationLabel, statusIndicatorKind } from "./friends";
+import { friendDisplayName, friendImage, groupFriendsByLocation, locationLabel, statusIndicatorKind } from "./friends";
 import type { VrchatUser } from "./vrchat/types";
 
 const makeFriend = (id: string, displayName: string, location: string, worldName?: string): VrchatUser => ({
@@ -15,6 +15,12 @@ describe("friend location helpers", () => {
         const user = { ...makeFriend("usr_1", "A", "offline"), userIcon: "icon", profilePicOverride: "profile", currentAvatarThumbnailImageUrl: "avatar" };
         expect(friendImage(user, true)).toBe("icon");
         expect(friendImage(user, false)).toBe("profile");
+    });
+
+    it("uses the first memo line as an optional VRCX sidebar nickname", () => {
+        const user = { ...makeFriend("usr_1", "A", "offline"), $memo: "Builder\nMet at an event" };
+        expect(friendDisplayName(user, true)).toBe("A (Builder)");
+        expect(friendDisplayName(user, false)).toBe("A");
     });
 
     it("prefers the returned world name over a raw location id", () => {

@@ -121,6 +121,7 @@ export const appSettingsUpdateSchema = z
         displayVRCPlusIconsAsAvatar: z.boolean().optional(),
         hideUserNotes: z.boolean().optional(),
         hideUserMemos: z.boolean().optional(),
+        hideNicknames: z.boolean().optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -197,5 +198,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         displayVRCPlusIconsAsAvatar: settings?.displayVRCPlusIconsAsAvatar ?? true,
         hideUserNotes: settings?.hideUserNotes ?? false,
         hideUserMemos: settings?.hideUserMemos ?? false,
+        hideNicknames: settings?.hideNicknames ?? false,
     };
 }

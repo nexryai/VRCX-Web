@@ -28,6 +28,7 @@ type SettingsState = Required<
         | "displayVRCPlusIconsAsAvatar"
         | "hideUserNotes"
         | "hideUserMemos"
+        | "hideNicknames"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -68,6 +69,7 @@ const defaults: SettingsState = {
     displayVRCPlusIconsAsAvatar: true,
     hideUserNotes: false,
     hideUserMemos: false,
+    hideNicknames: false,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -641,6 +643,9 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
             <SettingsGroup title="Display">
                 <SettingsRow label="Show Instance ID">
                     <Switch checked={settings.showInstanceIdInLocation} label="Show Instance ID" change={(showInstanceIdInLocation) => void change({ showInstanceIdInLocation })} />
+                </SettingsRow>
+                <SettingsRow label="Friend Memo Nicknames" description="Show your custom memo names after usernames.">
+                    <Switch checked={!settings.hideNicknames} label="Friend Memo Nicknames" change={(visible) => void change({ hideNicknames: !visible })} />
                 </SettingsRow>
                 <SettingsRow label="Striped Data Table Mode">
                     <Switch checked={settings.isDataTableStriped} label="Striped Data Table Mode" change={(isDataTableStriped) => void change({ isDataTableStriped })} />

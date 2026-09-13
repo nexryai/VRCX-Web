@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ArrowDown, ArrowUp, Check, ChevronDown, GripVertical, RefreshCw, Search, Settings, Users } from "lucide-react";
 
-import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useMemoNicknamesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { VrchatImage } from "@/components/vrchat-image";
 import { loadSidebarFavoriteFriendGroups } from "@/lib/friend-favorites-client";
-import { locationLabel } from "@/lib/friends";
+import { friendDisplayName, locationLabel } from "@/lib/friends";
 import { normalizeSidebarFavoriteGroupKeys, orderSidebarFavoriteGroups, resolveSidebarFavoriteGroupKeys, type SidebarFavoriteGroup } from "@/lib/sidebar-favorite-groups";
 import { groupSidebarFriendInstances, type SidebarSortMethod, sidebarSortMethods, sortSidebarFriends } from "@/lib/sidebar-friends";
 import type { VrchatCosmeticIconFrame, VrchatGroup, VrchatGroupInstance, VrchatUser } from "@/lib/vrchat/types";
@@ -646,11 +646,12 @@ function FavoriteGroupOrderDialog({ groups, persistedOrder, close, reset, confir
 function SidebarUser({ user, openUser, showCosmetics, iconFrames }: { user: VrchatUser; openUser: (userId: string) => void; showCosmetics: boolean; iconFrames: Map<string, VrchatCosmeticIconFrame> }) {
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
     const showInstanceId = useShowInstanceIdInLocation();
+    const showMemoNicknames = useMemoNicknamesVisible();
     return (
         <button type="button" onClick={() => openUser(user.id)} className="flex w-full items-center p-1.5 text-left text-[13px] hover:rounded-lg hover:bg-muted/50">
             <FriendAvatar friend={user} iconFrame={showCosmetics && user.iconFrame ? iconFrames.get(user.iconFrame) : undefined} />
             <span className="ml-2.5 min-w-0 flex-1">
-                <span className="block truncate font-medium leading-[18px]">{user.displayName}</span>
+                <span className="block truncate font-medium leading-[18px]">{friendDisplayName(user, showMemoNicknames)}</span>
                 <span className="block truncate text-xs text-muted-foreground">{locationLabel(user, showAgeGatedInstances, showInstanceId) || user.statusDescription}</span>
             </span>
         </button>

@@ -10,6 +10,7 @@ type AppearanceSettings = {
     displayVRCPlusIconsAsAvatar: boolean;
     hideUserNotes: boolean;
     hideUserMemos: boolean;
+    hideNicknames: boolean;
 };
 
 const defaultAppearanceSettings: AppearanceSettings = {
@@ -20,6 +21,7 @@ const defaultAppearanceSettings: AppearanceSettings = {
     displayVRCPlusIconsAsAvatar: true,
     hideUserNotes: false,
     hideUserMemos: false,
+    hideNicknames: false,
 };
 const AppearanceSettingsContext = createContext<AppearanceSettings>(defaultAppearanceSettings);
 
@@ -39,6 +41,7 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                     displayVRCPlusIconsAsAvatar: value.displayVRCPlusIconsAsAvatar !== false,
                     hideUserNotes: value.hideUserNotes === true,
                     hideUserMemos: value.hideUserMemos === true,
+                    hideNicknames: value.hideNicknames === true,
                 }),
             )
             .catch(() => undefined);
@@ -52,6 +55,7 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                 displayVRCPlusIconsAsAvatar: value && typeof value.displayVRCPlusIconsAsAvatar === "boolean" ? value.displayVRCPlusIconsAsAvatar : current.displayVRCPlusIconsAsAvatar,
                 hideUserNotes: value && typeof value.hideUserNotes === "boolean" ? value.hideUserNotes : current.hideUserNotes,
                 hideUserMemos: value && typeof value.hideUserMemos === "boolean" ? value.hideUserMemos : current.hideUserMemos,
+                hideNicknames: value && typeof value.hideNicknames === "boolean" ? value.hideNicknames : current.hideNicknames,
             }));
         }
         window.addEventListener("vrcx:settings", applySettings);
@@ -93,4 +97,8 @@ export function useProfileIconsAsAvatar() {
 export function useUserNoteVisibility() {
     const settings = useContext(AppearanceSettingsContext);
     return { showUserNotes: !settings.hideUserNotes, showUserMemos: !settings.hideUserMemos };
+}
+
+export function useMemoNicknamesVisible() {
+    return !useContext(AppearanceSettingsContext).hideNicknames;
 }
