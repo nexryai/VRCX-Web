@@ -591,6 +591,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ isAgeGatedInstancesVisible: { $exists: false } }, { $set: { isAgeGatedInstancesVisible: false, updatedAt: new Date() } });
         },
     },
+    {
+        version: 56,
+        name: "add-instance-id-visibility",
+        async apply(c) {
+            await c.appSettings.updateMany({ showInstanceIdInLocation: { $exists: false } }, { $set: { showInstanceIdInLocation: false, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

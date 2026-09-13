@@ -40,4 +40,11 @@ describe("VRCX sidebar friend ordering", () => {
         expect(groupSidebarFriendInstances(rows, [], false)[0]?.label).toBe("Restricted");
         expect(groupSidebarFriendInstances(rows, [], true)[0]?.label).toBe("Age Restricted World");
     });
+
+    it("adds the instance name to a repeated-location heading only after opt-in", () => {
+        const location = "wrld_00000000-0000-0000-0000-000000000001:42~region(jp)";
+        const rows = [friend("a", "A", { location, world: { name: "Example World" } }), friend("b", "B", { location, world: { name: "Example World" } })];
+        expect(groupSidebarFriendInstances(rows, [])[0]?.label).toBe("Example World");
+        expect(groupSidebarFriendInstances(rows, [], false, true)[0]?.label).toBe("Example World · #42");
+    });
 });

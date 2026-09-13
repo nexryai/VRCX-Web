@@ -29,6 +29,7 @@ const captures = [
     { name: "friend-list-note-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Note", query: "world-building meetup" } },
     { name: "friend-list-memo-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Memo", query: "browser-port test crew" } },
     { name: "user-dialog", path: "/social/friend-list", readyText: "Current instance", clickText: "Aoi Sample" },
+    { name: "user-dialog-instance-id", path: "/settings", readyText: "The Great Pug · #12345", clickText: "Interface", showInstanceId: true, favoriteKind: "friend" },
     { name: "user-dialog-recent-action", path: "/search", readyText: "Add Friend", searchQuery: "sample creator", recentActionUser: true },
     { name: "previous-instances-user", path: "/social/friend-list", readyText: "Remote user", clickText: "Aoi Sample", previousInstances: "user" },
     { name: "user-favorite-dialog", path: "/social/friend-list", readyText: "VRChat Favorites", clickText: "Aoi Sample", favoriteKind: "friend", favoriteActionLabel: "Manage favorites for Aoi Sample" },
@@ -256,6 +257,22 @@ for (const width of widths) {
                         ],
                     }),
                 });
+            });
+        }
+        if (capture.showInstanceId) {
+            let instanceIdVisibilityEnabled = false;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && body.showInstanceIdInLocation === true) instanceIdVisibilityEnabled = true;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && !instanceIdVisibilityEnabled) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, showInstanceIdInLocation: false }) });
+                }
+                return route.fulfill({ response });
             });
         }
         if (capture.statusBar) {
@@ -1030,6 +1047,20 @@ for (const width of widths) {
             await page.goto(`http://localhost:${port}/feed`, { waitUntil: "domcontentloaded" });
             await page.getByRole("tab").nth(1).click();
             await ageGatedWorld.waitFor();
+        }
+        if (capture.showInstanceId) {
+            const toggle = page.getByRole("switch", { name: "Show Instance ID", exact: true });
+            await toggle.waitFor();
+            if ((await toggle.getAttribute("aria-checked")) !== "false") throw new Error("The instance-ID visibility fixture did not restore the disabled switch state.");
+            if (await page.getByText("The Great Pug · #12345", { exact: true }).count()) throw new Error("An instance name was visible while Show Instance ID was disabled.");
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await toggle.click();
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.showInstanceIdInLocation !== true) throw new Error("Show Instance ID did not persist in MongoDB.");
+            await page.goto(`http://localhost:${port}/social/friend-list`, { waitUntil: "domcontentloaded" });
+            await page.getByText("Aoi Sample", { exact: true }).first().click();
+            await page.getByRole("dialog", { name: "Aoi Sample", exact: true }).getByText("The Great Pug · #12345", { exact: true }).waitFor({ state: "visible" });
         }
         if (capture.sidebarSettings) {
             const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Download, Ellipsis, ImageIcon, Loader2, Pencil, Plus, RefreshCcw, RefreshCw, Search, Trash2, Upload, User, X } from "lucide-react";
 
-import { useAgeGatedInstancesVisible } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { useFriends } from "@/components/friends/friends-provider";
 import { VrchatImage } from "@/components/vrchat-image";
@@ -684,10 +684,11 @@ function FavoriteCard({
     removeLocal: (groupId: string, id: string) => Promise<void>;
 }) {
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
+    const showInstanceId = useShowInstanceIdInLocation();
     const user = kind === "friend" ? (entry.item as VrchatUser) : null;
     const remoteItem = kind === "friend" ? null : (entry.item as VrchatAvatar | VrchatWorld);
     const world = kind === "world" ? (entry.item as VrchatWorld) : null;
-    const content = kind === "friend" ? user?.statusDescription || (user ? locationLabel(user, showAgeGatedInstances) : "") : `${remoteItem?.authorName || ""}${world?.occupants ? ` (${world.occupants})` : ""}`;
+    const content = kind === "friend" ? user?.statusDescription || (user ? locationLabel(user, showAgeGatedInstances, showInstanceId) : "") : `${remoteItem?.authorName || ""}${world?.occupants ? ` (${world.occupants})` : ""}`;
     const image = remoteItem?.thumbnailImageUrl || "";
     const open = () => {
         if (kind === "friend") openUser(entry.objectId);

@@ -37,7 +37,7 @@ import {
     XCircle,
 } from "lucide-react";
 
-import { useAgeGatedInstancesVisible } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { GalleryFilePicker } from "@/components/groups/gallery-file-picker";
@@ -815,6 +815,7 @@ function GroupInfo({
     previousInstancesButton: React.RefObject<HTMLButtonElement | null>;
 }) {
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
+    const showInstanceId = useShowInstanceIdInLocation();
     const rooms = new Map<string, { instance?: VrchatGroupInstance; users: VrchatUser[] }>();
     for (const instance of instances) rooms.set(instance.location, { instance, users: [] });
     for (const friend of friends) {
@@ -853,7 +854,7 @@ function GroupInfo({
                         <div key={room.location} className="mt-1.5 w-full">
                             <div className="flex flex-wrap items-center gap-2">
                                 <span className="max-w-full truncate rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground" title={room.location}>
-                                    {room.instance?.world.name || locationLabel(room.users[0], showAgeGatedInstances)}
+                                    {room.instance?.world.name || locationLabel(room.users[0], showAgeGatedInstances, showInstanceId)}
                                     {room.instance?.displayName ? ` · #${room.instance.displayName}` : ""}
                                 </span>
                                 {room.instance?.userCount ? (

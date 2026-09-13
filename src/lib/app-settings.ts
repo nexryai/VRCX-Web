@@ -114,6 +114,7 @@ export const appSettingsUpdateSchema = z
         statusBarClockCount: z.number().int().min(0).max(3).optional(),
         statusBarClocks: z.tuple([z.number().int().min(-12).max(14), z.number().int().min(-12).max(14), z.number().int().min(-12).max(14)]).optional(),
         isAgeGatedInstancesVisible: z.boolean().optional(),
+        showInstanceIdInLocation: z.boolean().optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -183,5 +184,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         statusBarClockCount: settings?.statusBarClockCount ?? 2,
         statusBarClocks: settings?.statusBarClocks ?? defaultStatusBarClocks(),
         isAgeGatedInstancesVisible: settings?.isAgeGatedInstancesVisible ?? false,
+        showInstanceIdInLocation: settings?.showInstanceIdInLocation ?? false,
     };
 }

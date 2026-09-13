@@ -103,6 +103,7 @@ export type AppSettingsDocument = {
     statusBarClockCount: number;
     statusBarClocks: [number, number, number];
     isAgeGatedInstancesVisible: boolean;
+    showInstanceIdInLocation: boolean;
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];

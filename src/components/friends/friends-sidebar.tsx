@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ArrowDown, ArrowUp, Check, ChevronDown, GripVertical, RefreshCw, Search, Settings, Users } from "lucide-react";
 
-import { useAgeGatedInstancesVisible } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { NotificationCenter } from "@/components/notifications/notification-center";
 import { VrchatImage } from "@/components/vrchat-image";
@@ -22,6 +22,7 @@ type SidebarGroupInstances = { group: VrchatGroup; instances: VrchatGroupInstanc
 
 export function FriendsSidebar() {
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
+    const showInstanceId = useShowInstanceIdInLocation();
     const currentUser = useCurrentUser();
     const { friends, allFriends, loading, refresh, openUser, openGroup } = useFriends();
     const [search, setSearch] = useState("");
@@ -157,10 +158,10 @@ export function FriendsSidebar() {
 
     const sections = useMemo(() => {
         const query = search.trim().toLocaleLowerCase();
-        const matches = (friend: VrchatUser) => !query || `${friend.displayName} ${friend.statusDescription || ""} ${locationLabel(friend, showAgeGatedInstances)}`.toLocaleLowerCase().includes(query);
+        const matches = (friend: VrchatUser) => !query || `${friend.displayName} ${friend.statusDescription || ""} ${locationLabel(friend, showAgeGatedInstances, showInstanceId)}`.toLocaleLowerCase().includes(query);
         const onlineIds = new Set(friends.map((friend) => friend.id));
         const matchedOnline = friends.filter(matches);
-        const instanceGroups = groupByInstance ? groupSidebarFriendInstances(matchedOnline, sortMethods, showAgeGatedInstances) : [];
+        const instanceGroups = groupByInstance ? groupSidebarFriendInstances(matchedOnline, sortMethods, showAgeGatedInstances, showInstanceId) : [];
         const groupedIds = new Set(instanceGroups.flatMap((group) => group.friends.map((friend) => friend.id)));
         const visibleOutsideGroups = (friend: VrchatUser) => !hideGroupedFriends || !groupedIds.has(friend.id);
         const selectedKeys = new Set(resolveSidebarFavoriteGroupKeys(selectedFavoriteGroups, favoriteGroups));
@@ -199,7 +200,7 @@ export function FriendsSidebar() {
             sortMethods,
         );
         return { favorite, dividedFavorites, favoriteCount: divideByFavoriteGroup ? dividedFavorites.reduce((count, group) => count + group.friends.length, 0) : favorite.length, online, active, offline, instanceGroups };
-    }, [allFriends, divideByFavoriteGroup, favoriteGroupOrder, favoriteGroups, friends, groupByInstance, hideGroupedFriends, search, selectedFavoriteGroups, showAgeGatedInstances, sortMethods]);
+    }, [allFriends, divideByFavoriteGroup, favoriteGroupOrder, favoriteGroups, friends, groupByInstance, hideGroupedFriends, search, selectedFavoriteGroups, showAgeGatedInstances, showInstanceId, sortMethods]);
 
     const iconFramesById = useMemo(() => new Map(iconFrames.map((frame) => [frame.id, frame])), [iconFrames]);
 
@@ -644,12 +645,13 @@ function FavoriteGroupOrderDialog({ groups, persistedOrder, close, reset, confir
 
 function SidebarUser({ user, openUser, showCosmetics, iconFrames }: { user: VrchatUser; openUser: (userId: string) => void; showCosmetics: boolean; iconFrames: Map<string, VrchatCosmeticIconFrame> }) {
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
+    const showInstanceId = useShowInstanceIdInLocation();
     return (
         <button type="button" onClick={() => openUser(user.id)} className="flex w-full items-center p-1.5 text-left text-[13px] hover:rounded-lg hover:bg-muted/50">
             <FriendAvatar friend={user} iconFrame={showCosmetics && user.iconFrame ? iconFrames.get(user.iconFrame) : undefined} />
             <span className="ml-2.5 min-w-0 flex-1">
                 <span className="block truncate font-medium leading-[18px]">{user.displayName}</span>
-                <span className="block truncate text-xs text-muted-foreground">{locationLabel(user, showAgeGatedInstances) || user.statusDescription}</span>
+                <span className="block truncate text-xs text-muted-foreground">{locationLabel(user, showAgeGatedInstances, showInstanceId) || user.statusDescription}</span>
             </span>
         </button>
     );

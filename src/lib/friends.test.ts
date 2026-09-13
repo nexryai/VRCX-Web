@@ -21,6 +21,12 @@ describe("friend location helpers", () => {
         expect(locationLabel(friend, true)).toBe("Age Restricted World");
     });
 
+    it("adds the parsed VRCX instance name only after the global opt-in", () => {
+        const friend = makeFriend("usr_1", "A", "wrld_1:123~region(jp)", "Example World");
+        expect(locationLabel(friend)).toBe("Example World");
+        expect(locationLabel(friend, false, true)).toBe("Example World · #123");
+    });
+
     it("groups locations by size and friends by display name", () => {
         const groups = groupFriendsByLocation([makeFriend("usr_1", "Zulu", "private"), makeFriend("usr_2", "Alpha", "private"), makeFriend("usr_3", "Beta", "wrld_1", "A World")]);
 

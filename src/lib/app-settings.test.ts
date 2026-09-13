@@ -32,6 +32,7 @@ describe("application settings boundary", () => {
             statusBarVisibility: { servers: true, ws: true, monitor: true, sync: true, rateLimit: true, uptime: true },
             statusBarClockCount: 2,
             isAgeGatedInstancesVisible: false,
+            showInstanceIdInLocation: false,
         });
     });
 
@@ -73,6 +74,7 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ statusBarClockCount: 4 }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ statusBarClocks: [15, 0, -5] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ isAgeGatedInstancesVisible: true }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ showInstanceIdInLocation: true }).success).toBe(true);
     });
 
     it("accepts only the versioned settings backup format", () => {

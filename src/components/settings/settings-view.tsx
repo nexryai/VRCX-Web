@@ -21,6 +21,7 @@ type SettingsState = Required<
         | "favoriteSortByDate"
         | "friendListTablePageSize"
         | "isAgeGatedInstancesVisible"
+        | "showInstanceIdInLocation"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -54,6 +55,7 @@ const defaults: SettingsState = {
     avatarAutoCleanupDays: 0,
     browserNotificationsEnabled: false,
     isAgeGatedInstancesVisible: false,
+    showInstanceIdInLocation: false,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -611,6 +613,11 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
                 </SettingsRow>
                 <SettingsRow label="Show Age-Gated Instances" description="Show age-restricted instances. When disabled, these instances are hidden and shown as restricted.">
                     <Switch checked={settings.isAgeGatedInstancesVisible} label="Show Age-Gated Instances" change={(isAgeGatedInstancesVisible) => void change({ isAgeGatedInstancesVisible })} />
+                </SettingsRow>
+            </SettingsGroup>
+            <SettingsGroup title="Display">
+                <SettingsRow label="Show Instance ID">
+                    <Switch checked={settings.showInstanceIdInLocation} label="Show Instance ID" change={(showInstanceIdInLocation) => void change({ showInstanceIdInLocation })} />
                 </SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Navigation">

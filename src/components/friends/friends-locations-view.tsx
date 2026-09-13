@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Pencil, Search, Settings, Users } from "lucide-react";
 
-import { useAgeGatedInstancesVisible } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { groupFriendsByLocation, locationLabel, statusColor } from "@/lib/friends";
@@ -35,6 +35,7 @@ function saveSettings(update: Partial<LocationSettings>) {
 
 export function FriendsLocationsView() {
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
+    const showInstanceId = useShowInstanceIdInLocation();
     const currentUser = useCurrentUser();
     const { friends, allFriends, loading, error, openUser } = useFriends();
     const [search, setSearch] = useState("");
@@ -77,9 +78,9 @@ export function FriendsLocationsView() {
     const filtered = useMemo(() => {
         const query = search.trim().toLocaleLowerCase();
         if (!query) return selectedFriends;
-        return selectedFriends.filter((friend) => `${friend.displayName} ${friend.statusDescription || ""} ${locationLabel(friend, showAgeGatedInstances)}`.toLocaleLowerCase().includes(query));
-    }, [search, selectedFriends, showAgeGatedInstances]);
-    const groups = useMemo(() => groupFriendsByLocation(filtered, showAgeGatedInstances), [filtered, showAgeGatedInstances]);
+        return selectedFriends.filter((friend) => `${friend.displayName} ${friend.statusDescription || ""} ${locationLabel(friend, showAgeGatedInstances, showInstanceId)}`.toLocaleLowerCase().includes(query));
+    }, [search, selectedFriends, showAgeGatedInstances, showInstanceId]);
+    const groups = useMemo(() => groupFriendsByLocation(filtered, showAgeGatedInstances, showInstanceId), [filtered, showAgeGatedInstances, showInstanceId]);
     const visibleSegments = showSameInstance ? segmentLabels : segmentLabels.filter((option) => option.value !== "same-instance");
 
     function selectSegment(value: Segment) {
@@ -188,7 +189,7 @@ export function FriendsLocationsView() {
                             </header>
                             <div className="grid justify-start p-0.5 max-sm:grid-cols-1" style={{ gridTemplateColumns: `repeat(auto-fill,minmax(${Math.round(200 * scale)}px,${Math.round(220 * scale)}px))`, gap: `${14 * scale * spacing}px` }}>
                                 {group.members.map((friend) => (
-                                    <FriendLocationCard key={friend.id} friend={friend} scale={scale} openUser={openUser} showAgeGatedInstances={showAgeGatedInstances} />
+                                    <FriendLocationCard key={friend.id} friend={friend} scale={scale} openUser={openUser} showAgeGatedInstances={showAgeGatedInstances} showInstanceId={showInstanceId} />
                                 ))}
                             </div>
                         </section>
@@ -199,8 +200,8 @@ export function FriendsLocationsView() {
     );
 }
 
-function FriendLocationCard({ friend, scale, openUser, showAgeGatedInstances }: { friend: VrchatUser; scale: number; openUser: (userId: string) => void; showAgeGatedInstances: boolean }) {
-    const location = locationLabel(friend, showAgeGatedInstances);
+function FriendLocationCard({ friend, scale, openUser, showAgeGatedInstances, showInstanceId }: { friend: VrchatUser; scale: number; openUser: (userId: string) => void; showAgeGatedInstances: boolean; showInstanceId: boolean }) {
+    const location = locationLabel(friend, showAgeGatedInstances, showInstanceId);
     return (
         <button type="button" onClick={() => openUser(friend.id)} className="relative min-w-0 rounded-md border border-border bg-card text-left hover:bg-muted" style={{ padding: `${8 * scale}px`, paddingBottom: `${6 * scale}px` }}>
             <span className="absolute rounded-full shadow-[0_0_8px_color-mix(in_oklch,var(--status-online)_40%,transparent)]" style={{ top: 8 * scale, right: 8 * scale, width: 12 * scale, height: 12 * scale, background: statusColor(friend.status) }} aria-hidden="true" />

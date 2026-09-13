@@ -41,7 +41,7 @@ function isInstanceLocation(location?: string) {
 
 // VRCX groups only online friends sharing the exact same real instance, and
 // omits singleton locations from its grouped section.
-export function groupSidebarFriendInstances(friends: VrchatUser[], methods: SidebarSortMethod[], showAgeGatedInstances = false) {
+export function groupSidebarFriendInstances(friends: VrchatUser[], methods: SidebarSortMethod[], showAgeGatedInstances = false, showInstanceId = false) {
     const byLocation = new Map<string, VrchatUser[]>();
     for (const friend of friends) {
         if (friend.state !== "online" || !isInstanceLocation(friend.location)) continue;
@@ -49,6 +49,6 @@ export function groupSidebarFriendInstances(friends: VrchatUser[], methods: Side
     }
     return [...byLocation]
         .filter(([, members]) => members.length > 1)
-        .map(([location, members]) => ({ location, label: locationLabel(members[0], showAgeGatedInstances), friends: sortSidebarFriends(members, methods) }))
+        .map(([location, members]) => ({ location, label: locationLabel(members[0], showAgeGatedInstances, showInstanceId), friends: sortSidebarFriends(members, methods) }))
         .toSorted((left, right) => right.friends.length - left.friends.length || left.label.localeCompare(right.label));
 }

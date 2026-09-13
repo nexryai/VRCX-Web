@@ -4,10 +4,13 @@ export function friendImage(friend: VrchatUser) {
     return friend.userIcon || friend.profilePicOverride || friend.currentAvatarThumbnailImageUrl || friend.currentAvatarImageUrl || "";
 }
 
-export function locationLabel(friend: VrchatUser, showAgeGatedInstances = false) {
+export function locationLabel(friend: VrchatUser, showAgeGatedInstances = false, showInstanceId = false) {
     if (!showAgeGatedInstances && (friend.location?.includes("~ageGate") || friend.travelingToLocation?.includes("~ageGate"))) return "Restricted";
+    const location = friend.location === "traveling" ? friend.travelingToLocation : friend.location;
+    const instanceName = location?.includes(":") ? location.slice(location.indexOf(":") + 1).split("~", 1)[0] : "";
+    const suffix = showInstanceId && instanceName ? ` · #${instanceName}` : "";
     if (friend.world?.name) {
-        return friend.world.name;
+        return `${friend.world.name}${suffix}`;
     }
     if (friend.location === "private") {
         return "Private";
@@ -18,13 +21,13 @@ export function locationLabel(friend: VrchatUser, showAgeGatedInstances = false)
     if (!friend.location || friend.location === "offline") {
         return "Offline";
     }
-    return friend.location;
+    return `${friend.location}${suffix}`;
 }
 
-export function groupFriendsByLocation(friends: VrchatUser[], showAgeGatedInstances = false) {
+export function groupFriendsByLocation(friends: VrchatUser[], showAgeGatedInstances = false, showInstanceId = false) {
     const groups = new Map<string, VrchatUser[]>();
     for (const friend of friends) {
-        const label = locationLabel(friend, showAgeGatedInstances);
+        const label = locationLabel(friend, showAgeGatedInstances, showInstanceId);
         const existing = groups.get(label);
         if (existing) {
             existing.push(friend);
