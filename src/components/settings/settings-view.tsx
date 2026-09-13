@@ -22,6 +22,7 @@ type SettingsState = Required<
         | "friendListTablePageSize"
         | "isAgeGatedInstancesVisible"
         | "showInstanceIdInLocation"
+        | "isDataTableStriped"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -56,6 +57,7 @@ const defaults: SettingsState = {
     browserNotificationsEnabled: false,
     isAgeGatedInstancesVisible: false,
     showInstanceIdInLocation: false,
+    isDataTableStriped: false,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -618,6 +620,9 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
             <SettingsGroup title="Display">
                 <SettingsRow label="Show Instance ID">
                     <Switch checked={settings.showInstanceIdInLocation} label="Show Instance ID" change={(showInstanceIdInLocation) => void change({ showInstanceIdInLocation })} />
+                </SettingsRow>
+                <SettingsRow label="Striped Data Table Mode">
+                    <Switch checked={settings.isDataTableStriped} label="Striped Data Table Mode" change={(isDataTableStriped) => void change({ isDataTableStriped })} />
                 </SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Navigation">

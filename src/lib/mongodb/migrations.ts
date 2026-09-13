@@ -598,6 +598,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ showInstanceIdInLocation: { $exists: false } }, { $set: { showInstanceIdInLocation: false, updatedAt: new Date() } });
         },
     },
+    {
+        version: 57,
+        name: "add-striped-data-table-mode",
+        async apply(c) {
+            await c.appSettings.updateMany({ isDataTableStriped: { $exists: false } }, { $set: { isDataTableStriped: false, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

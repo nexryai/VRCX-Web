@@ -12,6 +12,7 @@ await mkdir(output, { recursive: true });
 const captures = [
     { name: "friends-locations", path: "/friends-locations", readyText: "Aoi Sample" },
     { name: "feed", path: "/feed", readyText: "Own status is now recorded" },
+    { name: "feed-striped", path: "/settings", readyText: "Own status is now recorded", clickText: "Interface", stripedTable: true },
     { name: "sidebar-instance-groups", path: "/feed", readyText: "Same Instance ― 1", desktopOnly: true },
     { name: "sidebar-settings", path: "/feed", readyText: "Sort by Last Active", sidebarSettings: true, desktopOnly: true },
     { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
@@ -271,6 +272,22 @@ for (const width of widths) {
                 if (route.request().method() === "GET" && !instanceIdVisibilityEnabled) {
                     const payload = await response.json();
                     return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, showInstanceIdInLocation: false }) });
+                }
+                return route.fulfill({ response });
+            });
+        }
+        if (capture.stripedTable) {
+            let stripedTableEnabled = false;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && body.isDataTableStriped === true) stripedTableEnabled = true;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && !stripedTableEnabled) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, isDataTableStriped: false }) });
                 }
                 return route.fulfill({ response });
             });
@@ -1061,6 +1078,20 @@ for (const width of widths) {
             await page.goto(`http://localhost:${port}/social/friend-list`, { waitUntil: "domcontentloaded" });
             await page.getByText("Aoi Sample", { exact: true }).first().click();
             await page.getByRole("dialog", { name: "Aoi Sample", exact: true }).getByText("The Great Pug · #12345", { exact: true }).waitFor({ state: "visible" });
+        }
+        if (capture.stripedTable) {
+            const toggle = page.getByRole("switch", { name: "Striped Data Table Mode", exact: true });
+            await toggle.waitFor();
+            if ((await toggle.getAttribute("aria-checked")) !== "false") throw new Error("The striped-table fixture did not restore the disabled switch state.");
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await toggle.click();
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.isDataTableStriped !== true) throw new Error("Striped Data Table Mode did not persist in MongoDB.");
+            await page.goto(`http://localhost:${port}/feed`, { waitUntil: "domcontentloaded" });
+            await page.locator("tbody tr").nth(1).waitFor();
+            const stripes = await page.locator("tbody tr").evaluateAll((rows) => rows.slice(0, 2).map((row) => getComputedStyle(row).backgroundColor));
+            if (stripes.length < 2 || stripes[0] === stripes[1]) throw new Error(`Striped Data Table Mode did not distinguish even rows: ${JSON.stringify(stripes)}`);
         }
         if (capture.sidebarSettings) {
             const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });

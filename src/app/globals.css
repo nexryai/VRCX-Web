@@ -156,6 +156,10 @@ a {
     background: color-mix(in oklch, var(--primary) 40%, transparent);
 }
 
+:where(html[data-table-striped="true"] tbody > tr:nth-child(even)) {
+    background-color: color-mix(in oklch, var(--muted) 20%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

@@ -33,6 +33,7 @@ describe("application settings boundary", () => {
             statusBarClockCount: 2,
             isAgeGatedInstancesVisible: false,
             showInstanceIdInLocation: false,
+            isDataTableStriped: false,
         });
     });
 
@@ -75,6 +76,7 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ statusBarClocks: [15, 0, -5] }).success).toBe(false);
         expect(appSettingsUpdateSchema.safeParse({ isAgeGatedInstancesVisible: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ showInstanceIdInLocation: true }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ isDataTableStriped: true }).success).toBe(true);
     });
 
     it("accepts only the versioned settings backup format", () => {
