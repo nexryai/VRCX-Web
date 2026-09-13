@@ -117,6 +117,7 @@ export const appSettingsUpdateSchema = z
         showInstanceIdInLocation: z.boolean().optional(),
         isDataTableStriped: z.boolean().optional(),
         accessibleStatusIndicators: z.boolean().optional(),
+        hideUnfriends: z.boolean().optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -189,5 +190,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         showInstanceIdInLocation: settings?.showInstanceIdInLocation ?? false,
         isDataTableStriped: settings?.isDataTableStriped ?? false,
         accessibleStatusIndicators: settings?.accessibleStatusIndicators ?? false,
+        hideUnfriends: settings?.hideUnfriends ?? false,
     };
 }

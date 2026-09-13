@@ -35,6 +35,7 @@ describe("application settings boundary", () => {
             showInstanceIdInLocation: false,
             isDataTableStriped: false,
             accessibleStatusIndicators: false,
+            hideUnfriends: false,
         });
     });
 
@@ -79,6 +80,7 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ showInstanceIdInLocation: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ isDataTableStriped: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ accessibleStatusIndicators: true }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ hideUnfriends: true }).success).toBe(true);
     });
 
     it("accepts only the versioned settings backup format", () => {

@@ -238,6 +238,7 @@ await database.collection("app_settings").insertOne({
     showInstanceIdInLocation: false,
     isDataTableStriped: false,
     accessibleStatusIndicators: false,
+    hideUnfriends: false,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });

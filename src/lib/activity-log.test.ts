@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { diffFriendSnapshots, type FriendSnapshot, trustLevelFromTags } from "./activity-log";
+import { diffFriendSnapshots, type FriendSnapshot, isFriendLogEntryVisible, trustLevelFromTags } from "./activity-log";
 
 const friend = (overrides: Partial<FriendSnapshot> = {}): FriendSnapshot => ({ id: "usr_example", displayName: "Example", online: true, status: "active\nHello", location: "wrld_one:1", avatar: "avatar-one", bio: "Bio", trustLevel: "User", ...overrides });
 
 describe("friend activity differences", () => {
+    it("hides only unfriend rows when the VRCX preference is enabled", () => {
+        expect(isFriendLogEntryVisible("Unfriend", true)).toBe(false);
+        expect(isFriendLogEntryVisible("Friend", true)).toBe(true);
+        expect(isFriendLogEntryVisible("Unfriend", false)).toBe(true);
+    });
+
     it("maps remote presence changes into VRCX feed categories", () => {
         const result = diffFriendSnapshots([friend()], [friend({ online: false, status: "offline\n", location: "offline" })], "2026-08-02T00:00:00.000Z");
         expect(result.map((entry) => entry.type)).toEqual(["Offline", "Status"]);

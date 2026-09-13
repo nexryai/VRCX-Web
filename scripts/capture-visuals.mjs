@@ -27,6 +27,7 @@ const captures = [
     { name: "sidebar-favorite-selector", path: "/feed", readyText: "Event Crew", sidebarSettings: true, sidebarFavoriteSelector: true, desktopOnly: true },
     { name: "sidebar-favorite-order", path: "/feed", readyText: "Edit Group Order", sidebarSettings: true, sidebarFavoriteOrder: true, desktopOnly: true },
     { name: "friend-log", path: "/social/friend-log", readyText: "Former Friend" },
+    { name: "friend-log-hide-unfriends", path: "/settings", readyText: "Cobalt Friend", clickText: "Interface", hideUnfriends: true },
     { name: "friend-list", path: "/social/friend-list", readyText: "Known User" },
     { name: "friend-list-note-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Note", query: "world-building meetup" } },
     { name: "friend-list-memo-search", path: "/social/friend-list", readyText: "Aoi Sample", friendListSearch: { field: "Memo", query: "browser-port test crew" } },
@@ -289,6 +290,22 @@ for (const width of widths) {
                 if (route.request().method() === "GET" && !stripedTableEnabled) {
                     const payload = await response.json();
                     return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, isDataTableStriped: false }) });
+                }
+                return route.fulfill({ response });
+            });
+        }
+        if (capture.hideUnfriends) {
+            let hideUnfriendsEnabled = false;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && body.hideUnfriends === true) hideUnfriendsEnabled = true;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && !hideUnfriendsEnabled) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, hideUnfriends: false }) });
                 }
                 return route.fulfill({ response });
             });
@@ -1109,6 +1126,21 @@ for (const width of widths) {
             await page.locator("tbody tr").nth(1).waitFor();
             const stripes = await page.locator("tbody tr").evaluateAll((rows) => rows.slice(0, 2).map((row) => getComputedStyle(row).backgroundColor));
             if (stripes.length < 2 || stripes[0] === stripes[1]) throw new Error(`Striped Data Table Mode did not distinguish even rows: ${JSON.stringify(stripes)}`);
+        }
+        if (capture.hideUnfriends) {
+            const toggle = page.getByRole("switch", { name: "Hide Unfriend Events", exact: true });
+            await toggle.waitFor();
+            if ((await toggle.getAttribute("aria-checked")) !== "false") throw new Error("The hide-unfriends fixture did not restore the disabled switch state.");
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await toggle.click();
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.hideUnfriends !== true) throw new Error("Hide Unfriend Events did not persist in MongoDB.");
+            const storedActivity = await page.evaluate(() => fetch("/api/activity?limit=2000", { cache: "no-store" }).then((response) => response.json()));
+            if (!storedActivity.entries?.some((entry) => entry.type === "Unfriend" && entry.displayName === "Former Friend")) throw new Error("The hide-unfriends preference removed the stored Unfriend event.");
+            await page.goto(`http://localhost:${port}/social/friend-log`, { waitUntil: "domcontentloaded" });
+            await page.getByText("Cobalt Friend", { exact: true }).first().waitFor();
+            if (await page.getByText("Former Friend", { exact: true }).count()) throw new Error("Friend Log displayed an Unfriend row while Hide Unfriend Events was enabled.");
         }
         if (capture.accessibleStatuses) {
             const toggle = page.getByRole("switch", { name: "Accessible Status Indicators", exact: true });

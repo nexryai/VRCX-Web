@@ -6,7 +6,7 @@ import { ArrowDown, ArrowRight, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRi
 
 import { useFriends } from "@/components/friends/friends-provider";
 import { VrchatImage } from "@/components/vrchat-image";
-import type { ActivityType, FriendActivity } from "@/lib/activity-log";
+import { type ActivityType, type FriendActivity, isFriendLogEntryVisible } from "@/lib/activity-log";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 
 type ActivityMode = "feed" | "friend-log";
@@ -22,9 +22,10 @@ type ActivitySettings = {
     feedFavoritesOnly: boolean;
     friendLogFilters: FriendLogType[];
     activityTablePageSize: PageSize;
+    hideUnfriends: boolean;
 };
 
-const defaultSettings: ActivitySettings = { feedFilters: [], feedFavoritesOnly: false, friendLogFilters: [], activityTablePageSize: 20 };
+const defaultSettings: ActivitySettings = { feedFilters: [], feedFavoritesOnly: false, friendLogFilters: [], activityTablePageSize: 20, hideUnfriends: false };
 
 function formatDate(value: string, long = false) {
     const date = new Date(value);
@@ -103,6 +104,7 @@ export function ActivityView({ mode }: { mode: ActivityMode }) {
         return entries
             .filter((entry) => {
                 if (!(allowed as ActivityType[]).includes(entry.type)) return false;
+                if (mode === "friend-log" && !isFriendLogEntryVisible(entry.type, settings.hideUnfriends)) return false;
                 if (selected.length && !(selected as ActivityType[]).includes(entry.type)) return false;
                 if (mode === "feed" && settings.feedFavoritesOnly && !favoriteIds.has(entry.userId)) return false;
                 const time = Date.parse(entry.createdAt);

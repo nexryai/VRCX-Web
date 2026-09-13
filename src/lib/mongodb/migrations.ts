@@ -612,6 +612,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ accessibleStatusIndicators: { $exists: false } }, { $set: { accessibleStatusIndicators: false, updatedAt: new Date() } });
         },
     },
+    {
+        version: 59,
+        name: "add-hide-unfriend-events",
+        async apply(c) {
+            await c.appSettings.updateMany({ hideUnfriends: { $exists: false } }, { $set: { hideUnfriends: false, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

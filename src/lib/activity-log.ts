@@ -23,6 +23,11 @@ export type FriendSnapshot = {
     trustLevel: string;
 };
 
+/** Mirrors VRCX FriendLog.vue's presentation-only unfriend filter. */
+export function isFriendLogEntryVisible(type: ActivityType, hideUnfriends: boolean) {
+    return !hideUnfriends || type !== "Unfriend";
+}
+
 /** Ported from VRCX/src/shared/utils/userTransforms.js. */
 export function trustLevelFromTags(tags: string[] = []) {
     if (tags.includes("system_trust_veteran")) return "Trusted User";

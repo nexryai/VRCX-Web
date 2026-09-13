@@ -24,6 +24,7 @@ type SettingsState = Required<
         | "showInstanceIdInLocation"
         | "isDataTableStriped"
         | "accessibleStatusIndicators"
+        | "hideUnfriends"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -60,6 +61,7 @@ const defaults: SettingsState = {
     showInstanceIdInLocation: false,
     isDataTableStriped: false,
     accessibleStatusIndicators: false,
+    hideUnfriends: false,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -659,6 +661,11 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
                         <PageSize value={settings[key]} change={(value) => void change({ [key]: value } as Pick<SettingsState, PageSizeKey>)} />
                     </SettingsRow>
                 ))}
+            </SettingsGroup>
+            <SettingsGroup title="Friend Log">
+                <SettingsRow label="Hide Unfriend Events">
+                    <Switch checked={settings.hideUnfriends} label="Hide Unfriend Events" change={(hideUnfriends) => void change({ hideUnfriends })} />
+                </SettingsRow>
             </SettingsGroup>
         </>
     );
