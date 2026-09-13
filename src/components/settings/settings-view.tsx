@@ -23,6 +23,7 @@ type SettingsState = Required<
         | "isAgeGatedInstancesVisible"
         | "showInstanceIdInLocation"
         | "isDataTableStriped"
+        | "accessibleStatusIndicators"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -58,6 +59,7 @@ const defaults: SettingsState = {
     isAgeGatedInstancesVisible: false,
     showInstanceIdInLocation: false,
     isDataTableStriped: false,
+    accessibleStatusIndicators: false,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -623,6 +625,9 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
                 </SettingsRow>
                 <SettingsRow label="Striped Data Table Mode">
                     <Switch checked={settings.isDataTableStriped} label="Striped Data Table Mode" change={(isDataTableStriped) => void change({ isDataTableStriped })} />
+                </SettingsRow>
+                <SettingsRow label="Accessible Status Indicators" description="Use shapes in addition to color to distinguish statuses.">
+                    <Switch checked={settings.accessibleStatusIndicators} label="Accessible Status Indicators" change={(accessibleStatusIndicators) => void change({ accessibleStatusIndicators })} />
                 </SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Navigation">

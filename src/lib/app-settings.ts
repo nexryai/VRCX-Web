@@ -116,6 +116,7 @@ export const appSettingsUpdateSchema = z
         isAgeGatedInstancesVisible: z.boolean().optional(),
         showInstanceIdInLocation: z.boolean().optional(),
         isDataTableStriped: z.boolean().optional(),
+        accessibleStatusIndicators: z.boolean().optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -187,5 +188,6 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         isAgeGatedInstancesVisible: settings?.isAgeGatedInstancesVisible ?? false,
         showInstanceIdInLocation: settings?.showInstanceIdInLocation ?? false,
         isDataTableStriped: settings?.isDataTableStriped ?? false,
+        accessibleStatusIndicators: settings?.accessibleStatusIndicators ?? false,
     };
 }

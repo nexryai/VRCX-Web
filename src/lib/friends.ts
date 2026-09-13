@@ -49,3 +49,11 @@ export function statusColor(status?: string) {
     if (status === "offline") return "var(--status-offline)";
     return "var(--status-online)";
 }
+
+export function statusIndicatorKind(status?: string) {
+    if (status === "join me") return "joinme";
+    if (status === "ask me") return "askme";
+    if (status === "busy") return "busy";
+    if (status === "offline") return "offline";
+    return "online";
+}

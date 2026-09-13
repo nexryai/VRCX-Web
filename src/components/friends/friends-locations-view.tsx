@@ -7,7 +7,7 @@ import { Pencil, Search, Settings, Users } from "lucide-react";
 import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
-import { groupFriendsByLocation, locationLabel, statusColor } from "@/lib/friends";
+import { groupFriendsByLocation, locationLabel, statusColor, statusIndicatorKind } from "@/lib/friends";
 import type { VrchatUser } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
@@ -204,7 +204,12 @@ function FriendLocationCard({ friend, scale, openUser, showAgeGatedInstances, sh
     const location = locationLabel(friend, showAgeGatedInstances, showInstanceId);
     return (
         <button type="button" onClick={() => openUser(friend.id)} className="relative min-w-0 rounded-md border border-border bg-card text-left hover:bg-muted" style={{ padding: `${8 * scale}px`, paddingBottom: `${6 * scale}px` }}>
-            <span className="absolute rounded-full shadow-[0_0_8px_color-mix(in_oklch,var(--status-online)_40%,transparent)]" style={{ top: 8 * scale, right: 8 * scale, width: 12 * scale, height: 12 * scale, background: statusColor(friend.status) }} aria-hidden="true" />
+            <span
+                className="vrcx-status-indicator absolute rounded-full shadow-[0_0_8px_color-mix(in_oklch,var(--status-online)_40%,transparent)]"
+                data-user-status={statusIndicatorKind(friend.status)}
+                style={{ top: 8 * scale, right: 8 * scale, width: 12 * scale, height: 12 * scale, background: statusColor(friend.status) }}
+                aria-hidden="true"
+            />
             <div className="mb-[7px] flex min-w-0 items-center" style={{ gap: 10 * scale }}>
                 <span className="inline-flex shrink-0" style={{ transform: `scale(${scale})`, transformOrigin: "left center", width: 36 * scale, height: 36 * scale }}>
                     <FriendAvatar friend={friend} showStatus={false} />

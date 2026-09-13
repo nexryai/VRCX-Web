@@ -10,7 +10,7 @@ import { trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { type FriendListSearchField, type FriendListUser, friendListSearchFields, friendMatchesSearch } from "@/lib/friend-list";
-import { statusColor } from "@/lib/friends";
+import { statusColor, statusIndicatorKind } from "@/lib/friends";
 import type { MutualGraphSnapshot } from "@/lib/mutual-graph";
 import { fetchAndPersistMutualGraph } from "@/lib/mutual-graph-client";
 import type { VrchatUser } from "@/lib/vrchat/types";
@@ -322,7 +322,7 @@ export function FriendListView() {
                                     <td className="border-t border-border px-2 py-2">{trustLevelFromTags(friend.tags)}</td>
                                     <td className="border-t border-border px-2 py-2">
                                         <span className="flex items-center gap-1">
-                                            <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor(friend.status) }} />
+                                            <span className="vrcx-status-indicator size-2 shrink-0 rounded-full" data-user-status={statusIndicatorKind(friend.status)} style={{ backgroundColor: statusColor(friend.status) }} aria-hidden="true" />
                                             {friend.statusDescription || friend.status || "Offline"}
                                         </span>
                                     </td>

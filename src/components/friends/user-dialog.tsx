@@ -12,7 +12,7 @@ import { PreviousInstancesDialog } from "@/components/previous-instances/previou
 import { VrchatImage } from "@/components/vrchat-image";
 import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
-import { friendImage, locationLabel, statusColor } from "@/lib/friends";
+import { friendImage, locationLabel, statusColor, statusIndicatorKind } from "@/lib/friends";
 import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
 import { useFriends } from "./friends-provider";
@@ -359,7 +359,7 @@ function UserSummary({ user, isFriend, isCurrentUser, copied, confirming, removi
                     </div>
                     {user.username ? <p className="font-mono text-[10px] text-muted-foreground">{user.username}</p> : null}
                     <p className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground">
-                        <span className="mt-1 size-2 shrink-0 rounded-full" style={{ backgroundColor: statusColor(user.status) }} />
+                        <span className="vrcx-status-indicator mt-1 size-2 shrink-0 rounded-full" data-user-status={statusIndicatorKind(user.status)} style={{ backgroundColor: statusColor(user.status) }} aria-hidden="true" />
                         {user.statusDescription || user.state || user.status || "Offline"}
                     </p>
                 </div>

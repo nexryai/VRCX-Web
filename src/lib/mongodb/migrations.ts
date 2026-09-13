@@ -605,6 +605,13 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ isDataTableStriped: { $exists: false } }, { $set: { isDataTableStriped: false, updatedAt: new Date() } });
         },
     },
+    {
+        version: 58,
+        name: "add-accessible-status-indicators",
+        async apply(c) {
+            await c.appSettings.updateMany({ accessibleStatusIndicators: { $exists: false } }, { $set: { accessibleStatusIndicators: false, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

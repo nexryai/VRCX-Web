@@ -2,7 +2,7 @@ import { User } from "lucide-react";
 
 import { IconFrame } from "@/components/icon-frame";
 import { VrchatImage } from "@/components/vrchat-image";
-import { friendImage, statusColor } from "@/lib/friends";
+import { friendImage, statusColor, statusIndicatorKind } from "@/lib/friends";
 import type { VrchatCosmeticIconFrame, VrchatUser } from "@/lib/vrchat/types";
 
 export function FriendAvatar({ friend, iconFrame, size = "md", showStatus = true }: { friend: VrchatUser; iconFrame?: VrchatCosmeticIconFrame; size?: "sm" | "md"; showStatus?: boolean }) {
@@ -15,7 +15,7 @@ export function FriendAvatar({ friend, iconFrame, size = "md", showStatus = true
                 <VrchatImage src={image} alt="" className="size-full object-cover" loading="lazy" referrerPolicy="no-referrer" fallback={<User aria-hidden="true" className="size-4" />} />
             </span>
             <IconFrame frame={iconFrame} />
-            {showStatus ? <span className="absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-card" style={{ backgroundColor: statusColor(friend.status) }} aria-hidden="true" /> : null}
+            {showStatus ? <span className="vrcx-status-indicator absolute right-0 bottom-0 size-2.5 rounded-full border-2 border-card" data-user-status={statusIndicatorKind(friend.status)} style={{ backgroundColor: statusColor(friend.status) }} aria-hidden="true" /> : null}
         </span>
     );
 }

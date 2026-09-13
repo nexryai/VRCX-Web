@@ -160,6 +160,18 @@ a {
     background-color: color-mix(in oklch, var(--muted) 20%, transparent);
 }
 
+.accessible-status-indicators .vrcx-status-indicator[data-user-status="joinme"] {
+    mask: url("/images/masks/joinme.svg") center / contain no-repeat;
+}
+
+.accessible-status-indicators .vrcx-status-indicator[data-user-status="askme"] {
+    mask: url("/images/masks/askme.svg") center / contain no-repeat;
+}
+
+.accessible-status-indicators .vrcx-status-indicator[data-user-status="busy"] {
+    mask: url("/images/masks/busy.svg") center / contain no-repeat;
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

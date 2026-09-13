@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-type AppearanceSettings = { isAgeGatedInstancesVisible: boolean; showInstanceIdInLocation: boolean; isDataTableStriped: boolean };
+type AppearanceSettings = { isAgeGatedInstancesVisible: boolean; showInstanceIdInLocation: boolean; isDataTableStriped: boolean; accessibleStatusIndicators: boolean };
 
-const defaultAppearanceSettings: AppearanceSettings = { isAgeGatedInstancesVisible: false, showInstanceIdInLocation: false, isDataTableStriped: false };
+const defaultAppearanceSettings: AppearanceSettings = { isAgeGatedInstancesVisible: false, showInstanceIdInLocation: false, isDataTableStriped: false, accessibleStatusIndicators: false };
 const AppearanceSettingsContext = createContext<AppearanceSettings>(defaultAppearanceSettings);
 
 export function AppearanceSettingsProvider({ children }: { children: React.ReactNode }) {
@@ -14,7 +14,7 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
         const controller = new AbortController();
         void fetch("/api/settings", { cache: "no-store", signal: controller.signal })
             .then((response) => response.json() as Promise<Partial<AppearanceSettings>>)
-            .then((value) => setSettings({ isAgeGatedInstancesVisible: value.isAgeGatedInstancesVisible === true, showInstanceIdInLocation: value.showInstanceIdInLocation === true, isDataTableStriped: value.isDataTableStriped === true }))
+            .then((value) => setSettings({ isAgeGatedInstancesVisible: value.isAgeGatedInstancesVisible === true, showInstanceIdInLocation: value.showInstanceIdInLocation === true, isDataTableStriped: value.isDataTableStriped === true, accessibleStatusIndicators: value.accessibleStatusIndicators === true }))
             .catch(() => undefined);
         function applySettings(event: Event) {
             const value = (event as CustomEvent<Partial<AppearanceSettings>>).detail;
@@ -22,6 +22,7 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                 isAgeGatedInstancesVisible: value && typeof value.isAgeGatedInstancesVisible === "boolean" ? value.isAgeGatedInstancesVisible : current.isAgeGatedInstancesVisible,
                 showInstanceIdInLocation: value && typeof value.showInstanceIdInLocation === "boolean" ? value.showInstanceIdInLocation : current.showInstanceIdInLocation,
                 isDataTableStriped: value && typeof value.isDataTableStriped === "boolean" ? value.isDataTableStriped : current.isDataTableStriped,
+                accessibleStatusIndicators: value && typeof value.accessibleStatusIndicators === "boolean" ? value.accessibleStatusIndicators : current.accessibleStatusIndicators,
             }));
         }
         window.addEventListener("vrcx:settings", applySettings);
@@ -39,6 +40,11 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
             delete document.documentElement.dataset.tableStriped;
         };
     }, [settings.isDataTableStriped]);
+
+    useEffect(() => {
+        document.documentElement.classList.toggle("accessible-status-indicators", settings.accessibleStatusIndicators);
+        return () => document.documentElement.classList.remove("accessible-status-indicators");
+    }, [settings.accessibleStatusIndicators]);
 
     return <AppearanceSettingsContext.Provider value={settings}>{children}</AppearanceSettingsContext.Provider>;
 }

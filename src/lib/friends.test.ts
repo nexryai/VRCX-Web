@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupFriendsByLocation, locationLabel } from "./friends";
+import { groupFriendsByLocation, locationLabel, statusIndicatorKind } from "./friends";
 import type { VrchatUser } from "./vrchat/types";
 
 const makeFriend = (id: string, displayName: string, location: string, worldName?: string): VrchatUser => ({
@@ -33,5 +33,9 @@ describe("friend location helpers", () => {
         expect(groups[0].location).toBe("Private");
         expect(groups[0].members.map((friend) => friend.displayName)).toEqual(["Alpha", "Zulu"]);
         expect(groups[1].location).toBe("A World");
+    });
+
+    it("maps VRChat statuses to the VRCX accessible indicator masks", () => {
+        expect([statusIndicatorKind("join me"), statusIndicatorKind("ask me"), statusIndicatorKind("busy"), statusIndicatorKind("active"), statusIndicatorKind("offline")]).toEqual(["joinme", "askme", "busy", "online", "offline"]);
     });
 });
