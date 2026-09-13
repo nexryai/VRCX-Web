@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ArrowDown, ArrowRight, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, ListFilter, Loader2, Search, Star, Trash2, UserMinus } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { useFriends } from "@/components/friends/friends-provider";
 import { VrchatImage } from "@/components/vrchat-image";
 import { type ActivityType, type FriendActivity, isFriendLogEntryVisible } from "@/lib/activity-log";
+import { formatVrcxDate } from "@/lib/date-format";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 
 type ActivityMode = "feed" | "friend-log";
@@ -26,12 +28,6 @@ type ActivitySettings = {
 };
 
 const defaultSettings: ActivitySettings = { feedFilters: [], feedFavoritesOnly: false, friendLogFilters: [], activityTablePageSize: 20, hideUnfriends: false };
-
-function formatDate(value: string, long = false) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat("en", long ? { dateStyle: "long", timeStyle: "medium" } : { dateStyle: "short", timeStyle: "short" }).format(date);
-}
 
 function splitStatus(value?: string) {
     const [status = "", ...description] = (value || "").split("\n");
@@ -349,6 +345,7 @@ function FeedTable({ entries, expanded, setExpanded, ascending, toggleSort, open
 }
 
 function FragmentRow({ entry, expanded, toggle, openUser }: { entry: FriendActivity; expanded: boolean; toggle: () => void; openUser: (id: string) => void }) {
+    const dateSettings = useDateTimeSettings();
     return (
         <>
             <tr className="hover:bg-muted/50">
@@ -357,8 +354,8 @@ function FragmentRow({ entry, expanded, toggle, openUser }: { entry: FriendActiv
                         {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                     </button>
                 </td>
-                <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatDate(entry.createdAt, true)}>
-                    {formatDate(entry.createdAt)}
+                <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatVrcxDate(entry.createdAt, "long", dateSettings)}>
+                    {formatVrcxDate(entry.createdAt, "short", dateSettings)}
                 </td>
                 <td className="border-t border-border px-2 py-2">
                     <TypeBadge type={entry.type} />
@@ -428,6 +425,7 @@ function AvatarPreview({ url, label }: { url?: string; label: string }) {
 }
 
 function FriendLogTable({ entries, ascending, toggleSort, openUser, removeEntry }: { entries: FriendActivity[]; ascending: boolean; toggleSort: () => void; openUser: (id: string) => void; removeEntry: (entry: FriendActivity, bypassConfirmation: boolean) => Promise<void> }) {
+    const dateSettings = useDateTimeSettings();
     return (
         <table className="w-full min-w-[580px] table-fixed text-left text-xs">
             <thead className="sticky top-0 z-10 bg-muted/95 text-muted-foreground backdrop-blur">
@@ -445,8 +443,8 @@ function FriendLogTable({ entries, ascending, toggleSort, openUser, removeEntry 
                 {entries.map((entry) => (
                     <tr key={entry.id} className="hover:bg-muted/50">
                         <td className="border-t border-border" />
-                        <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatDate(entry.createdAt, true)}>
-                            {formatDate(entry.createdAt)}
+                        <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatVrcxDate(entry.createdAt, "long", dateSettings)}>
+                            {formatVrcxDate(entry.createdAt, "short", dateSettings)}
                         </td>
                         <td className="border-t border-border px-2 py-2">
                             <TypeBadge type={entry.type} />

@@ -37,14 +37,16 @@ import {
     XCircle,
 } from "lucide-react";
 
-import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useDateTimeSettings, useShowInstanceIdInLocation } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { GalleryFilePicker } from "@/components/groups/gallery-file-picker";
 import { GroupEventEditor } from "@/components/groups/group-event-editor";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
+import { VrcxDate } from "@/components/vrcx-date";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
+import { formatVrcxDate } from "@/lib/date-format";
 import { locationLabel } from "@/lib/friends";
 import { formatGroupAuditLogCsv, GROUP_AUDIT_LOG_EXPORT_FIELDS, GROUP_AUDIT_LOG_EXPORT_LABELS, type GroupAuditLogExportField, groupAuditLogTypeName } from "@/lib/group-audit-log-transfer";
 import { extractGroupBanUserIds, formatGroupBanCsv, GROUP_BAN_EXPORT_FIELDS, GROUP_BAN_EXPORT_LABELS, type GroupBanExportField } from "@/lib/group-ban-transfer";
@@ -888,7 +890,9 @@ function GroupInfo({
                             <p>{announcement.title}</p>
                             <p className="mt-1 whitespace-pre-wrap">{announcement.text || "—"}</p>
                             <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
-                                <span>{dateTime(announcement.updatedAt || announcement.createdAt)}</span>
+                                <span>
+                                    <VrcxDate value={announcement.updatedAt || announcement.createdAt} />
+                                </span>
                                 {canManagePosts ? (
                                     <>
                                         <button type="button" onClick={(event) => editPost(announcement, event.currentTarget)} className="inline-flex size-6 items-center justify-center rounded hover:bg-muted hover:text-foreground" aria-label="Edit post">
@@ -910,7 +914,7 @@ function GroupInfo({
             <GroupCalendar events={calendar} loading={calendarLoading} followingEventId={followingEventId} follow={followCalendarEvent} canEdit={hasGroupPermission(group, "group-calendar-manage")} edit={editCalendarEvent} />
             <div className="flex flex-wrap items-start px-1">
                 <Info label="Members" value={`${number(group.memberCount)} (${number(group.onlineMemberCount)})`} icon={<Users className="size-3.5" />} />
-                <Info label="Created" value={date(group.createdAt)} />
+                <Info label="Created" value={<VrcxDate value={group.createdAt} format="date" />} />
                 <button ref={previousInstancesButton} type="button" onClick={onOpenPreviousInstances} aria-label="Previous Instances" className="box-border w-[167px] rounded p-1.5 text-left text-[13px] hover:bg-muted">
                     <span className="flex items-center gap-1 font-medium leading-[18px]">
                         <History className="size-3.5" /> Previous Instances
@@ -1061,7 +1065,9 @@ function GroupCalendarCard({ event, following, follow, canEdit, edit }: { event:
                         {event.title}
                     </p>
                     <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-                        <span className="font-medium">{eventRange(event)}</span>
+                        <span className="font-medium">
+                            <GroupEventRange event={event} />
+                        </span>
                         <span className="capitalize">{event.accessType}</span>
                     </div>
                 </summary>
@@ -1080,13 +1086,9 @@ function GroupCalendarCard({ event, following, follow, canEdit, edit }: { event:
     );
 }
 
-function eventRange(event: VrchatGroupCalendarEvent) {
-    const startsAt = new Date(event.startsAt);
-    const endsAt = new Date(event.endsAt);
-    if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return `${event.startsAt} – ${event.endsAt}`;
-    const date = new Intl.DateTimeFormat("en", { dateStyle: "short" }).format(startsAt);
-    const time = new Intl.DateTimeFormat("en", { timeStyle: "short" });
-    return `${date} ${time.format(startsAt)} – ${time.format(endsAt)}`;
+function GroupEventRange({ event }: { event: VrchatGroupCalendarEvent }) {
+    const settings = useDateTimeSettings();
+    return <>{`${formatVrcxDate(event.startsAt, "date", settings)} ${formatVrcxDate(event.startsAt, "time", settings)} – ${formatVrcxDate(event.endsAt, "time", settings)}`}</>;
 }
 
 function GroupInviteDialog({ group, friends, close }: { group: VrchatGroup; friends: VrchatUser[]; close: () => void }) {
@@ -1545,7 +1547,9 @@ function GroupMemberModerationDialog({ group, currentUserId, openUser, close }: 
                                                 <td className="truncate p-2" title={member.managerNotes}>
                                                     {member.managerNotes || "—"}
                                                 </td>
-                                                <td className="p-2">{dateTime(member.joinedAt)}</td>
+                                                <td className="p-2">
+                                                    <VrcxDate value={member.joinedAt} />
+                                                </td>
                                                 <td className="truncate p-2">{member.visibility || "—"}</td>
                                             </tr>
                                         ))}
@@ -1816,8 +1820,12 @@ function GroupModerationBansTab({
                                 <td className="truncate p-2" title={ban.managerNotes}>
                                     {ban.managerNotes || "—"}
                                 </td>
-                                <td className="p-2">{dateTime(ban.joinedAt)}</td>
-                                <td className="p-2">{dateTime(ban.bannedAt)}</td>
+                                <td className="p-2">
+                                    <VrcxDate value={ban.joinedAt} />
+                                </td>
+                                <td className="p-2">
+                                    <VrcxDate value={ban.bannedAt} />
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -2212,7 +2220,9 @@ function GroupModerationLogsTab({ group, openUser, busy, reportError }: { group:
                     <tbody>
                         {pageLogs.map((log) => (
                             <tr key={log.id} className="border-t border-border hover:bg-muted/50">
-                                <td className="p-2">{dateTime(log.created_at)}</td>
+                                <td className="p-2">
+                                    <VrcxDate value={log.created_at} />
+                                </td>
                                 <td className="truncate p-2">{log.eventType}</td>
                                 <td className="truncate p-2">
                                     {log.actorId?.startsWith("usr_") ? (
@@ -2742,7 +2752,9 @@ function GroupPosts({
                                     {post.authorId}
                                 </button>
                             ) : null}
-                            <span>{dateTime(post.updatedAt || post.createdAt)}</span>
+                            <span>
+                                <VrcxDate value={post.updatedAt || post.createdAt} />
+                            </span>
                             {canManage ? (
                                 <>
                                     <button type="button" onClick={(event) => editPost(post, event.currentTarget)} className="inline-flex size-6 items-center justify-center rounded hover:bg-muted hover:text-foreground" aria-label="Edit post">
@@ -2777,7 +2789,7 @@ function GroupMembers({ group, members, search, setSearch, refresh, loadMore, ha
                             <FriendAvatar friend={user} size="sm" />
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate font-medium">{user.displayName}</span>
-                                <span className="block truncate text-[10px] text-muted-foreground">{member.roleIds.map((id) => roleNames.get(id) || id).join(", ") || date(member.joinedAt)}</span>
+                                <span className="block truncate text-[10px] text-muted-foreground">{member.roleIds.map((id) => roleNames.get(id) || id).join(", ") || <VrcxDate value={member.joinedAt} format="date" />}</span>
                             </span>
                         </button>
                     );
@@ -2951,7 +2963,7 @@ function Badge({ children, icon }: { children: React.ReactNode; icon?: React.Rea
     );
 }
 
-function Info({ label, value, icon, action }: { label: string; value: string; icon?: React.ReactNode; action?: () => void }) {
+function Info({ label, value, icon, action }: { label: string; value: React.ReactNode; icon?: React.ReactNode; action?: () => void }) {
     const content = (
         <>
             <span className="flex items-center gap-1 truncate font-medium leading-[18px]">
@@ -2991,16 +3003,4 @@ function FullInfo({ label, value, links }: { label: string; value: string; links
 
 function number(value?: number) {
     return value === undefined ? "—" : new Intl.NumberFormat("en").format(value);
-}
-
-function date(value?: string) {
-    if (!value) return "—";
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(parsed);
-}
-
-function dateTime(value?: string) {
-    if (!value) return "—";
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }

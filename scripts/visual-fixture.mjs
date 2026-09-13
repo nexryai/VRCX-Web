@@ -243,6 +243,9 @@ await database.collection("app_settings").insertOne({
     hideUserNotes: false,
     hideUserMemos: false,
     hideNicknames: false,
+    dtHour12: false,
+    dtIsoFormat: false,
+    weekStartsOn: 1,
     updatedAt: now,
 });
 await database.collection("vrchat_session").insertOne({ _id: "singleton", schemaVersion: 1, status: "authenticated", activeUserId: ownerId, encryptedCookies: encryptedCookies({ auth: "visual-fixture" }), createdAt: now, updatedAt: now });

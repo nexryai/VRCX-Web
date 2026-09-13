@@ -40,6 +40,9 @@ describe("application settings boundary", () => {
             hideUserNotes: false,
             hideUserMemos: false,
             hideNicknames: false,
+            dtHour12: false,
+            dtIsoFormat: false,
+            weekStartsOn: 1,
         });
     });
 
@@ -88,6 +91,8 @@ describe("application settings boundary", () => {
         expect(appSettingsUpdateSchema.safeParse({ displayVRCPlusIconsAsAvatar: false }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ hideUserNotes: true, hideUserMemos: true }).success).toBe(true);
         expect(appSettingsUpdateSchema.safeParse({ hideNicknames: true }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ dtHour12: true, dtIsoFormat: true, weekStartsOn: 6 }).success).toBe(true);
+        expect(appSettingsUpdateSchema.safeParse({ weekStartsOn: 2 }).success).toBe(false);
     });
 
     it("accepts only the versioned settings backup format", () => {

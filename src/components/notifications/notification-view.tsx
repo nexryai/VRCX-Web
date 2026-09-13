@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ArrowUpDown, Ban, BellOff, Check, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Image as ImageIcon, Link as LinkIcon, Loader2, MessageCircle, RefreshCw, Reply, Send, Tag, Trash2, X } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { useFriends } from "@/components/friends/friends-provider";
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
+import { formatVrcxDate } from "@/lib/date-format";
 import type { VrchatNotification } from "@/lib/vrchat/types";
 
 type NotificationSource = "hidden" | "legacy" | "v2";
@@ -78,12 +80,6 @@ function notificationDate(notification: VrchatNotification) {
 function notificationTimestamp(notification: VrchatNotification) {
     const date = notificationDate(notification);
     return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
-}
-
-function formatDate(notification: VrchatNotification, long = false) {
-    const date = notificationDate(notification);
-    if (!date || Number.isNaN(date.getTime())) return "Unknown";
-    return new Intl.DateTimeFormat("en", long ? { dateStyle: "long", timeStyle: "medium" } : { dateStyle: "short", timeStyle: "short" }).format(date);
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -345,6 +341,8 @@ function NotificationTable({ notifications, toggleSort, busyId, openUser, update
 }
 
 function NotificationRow({ notification, busy, openUser, updateNotification, deleteLog }: { notification: VrchatNotification; busy: boolean; openUser: (id: string) => void; updateNotification: TableProps["updateNotification"]; deleteLog: TableProps["deleteLog"] }) {
+    const dateSettings = useDateTimeSettings();
+    const date = notificationDate(notification);
     const details = asRecord(notification.details);
     const data = asRecord(notification.data);
     const groupName = notification.groupName || textValue(data.groupName) || textValue(details.groupName) || (notification.senderUserId?.startsWith("grp_") ? notification.senderUsername : "");
@@ -370,8 +368,8 @@ function NotificationRow({ notification, busy, openUser, updateNotification, del
     return (
         <tr className="hover:bg-muted/50">
             <td className="border-t border-border" />
-            <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatDate(notification, true)}>
-                {formatDate(notification)}
+            <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatVrcxDate(date, "long", dateSettings)}>
+                {formatVrcxDate(date, "short", dateSettings)}
             </td>
             <td className="border-t border-border px-2 py-2">
                 <span className="inline-flex max-w-full rounded border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{notificationLabels[notification.type] || notification.type}</span>

@@ -4,10 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, EyeOff, Link as LinkIcon, Loader2, Star, UserMinus } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import type { FriendActivity } from "@/lib/activity-log";
 import { trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
+import { formatVrcxDate } from "@/lib/date-format";
 import { loadFavoriteFriendIds } from "@/lib/friend-favorites-client";
 import { type FriendListSearchField, type FriendListUser, friendListSearchFields, friendMatchesSearch } from "@/lib/friend-list";
 import { statusColor, statusIndicatorKind } from "@/lib/friends";
@@ -20,12 +22,6 @@ import { useFriends } from "./friends-provider";
 type SortKey = "number" | "displayName" | "rank" | "status" | "mutual" | "lastActivity" | "lastLogin" | "dateJoined";
 type PageSize = 20 | 50 | 100;
 
-function formatDate(value?: string) {
-    if (!value) return "";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
-
 function languages(friend: VrchatUser) {
     return (friend.tags || []).filter((tag) => tag.startsWith("language_")).map((tag) => tag.slice("language_".length).toUpperCase());
 }
@@ -36,6 +32,7 @@ function compare(left: string | number, right: string | number) {
 }
 
 export function FriendListView() {
+    const dateSettings = useDateTimeSettings();
     const currentUser = useCurrentUser();
     const { allFriends: friends, loading, error, reload, openUser, removeFriend } = useFriends();
     const [search, setSearch] = useState("");
@@ -348,9 +345,9 @@ export function FriendListView() {
                                         </div>
                                     </td>
                                     <td className="border-t border-border px-2 py-2 text-right">{snapshot?.optedOut.includes(friend.id) ? <EyeOff className="inline size-3.5 text-muted-foreground" aria-label="Mutual connections unavailable" /> : mutualCount(friend) || ""}</td>
-                                    <td className="whitespace-nowrap border-t border-border px-2 py-2">{formatDate(lastSeen.get(friend.id))}</td>
-                                    <td className="whitespace-nowrap border-t border-border px-2 py-2">{formatDate(friend.last_activity)}</td>
-                                    <td className="whitespace-nowrap border-t border-border px-2 py-2">{formatDate(friend.last_login)}</td>
+                                    <td className="whitespace-nowrap border-t border-border px-2 py-2">{formatVrcxDate(lastSeen.get(friend.id), "long", dateSettings)}</td>
+                                    <td className="whitespace-nowrap border-t border-border px-2 py-2">{formatVrcxDate(friend.last_activity, "long", dateSettings)}</td>
+                                    <td className="whitespace-nowrap border-t border-border px-2 py-2">{formatVrcxDate(friend.last_login, "long", dateSettings)}</td>
                                     <td className="whitespace-nowrap border-t border-border px-2 py-2">{friend.date_joined || ""}</td>
                                     <td className="border-t border-border px-2 py-2 text-center" onClick={(event) => event.stopPropagation()}>
                                         <button type="button" onClick={() => void unfriend(friend)} disabled={busyIds.has(friend.id)} className="inline-flex size-7 items-center justify-center text-destructive disabled:opacity-40" aria-label={`Unfriend ${friend.displayName}`}>

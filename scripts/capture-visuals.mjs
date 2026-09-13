@@ -15,6 +15,7 @@ const captures = [
     { name: "friends-locations-profile-icons-disabled", path: "/settings", readyText: "Aoi Sample", clickText: "Interface", profileIcons: true },
     { name: "feed", path: "/feed", readyText: "Own status is now recorded" },
     { name: "feed-striped", path: "/settings", readyText: "Own status is now recorded", clickText: "Interface", stripedTable: true },
+    { name: "feed-date-format", path: "/settings", readyText: "Own status is now recorded", clickText: "Interface", dateFormat: true },
     { name: "sidebar-instance-groups", path: "/feed", readyText: "Same Instance ― 1", desktopOnly: true },
     { name: "sidebar-settings", path: "/feed", readyText: "Sort by Last Active", sidebarSettings: true, desktopOnly: true },
     { name: "sidebar-favorite-groups", path: "/feed", readyText: "Best Friends ― 1", desktopOnly: true },
@@ -129,6 +130,7 @@ const captures = [
     { name: "tools-friends-export", path: "/tools", readyText: "Export Friends List", toolDialog: "friends" },
     { name: "tools-avatars-export", path: "/tools", readyText: "Export Own Avatars", toolDialog: "avatars", avatars: true },
     { name: "tools-group-calendar", path: "/tools", readyText: "Tools Creator Meetup", toolDialog: "calendar", groupCalendarDownload: true },
+    { name: "tools-group-calendar-saturday", path: "/settings", readyText: "Tools Creator Meetup", clickText: "Interface", toolDialog: "calendar", calendarWeekStart: true },
     { name: "tools-group-calendar-event-edit", path: "/tools", readyText: "Edit Group Event", toolDialog: "calendar", groupEventDialog: "edit" },
     { name: "tools-group-calendar-event-delete", path: "/tools", readyText: "Are you sure you want to delete this group event?", toolDialog: "calendar", groupEventDialog: "delete" },
 ];
@@ -395,6 +397,40 @@ for (const width of widths) {
                 if (route.request().method() === "GET" && !nicknamesHidden) {
                     const payload = await response.json();
                     return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, hideNicknames: false }) });
+                }
+                return route.fulfill({ response });
+            });
+        }
+        if (capture.dateFormat) {
+            let hour12 = false;
+            let iso = false;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && typeof body.dtHour12 === "boolean") hour12 = body.dtHour12;
+                    if (response.ok() && typeof body.dtIsoFormat === "boolean") iso = body.dtIsoFormat;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET" && !(hour12 && iso)) {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, dtHour12: false, dtIsoFormat: false }) });
+                }
+                return route.fulfill({ response });
+            });
+        }
+        if (capture.calendarWeekStart) {
+            let weekStartsOn = 1;
+            await page.route("**/api/settings", async (route) => {
+                const response = await route.fetch();
+                if (route.request().method() === "PATCH") {
+                    const body = JSON.parse(route.request().postData() || "{}");
+                    if (response.ok() && (body.weekStartsOn === 0 || body.weekStartsOn === 1 || body.weekStartsOn === 6)) weekStartsOn = body.weekStartsOn;
+                    return route.fulfill({ response });
+                }
+                if (route.request().method() === "GET") {
+                    const payload = await response.json();
+                    return route.fulfill({ response, contentType: "application/json", body: JSON.stringify({ ...payload, dtHour12: false, dtIsoFormat: false, weekStartsOn: weekStartsOn === 6 ? 6 : 1 }) });
                 }
                 return route.fulfill({ response });
             });
@@ -1281,6 +1317,32 @@ for (const width of widths) {
             await page.getByText("Aoi Sample", { exact: true }).first().waitFor();
             if (await nickname.count()) throw new Error("The memo nickname remained visible after Friend Memo Nicknames was disabled.");
         }
+        if (capture.dateFormat) {
+            const hour12 = page.getByRole("button", { name: "12-hour", exact: true });
+            const hourSaved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await hour12.click();
+            await hourSaved;
+            const iso = page.getByRole("switch", { name: "Force ISO Date Format", exact: true });
+            const isoSaved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await iso.click();
+            await isoSaved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.dtHour12 !== true || savedSettings.dtIsoFormat !== true) throw new Error(`Time and Date preferences did not persist: ${JSON.stringify(savedSettings)}`);
+            await page.goto(`http://localhost:${port}/feed`, { waitUntil: "domcontentloaded" });
+            const dateCell = page.locator("tbody tr").first().locator("td").nth(1);
+            await dateCell.waitFor();
+            if (!/[ap]m$/i.test((await dateCell.textContent())?.trim() || "")) throw new Error(`Feed did not use 12-hour short time: ${await dateCell.textContent()}`);
+            if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test((await dateCell.getAttribute("title")) || "")) throw new Error(`Feed did not use ISO long date: ${await dateCell.getAttribute("title")}`);
+        }
+        if (capture.calendarWeekStart) {
+            const select = page.getByRole("combobox", { name: "Week Starts On", exact: true });
+            const saved = page.waitForResponse((response) => response.url().endsWith("/api/settings") && response.request().method() === "PATCH" && response.ok(), { timeout: 60_000 });
+            await select.selectOption("6");
+            await saved;
+            const savedSettings = await page.evaluate(() => fetch("/api/settings", { cache: "no-store" }).then((response) => response.json()));
+            if (savedSettings.weekStartsOn !== 6) throw new Error("Week Starts On did not persist in MongoDB.");
+            await page.goto(`http://localhost:${port}/tools`, { waitUntil: "domcontentloaded" });
+        }
         if (capture.sidebarSettings) {
             const trigger = page.getByRole("button", { name: "Sidebar settings", exact: true });
             await trigger.click();
@@ -1442,6 +1504,11 @@ for (const width of widths) {
             await dialog.waitFor();
             if (capture.toolDialog === "avatars") await dialog.getByRole("textbox", { name: "Export Own Avatars export", exact: true }).waitFor();
             if (capture.toolDialog === "calendar") await dialog.getByText("Tools Creator Meetup", { exact: true }).waitFor();
+            if (capture.calendarWeekStart) {
+                const weekdayRow = dialog.getByText("Sat", { exact: true }).first().locator("..");
+                const weekdays = await weekdayRow.locator("span").allTextContents();
+                if (weekdays.join(",") !== "Sat,Sun,Mon,Tue,Wed,Thu,Fri") throw new Error(`Calendar did not start on Saturday: ${JSON.stringify(weekdays)}`);
+            }
             if (capture.groupEventDialog === "edit" || capture.groupEventDialog === "delete") {
                 await dialog.getByRole("button", { name: "Edit Tools Creator Meetup", exact: true }).click();
                 const editor = page.getByRole("dialog", { name: "Edit Group Event", exact: true });

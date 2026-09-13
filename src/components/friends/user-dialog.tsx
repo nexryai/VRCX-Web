@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarDays, Clipboard, Clock, ExternalLink, History, Image as ImageIcon, Link as LinkIcon, Loader2, LogIn, MapPin, RefreshCw, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 
-import { useAgeGatedInstancesVisible, useShowInstanceIdInLocation, useUserNoteVisibility } from "@/components/appearance-settings-provider";
+import { useAgeGatedInstancesVisible, useDateTimeSettings, useShowInstanceIdInLocation, useUserNoteVisibility } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
@@ -12,6 +12,7 @@ import { PreviousInstancesDialog } from "@/components/previous-instances/previou
 import { VrchatImage } from "@/components/vrchat-image";
 import { type FriendActivity, trustLevelFromTags } from "@/lib/activity-log";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
+import { formatVrcxDate } from "@/lib/date-format";
 import { friendImage, locationLabel, statusColor, statusIndicatorKind } from "@/lib/friends";
 import type { VrchatGroup, VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 import { FriendAvatar } from "./friend-avatar";
@@ -20,12 +21,6 @@ import { useFriends } from "./friends-provider";
 type UserTab = "Info" | "Mutual" | "Groups" | "Worlds" | "Activity" | "JSON";
 const tabs: UserTab[] = ["Info", "Mutual", "Groups", "Worlds", "Activity", "JSON"];
 const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, key: `hour-${hour}` }));
-
-function formatDate(value?: string) {
-    if (!value) return "Unknown";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(date);
-}
 
 function userLanguages(user: VrchatUser) {
     return (user.tags || []).filter((tag) => tag.startsWith("language_")).map((tag) => tag.slice("language_".length).toUpperCase());
@@ -540,6 +535,7 @@ function InfoTab({
     onOpenPreviousInstances: () => void;
     previousInstancesButton: React.RefObject<HTMLButtonElement | null>;
 }) {
+    const dateSettings = useDateTimeSettings();
     const showAgeGatedInstances = useAgeGatedInstancesVisible();
     const showInstanceId = useShowInstanceIdInLocation();
     const locationRestricted = !showAgeGatedInstances && Boolean(user.location?.includes("~ageGate") || user.travelingToLocation?.includes("~ageGate"));
@@ -582,8 +578,8 @@ function InfoTab({
                 ) : null}
             </section>
             <section className="grid gap-2 sm:grid-cols-2">
-                <InfoCard icon={<CalendarDays className="size-4" />} label="Joined VRChat" value={formatDate(user.date_joined)} />
-                <InfoCard icon={<LogIn className="size-4" />} label="Last login" value={formatDate(user.last_login || user.last_activity)} />
+                <InfoCard icon={<CalendarDays className="size-4" />} label="Joined VRChat" value={formatVrcxDate(user.date_joined, "date", dateSettings)} />
+                <InfoCard icon={<LogIn className="size-4" />} label="Last login" value={formatVrcxDate(user.last_login || user.last_activity, "long", dateSettings)} />
             </section>
         </div>
     );

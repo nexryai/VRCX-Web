@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Loader2, RefreshCw, Trash2, X } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
+import { formatVrcxDate } from "@/lib/date-format";
 import type { VrchatPlayerModeration } from "@/lib/vrchat/types";
 
 type PageSize = 20 | 50 | 100;
@@ -31,14 +33,8 @@ function moderationTimestamp(row: VrchatPlayerModeration) {
     return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function formatDate(value?: string, long = false) {
-    if (!value) return "Unknown";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat("en", long ? { dateStyle: "long", timeStyle: "medium" } : { dateStyle: "short", timeStyle: "short" }).format(date);
-}
-
 export function ModerationView() {
+    const dateSettings = useDateTimeSettings();
     const currentUser = useCurrentUser();
     const { openUser } = useFriends();
     const [moderations, setModerations] = useState<VrchatPlayerModeration[]>([]);
@@ -231,8 +227,8 @@ export function ModerationView() {
                                 return (
                                     <tr key={key} className="hover:bg-muted/50">
                                         <td className="border-t border-border" />
-                                        <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatDate(row.created, true)}>
-                                            {formatDate(row.created)}
+                                        <td className="whitespace-nowrap border-t border-border px-2 py-2 text-muted-foreground" title={formatVrcxDate(row.created, "long", dateSettings)}>
+                                            {formatVrcxDate(row.created, "short", dateSettings)}
                                         </td>
                                         <td className="border-t border-border px-2 py-2">
                                             <span className="inline-flex max-w-full rounded border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{moderationLabels[row.type] || row.type}</span>

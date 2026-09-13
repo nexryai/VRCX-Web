@@ -6,8 +6,10 @@ import { createPortal } from "react-dom";
 
 import { Ban, Bell, BellOff, Check, ExternalLink, Link as LinkIcon, Mail, MessageCircle, Reply, Send, Tag, Trash2, UserPlus, Users, X } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { VrchatImage } from "@/components/vrchat-image";
 import { safeExternalHttpUrl } from "@/lib/browser-url";
+import { formatVrcxDate } from "@/lib/date-format";
 import { type NotificationCategory, notificationDetails, notificationText, notificationTimestamp, splitNotificationCenter } from "@/lib/notifications/notification-center";
 import type { VrchatNotification, VrchatUser } from "@/lib/vrchat/types";
 
@@ -356,6 +358,7 @@ function NotificationItem({
     openGroup: (groupId: string) => void;
     update: (notification: VrchatNotification, method: "DELETE" | "POST", body: Record<string, unknown>) => Promise<void>;
 }) {
+    const dateSettings = useDateTimeSettings();
     const details = notificationDetails(notification.details);
     const data = notification.data || {};
     const group = notification.type.startsWith("group.") || notification.type.startsWith("moderation.") || notification.type === "groupChange";
@@ -399,7 +402,7 @@ function NotificationItem({
                 {message ? <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{message}</p> : null}
             </div>
             <div className="flex h-full shrink-0 flex-col items-end justify-between gap-1 self-stretch">
-                <time className="text-[10px] text-muted-foreground" title={notificationTimestamp(notification) ? new Date(notificationTimestamp(notification)).toLocaleString() : undefined}>
+                <time className="text-[10px] text-muted-foreground" title={notificationTimestamp(notification) ? formatVrcxDate(new Date(notificationTimestamp(notification)), "long", dateSettings) : undefined}>
                     {relativeTime(notification)}
                 </time>
                 <div className="flex items-center gap-0.5">

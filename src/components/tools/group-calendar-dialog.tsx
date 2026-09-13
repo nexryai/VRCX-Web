@@ -4,11 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Download, Loader2, Pencil, Repeat, Search, Share2, Star } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
 import { GroupEventEditor } from "@/components/groups/group-event-editor";
 import { ToolsDialogFrame } from "@/components/tools/tools-dialog-frame";
 import { VrchatImage } from "@/components/vrchat-image";
+import { calendarGridStart, formatVrcxDate, orderedWeekdays, type VrcxDateSettings } from "@/lib/date-format";
 import { calendarDateKey, calendarMonthFromDate, mergeCalendarEvents, toolsGroupCalendarPayloadSchema } from "@/lib/group-calendar";
 import type { VrchatGroup, VrchatGroupCalendarEvent, VrchatGroupCalendarInterestUpdate } from "@/lib/vrchat/types";
 
@@ -220,9 +222,10 @@ function Timeline({
     selectGroup: (groupId: string) => void;
     edit: (event: VrchatGroupCalendarEvent) => void;
 }) {
+    const dateSettings = useDateTimeSettings();
     const grouped = new Map<string, VrchatGroupCalendarEvent[]>();
     for (const event of events) {
-        const key = timeOnly(event.startsAt);
+        const key = timeOnly(event.startsAt, dateSettings);
         grouped.set(key, [...(grouped.get(key) || []), event]);
     }
     return [...grouped.entries()].map(([time, timeEvents]) => (
@@ -256,6 +259,7 @@ function CalendarEventCard({
     edit: (event: VrchatGroupCalendarEvent) => void;
     mode: CalendarView;
 }) {
+    const dateSettings = useDateTimeSettings();
     const [busy, setBusy] = useState(false);
     const [copied, setCopied] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -341,7 +345,7 @@ function CalendarEventCard({
                     {event.title}
                 </button>
                 <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-                    <span className="font-medium">{mode === "timeline" ? `${timeOnly(event.startsAt)} - ${timeOnly(event.endsAt)}` : eventRange(event)}</span>
+                    <span className="font-medium">{mode === "timeline" ? `${timeOnly(event.startsAt, dateSettings)} - ${timeOnly(event.endsAt, dateSettings)}` : eventRange(event, dateSettings)}</span>
                     <span className="capitalize">{event.accessType}</span>
                 </div>
                 <button type="button" onClick={() => setExpanded((current) => !current)} aria-expanded={expanded} className="mt-2 text-[11px] text-muted-foreground hover:underline">
@@ -355,7 +359,7 @@ function CalendarEventCard({
                         <Info label="Category" value={event.category} />
                         <Info label="Users Interested" value={String(event.interestedUserCount)} />
                         <Info label="Close Instance After End" value={`${event.closeInstanceAfterEndMinutes} min`} />
-                        <Info label="Created Date" value={shortDate(event.createdAt)} />
+                        <Info label="Created Date" value={formatVrcxDate(event.createdAt, "date", dateSettings)} />
                         <div className="col-span-2">
                             <span className="text-muted-foreground">Description</span>
                             <p className="mt-1 whitespace-pre-wrap break-words">{event.description || "—"}</p>
@@ -369,9 +373,9 @@ function CalendarEventCard({
 }
 
 function MonthCalendar({ selected, events, followingIds, changeMonth, select }: { selected: Date; events: VrchatGroupCalendarEvent[]; followingIds: Set<string>; changeMonth: (offset: number) => void; select: (date: Date) => void }) {
+    const dateSettings = useDateTimeSettings();
     const first = new Date(selected.getFullYear(), selected.getMonth(), 1);
-    const gridStart = new Date(first);
-    gridStart.setDate(1 - first.getDay());
+    const gridStart = calendarGridStart(first, dateSettings.weekStartsOn);
     const days = Array.from({ length: 42 }, (_, index) => new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index));
     const byDate = new Map<string, VrchatGroupCalendarEvent[]>();
     for (const event of events) byDate.set(calendarDateKey(event.startsAt), [...(byDate.get(calendarDateKey(event.startsAt)) || []), event]);
@@ -387,7 +391,7 @@ function MonthCalendar({ selected, events, followingIds, changeMonth, select }: 
                 </button>
             </div>
             <div className="mt-4 grid grid-cols-7 text-center text-xs text-muted-foreground">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                {orderedWeekdays(dateSettings.weekStartsOn).map((day) => (
                     <span key={day}>{day}</span>
                 ))}
             </div>
@@ -404,7 +408,7 @@ function MonthCalendar({ selected, events, followingIds, changeMonth, select }: 
                             type="button"
                             onClick={() => select(day)}
                             className={`relative mx-auto flex size-12 items-center justify-center rounded-xl text-lg hover:bg-muted ${isSelected ? "bg-accent ring-1 ring-primary" : ""} ${currentMonth ? "" : "text-muted-foreground/40"}`}
-                            aria-label={`${shortDate(day)}${rows.length ? `, ${rows.length} events` : ""}`}
+                            aria-label={`${formatVrcxDate(day, "date", dateSettings)}${rows.length ? `, ${rows.length} events` : ""}`}
                         >
                             {day.getDate()}
                             {rows.length ? <span className={`absolute top-0 right-0 inline-flex h-4 min-w-4 items-center justify-center rounded-xl px-1 text-[10px] font-bold ${hasFollowing ? "bg-primary text-primary-foreground" : "bg-foreground text-background"}`}>{rows.length}</span> : null}
@@ -442,14 +446,11 @@ function toggleSet(current: Set<string>, value: string) {
 function shortDay(value: string) {
     return new Intl.DateTimeFormat("en", { month: "2-digit", day: "2-digit", weekday: "short" }).format(new Date(value));
 }
-function shortDate(value: string | Date) {
-    return new Intl.DateTimeFormat("en", { dateStyle: "short" }).format(new Date(value));
+function timeOnly(value: string, settings: VrcxDateSettings) {
+    return formatVrcxDate(value, "time", settings);
 }
-function timeOnly(value: string) {
-    return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
-}
-function eventRange(event: VrchatGroupCalendarEvent) {
-    return `${shortDate(event.startsAt)} ${timeOnly(event.startsAt)} - ${timeOnly(event.endsAt)}`;
+function eventRange(event: VrchatGroupCalendarEvent, settings: VrcxDateSettings) {
+    return `${formatVrcxDate(event.startsAt, "date", settings)} ${timeOnly(event.startsAt, settings)} - ${timeOnly(event.endsAt, settings)}`;
 }
 function readError(payload: unknown, fallback: string) {
     return typeof payload === "object" && payload !== null && "error" in payload && typeof payload.error === "string" ? payload.error : fallback;

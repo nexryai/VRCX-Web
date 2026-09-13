@@ -4,6 +4,8 @@ import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 
 import { ArrowDown, ArrowUp, Clock3, Loader2, MapPin, Search, X } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
+import { formatVrcxDate } from "@/lib/date-format";
 import { type PreviousInstanceRow, type PreviousInstancesVariant, previousInstancesResponseSchema } from "@/lib/previous-instances";
 
 type SortKey = "date" | "time";
@@ -191,9 +193,10 @@ function SortableHeader({ label, active, descending, onClick, className }: { lab
 }
 
 function PreviousInstanceTableRow({ row, variant }: { row: PreviousInstanceRow; variant: PreviousInstancesVariant }) {
+    const dateSettings = useDateTimeSettings();
     return (
         <tr className="border-b border-border/70 last:border-0 hover:bg-muted/40">
-            <td className="px-3 py-2 align-top">{formatDate(row.startedAt)}</td>
+            <td className="px-3 py-2 align-top">{formatVrcxDate(row.startedAt, "long", dateSettings)}</td>
             <td className="px-3 py-2 align-top">
                 <span className="flex min-w-0 items-start gap-1.5">
                     <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" />
@@ -227,11 +230,6 @@ function PreviousInstanceTableRow({ row, variant }: { row: PreviousInstanceRow; 
 
 function Badge({ children }: { children: React.ReactNode }) {
     return <span className="inline-flex h-5 items-center rounded border border-border px-1.5 text-[10px] text-muted-foreground">{children}</span>;
-}
-
-function formatDate(value: string) {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function formatDuration(milliseconds: number) {

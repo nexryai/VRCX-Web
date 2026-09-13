@@ -12,6 +12,7 @@ import { FriendAvatar } from "@/components/friends/friend-avatar";
 import { MemoField } from "@/components/memo-field";
 import { PreviousInstancesDialog } from "@/components/previous-instances/previous-instances-dialog";
 import { VrchatImage } from "@/components/vrchat-image";
+import { VrcxDate } from "@/components/vrcx-date";
 import type { VrchatUser, VrchatWorld } from "@/lib/vrchat/types";
 import type { WorldAction } from "@/lib/vrchat/world-actions";
 import { normalizeYoutubePreview, type WorldTagSettings, worldTagSettingsFromWorld } from "@/lib/vrchat/world-metadata";
@@ -860,10 +861,10 @@ function WorldInfo({ world, copy, copied, onOpenPreviousInstances, previousInsta
                 <span className="block truncate text-xs text-muted-foreground">Remote visit history</span>
             </button>
             <Info label="Favorite rate" value={favoriteRate} />
-            <Info label="Created" value={date(world.created_at)} />
-            <Info label="Last updated" value={date(world.updated_at)} />
-            {world.labsPublicationDate && world.labsPublicationDate !== "none" ? <Info label="Labs publication date" value={date(world.labsPublicationDate)} /> : null}
-            {world.publicationDate && world.publicationDate !== "none" ? <Info label="Publication date" value={date(world.publicationDate)} /> : null}
+            <Info label="Created" value={<VrcxDate value={world.created_at} />} />
+            <Info label="Last updated" value={<VrcxDate value={world.updated_at} />} />
+            {world.labsPublicationDate && world.labsPublicationDate !== "none" ? <Info label="Labs publication date" value={<VrcxDate value={world.labsPublicationDate} />} /> : null}
+            {world.publicationDate && world.publicationDate !== "none" ? <Info label="Publication date" value={<VrcxDate value={world.publicationDate} />} /> : null}
             <Info label="Version" value={world.version === undefined ? "—" : String(world.version)} />
             <Info label="Heat" value={metric(world.heat, "🔥")} />
             <Info label="Popularity" value={metric(world.popularity, "💖")} />
@@ -954,7 +955,7 @@ function Badge({ children }: { children: React.ReactNode }) {
     return <span className="inline-flex h-5 items-center gap-1 rounded border border-border px-1.5 capitalize">{children}</span>;
 }
 
-function Info({ label, value, action }: { label: string; value: string; action?: () => void }) {
+function Info({ label, value, action }: { label: string; value: React.ReactNode; action?: () => void }) {
     const content = (
         <>
             <span className="block truncate font-medium leading-[18px]">{label}</span>
@@ -976,10 +977,4 @@ function number(value?: number) {
 
 function metric(value: number | undefined, icon: string) {
     return value === undefined ? "—" : `${number(value)} ${icon.repeat(Math.min(Math.max(0, Math.floor(value)), 10))}`;
-}
-
-function date(value?: string) {
-    if (!value || value === "none") return "—";
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(parsed);
 }

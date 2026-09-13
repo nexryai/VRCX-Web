@@ -9,6 +9,7 @@ import { useCurrentUser } from "@/components/current-user-provider";
 import { FavoriteAction } from "@/components/favorite-action";
 import { MemoField } from "@/components/memo-field";
 import { VrchatImage } from "@/components/vrchat-image";
+import { VrcxDate } from "@/components/vrcx-date";
 import { latestAvatarGalleryImageUrl } from "@/lib/vrchat/avatar-gallery";
 import type { VrchatAvatar, VrchatAvatarStyle, VrchatFile } from "@/lib/vrchat/types";
 
@@ -1142,8 +1143,8 @@ function AvatarInfo({ avatar, copied, copy }: { avatar: VrchatAvatar; copied: st
         <div className="flex flex-wrap items-start px-1">
             <MemoField entityType="avatar" entityId={avatar.id} />
             <Info label="Avatar ID" value={copied === "ID" ? "Copied" : avatar.id} action={() => void copy(avatar.id, "ID")} full />
-            <Info label="Created" value={date(avatar.created_at)} />
-            <Info label="Last updated" value={date(avatar.updated_at)} />
+            <Info label="Created" value={<VrcxDate value={avatar.created_at} />} />
+            <Info label="Last updated" value={<VrcxDate value={avatar.updated_at} />} />
             <Info label="Version" value={avatar.version ? String(avatar.version) : "—"} />
             <Info label="Visibility" value={avatar.releaseStatus || "private"} />
             <Info label="Platform" value={packages.map((item) => `${platformLabel(item.platform)}${item.performanceRating ? ` (${item.performanceRating})` : ""}`).join(", ") || "—"} full />
@@ -1175,7 +1176,7 @@ function Badge({ children }: { children: React.ReactNode }) {
     return <span className="inline-flex h-5 items-center gap-1 rounded border border-border px-1.5 capitalize">{children}</span>;
 }
 
-function Info({ label, value, action, full = false }: { label: string; value: string; action?: () => void; full?: boolean }) {
+function Info({ label, value, action, full = false }: { label: string; value: React.ReactNode; action?: () => void; full?: boolean }) {
     const content = (
         <>
             <span className="block truncate font-medium leading-[18px]">{label}</span>
@@ -1190,10 +1191,4 @@ function Info({ label, value, action, full = false }: { label: string; value: st
     ) : (
         <div className={className}>{content}</div>
     );
-}
-
-function date(value?: string) {
-    if (!value) return "—";
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(parsed);
 }

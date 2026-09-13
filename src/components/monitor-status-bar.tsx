@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { type AppSettingsPayload, defaultStatusBarClocks, defaultStatusBarVisibility } from "@/lib/app-settings";
+import { formatVrcxDate } from "@/lib/date-format";
 import { formatAppUptime, formatClock, formatUtcHour, type StatusBarVisibility } from "@/lib/status-bar";
 
 type MonitorStatus = {
@@ -26,11 +28,6 @@ type MonitorStatus = {
 };
 
 type MenuPoint = { x: number; y: number };
-
-function time(value?: string) {
-    if (!value) return "Never";
-    return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(value));
-}
 
 function statusDot(status: MonitorStatus["status"]) {
     if (status === "healthy") return "bg-status-online";
@@ -79,6 +76,8 @@ function PipelineSparkline({ samples }: { samples: number[] }) {
 }
 
 export function MonitorStatusBar() {
+    const dateSettings = useDateTimeSettings();
+    const time = (value?: string) => (value ? formatVrcxDate(value, "time", dateSettings) : "Never");
     const [status, setStatus] = useState<MonitorStatus>({ status: "idle", pipelineConnected: false });
     const [now, setNow] = useState<Date | null>(null);
     const [visibility, setVisibility] = useState<StatusBarVisibility>(defaultStatusBarVisibility);

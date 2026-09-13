@@ -4,9 +4,11 @@ import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } fro
 
 import { Apple, ArrowUpDown, Check, ChevronLeft, ChevronRight, Ellipsis, ExternalLink, Grid2X2, ImageIcon, List, ListFilter, Loader2, Monitor, Pencil, RefreshCw, Settings, Smartphone, Sparkles, Tag, User, X } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { useFriends } from "@/components/friends/friends-provider";
 import { VrchatImage } from "@/components/vrchat-image";
+import { formatVrcxDate } from "@/lib/date-format";
 import type { VrchatAvatar } from "@/lib/vrchat/types";
 
 type ReleaseFilter = "all" | "private" | "public";
@@ -52,12 +54,6 @@ function impostorVersion(avatar: VrchatAvatar) {
 function timestamp(value?: string) {
     const result = Date.parse(value || "");
     return Number.isNaN(result) ? 0 : result;
-}
-
-function formatDate(value?: string) {
-    if (!value) return "Unknown";
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en", { dateStyle: "short", timeStyle: "short" }).format(date);
 }
 
 function hashColor(tag: string) {
@@ -523,6 +519,7 @@ type TableProps = {
 };
 
 function AvatarTable(props: TableProps) {
+    const dateSettings = useDateTimeSettings();
     return (
         <div className="min-h-0 overflow-auto rounded-md border border-border">
             <table className="w-full min-w-[1480px] table-fixed text-left text-xs">
@@ -590,8 +587,8 @@ function AvatarTable(props: TableProps) {
                                 <td className="border-t border-border px-2 py-2">{performance(avatar, "pc") || "-"}</td>
                                 <td className="border-t border-border px-2 py-2">{performance(avatar, "android") || "-"}</td>
                                 <td className="border-t border-border px-2 py-2">{performance(avatar, "ios") || "-"}</td>
-                                <td className="border-t border-border px-2 py-2">{formatDate(avatar.updated_at)}</td>
-                                <td className="border-t border-border px-2 py-2">{formatDate(avatar.created_at)}</td>
+                                <td className="border-t border-border px-2 py-2">{formatVrcxDate(avatar.updated_at, "long", dateSettings)}</td>
+                                <td className="border-t border-border px-2 py-2">{formatVrcxDate(avatar.created_at, "long", dateSettings)}</td>
                                 <td className="border-t border-border px-2" onClick={(event) => event.stopPropagation()}>
                                     <ActionMenu {...cardProps} table />
                                 </td>

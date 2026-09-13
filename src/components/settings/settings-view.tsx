@@ -29,6 +29,9 @@ type SettingsState = Required<
         | "hideUserNotes"
         | "hideUserMemos"
         | "hideNicknames"
+        | "dtHour12"
+        | "dtIsoFormat"
+        | "weekStartsOn"
         | "localFavoriteFriendsGroups"
         | "moderationTablePageSize"
         | "myAvatarsTablePageSize"
@@ -70,6 +73,9 @@ const defaults: SettingsState = {
     hideUserNotes: false,
     hideUserMemos: false,
     hideNicknames: false,
+    dtHour12: false,
+    dtIsoFormat: false,
+    weekStartsOn: 1,
 };
 
 export function SettingsView({ version }: { version: string }) {
@@ -683,6 +689,28 @@ function InterfaceSettings({ settings, change }: { settings: SettingsState; chan
                         <PageSize value={settings[key]} change={(value) => void change({ [key]: value } as Pick<SettingsState, PageSizeKey>)} />
                     </SettingsRow>
                 ))}
+            </SettingsGroup>
+            <SettingsGroup title="Time and Date">
+                <SettingsRow label="Time Format">
+                    <Segmented
+                        value={settings.dtHour12 ? "12" : "24"}
+                        options={[
+                            { value: "12", label: "12-hour" },
+                            { value: "24", label: "24-hour" },
+                        ]}
+                        change={(value) => void change({ dtHour12: value === "12" })}
+                    />
+                </SettingsRow>
+                <SettingsRow label="Force ISO Date Format">
+                    <Switch checked={settings.dtIsoFormat} label="Force ISO Date Format" change={(dtIsoFormat) => void change({ dtIsoFormat })} />
+                </SettingsRow>
+                <SettingsRow label="Week Starts On" description="Choose the first day shown in calendars.">
+                    <select value={settings.weekStartsOn} onChange={(event) => void change({ weekStartsOn: Number(event.target.value) as 0 | 1 | 6 })} className="h-8 rounded-md border border-input bg-background px-2 text-xs" aria-label="Week Starts On">
+                        <option value={1}>Monday</option>
+                        <option value={0}>Sunday</option>
+                        <option value={6}>Saturday</option>
+                    </select>
+                </SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Friend Log">
                 <SettingsRow label="Hide Unfriend Events">

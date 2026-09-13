@@ -641,6 +641,15 @@ const migrations: Migration[] = [
             await c.appSettings.updateMany({ hideNicknames: { $exists: false } }, { $set: { hideNicknames: false, updatedAt: new Date() } });
         },
     },
+    {
+        version: 63,
+        name: "add-time-and-date-preferences",
+        async apply(c) {
+            await c.appSettings.updateMany({ dtHour12: { $exists: false } }, { $set: { dtHour12: false, updatedAt: new Date() } });
+            await c.appSettings.updateMany({ dtIsoFormat: { $exists: false } }, { $set: { dtIsoFormat: false, updatedAt: new Date() } });
+            await c.appSettings.updateMany({ weekStartsOn: { $exists: false } }, { $set: { weekStartsOn: 1, updatedAt: new Date() } });
+        },
+    },
 ];
 
 async function applyMigrations() {

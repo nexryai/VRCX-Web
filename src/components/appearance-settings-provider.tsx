@@ -11,6 +11,9 @@ type AppearanceSettings = {
     hideUserNotes: boolean;
     hideUserMemos: boolean;
     hideNicknames: boolean;
+    dtHour12: boolean;
+    dtIsoFormat: boolean;
+    weekStartsOn: 0 | 1 | 6;
 };
 
 const defaultAppearanceSettings: AppearanceSettings = {
@@ -22,6 +25,9 @@ const defaultAppearanceSettings: AppearanceSettings = {
     hideUserNotes: false,
     hideUserMemos: false,
     hideNicknames: false,
+    dtHour12: false,
+    dtIsoFormat: false,
+    weekStartsOn: 1,
 };
 const AppearanceSettingsContext = createContext<AppearanceSettings>(defaultAppearanceSettings);
 
@@ -42,6 +48,9 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                     hideUserNotes: value.hideUserNotes === true,
                     hideUserMemos: value.hideUserMemos === true,
                     hideNicknames: value.hideNicknames === true,
+                    dtHour12: value.dtHour12 === true,
+                    dtIsoFormat: value.dtIsoFormat === true,
+                    weekStartsOn: value.weekStartsOn === 0 || value.weekStartsOn === 6 ? value.weekStartsOn : 1,
                 }),
             )
             .catch(() => undefined);
@@ -56,6 +65,9 @@ export function AppearanceSettingsProvider({ children }: { children: React.React
                 hideUserNotes: value && typeof value.hideUserNotes === "boolean" ? value.hideUserNotes : current.hideUserNotes,
                 hideUserMemos: value && typeof value.hideUserMemos === "boolean" ? value.hideUserMemos : current.hideUserMemos,
                 hideNicknames: value && typeof value.hideNicknames === "boolean" ? value.hideNicknames : current.hideNicknames,
+                dtHour12: value && typeof value.dtHour12 === "boolean" ? value.dtHour12 : current.dtHour12,
+                dtIsoFormat: value && typeof value.dtIsoFormat === "boolean" ? value.dtIsoFormat : current.dtIsoFormat,
+                weekStartsOn: value && (value.weekStartsOn === 0 || value.weekStartsOn === 1 || value.weekStartsOn === 6) ? value.weekStartsOn : current.weekStartsOn,
             }));
         }
         window.addEventListener("vrcx:settings", applySettings);
@@ -101,4 +113,9 @@ export function useUserNoteVisibility() {
 
 export function useMemoNicknamesVisible() {
     return !useContext(AppearanceSettingsContext).hideNicknames;
+}
+
+export function useDateTimeSettings() {
+    const settings = useContext(AppearanceSettingsContext);
+    return { hour12: settings.dtHour12, iso: settings.dtIsoFormat, weekStartsOn: settings.weekStartsOn };
 }

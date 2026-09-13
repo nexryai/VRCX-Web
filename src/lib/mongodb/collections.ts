@@ -111,6 +111,9 @@ export type AppSettingsDocument = {
     hideUserNotes: boolean;
     hideUserMemos: boolean;
     hideNicknames: boolean;
+    dtHour12: boolean;
+    dtIsoFormat: boolean;
+    weekStartsOn: 0 | 1 | 6;
     legacyBrowserSettingsImportVersion: 0 | 1;
     legacyBrowserSettingsImportedAt?: Date;
     legacyBrowserSettingsImportedKeys?: LegacyBrowserStorageKey[];

@@ -122,6 +122,9 @@ export const appSettingsUpdateSchema = z
         hideUserNotes: z.boolean().optional(),
         hideUserMemos: z.boolean().optional(),
         hideNicknames: z.boolean().optional(),
+        dtHour12: z.boolean().optional(),
+        dtIsoFormat: z.boolean().optional(),
+        weekStartsOn: z.union([z.literal(0), z.literal(1), z.literal(6)]).optional(),
     })
     .strict()
     .refine((value) => Object.values(value).some((item) => item !== undefined));
@@ -199,5 +202,8 @@ export function serializeAppSettings(settings?: Partial<AppSettingsPayload> | nu
         hideUserNotes: settings?.hideUserNotes ?? false,
         hideUserMemos: settings?.hideUserMemos ?? false,
         hideNicknames: settings?.hideNicknames ?? false,
+        dtHour12: settings?.dtHour12 ?? false,
+        dtIsoFormat: settings?.dtIsoFormat ?? false,
+        weekStartsOn: settings?.weekStartsOn === 0 || settings?.weekStartsOn === 6 ? settings.weekStartsOn : 1,
     };
 }

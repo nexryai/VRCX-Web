@@ -4,11 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CalendarRange, ChevronRight, Clock3, MapPin, Search, X } from "lucide-react";
 
+import { useDateTimeSettings } from "@/components/appearance-settings-provider";
+import { formatVrcxDate } from "@/lib/date-format";
 import type { GameSessionActivityDto, GameSessionDto, GameSessionsResponse } from "@/lib/game-log/types";
-
-function formatDate(value: string) {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" }).format(new Date(value));
-}
 
 function formatDuration(session: GameSessionDto) {
     if (!session.endedAt) return "";
@@ -19,10 +17,6 @@ function formatDuration(session: GameSessionDto) {
     if (hours) return `${hours}h ${minutes}m`;
     if (minutes) return `${minutes}m ${remainder}s`;
     return `${remainder}s`;
-}
-
-function formatTime(value: string) {
-    return new Intl.DateTimeFormat(undefined, { timeStyle: "medium" }).format(new Date(value));
 }
 
 function compactValue(value?: string) {
@@ -41,9 +35,10 @@ function activityDescription(activity: GameSessionActivityDto) {
 }
 
 function SessionActivity({ activity }: { activity: GameSessionActivityDto }) {
+    const dateSettings = useDateTimeSettings();
     return (
         <div className="flex min-h-7 items-center gap-1.5 rounded px-2 py-0.5 text-[0.8125rem] text-muted-foreground hover:bg-muted/50">
-            <span className="w-[5.5rem] shrink-0 text-[0.75rem] tabular-nums">{formatTime(activity.occurredAt)}</span>
+            <span className="w-[5.5rem] shrink-0 text-[0.75rem] tabular-nums">{formatVrcxDate(activity.occurredAt, "time", dateSettings)}</span>
             <span className="inline-flex h-5 min-w-20 shrink-0 items-center justify-center rounded border border-border px-1.5 text-[0.6875rem]">{activity.type}</span>
             <span className="min-w-0 flex-1 truncate text-foreground" title={activityDescription(activity)}>
                 {activityDescription(activity)}
@@ -56,6 +51,7 @@ function SessionActivity({ activity }: { activity: GameSessionActivityDto }) {
 }
 
 function SessionSegment({ session, latest }: { session: GameSessionDto; latest: boolean }) {
+    const dateSettings = useDateTimeSettings();
     const [collapsed, setCollapsed] = useState(false);
     const duration = formatDuration(session);
     return (
@@ -70,7 +66,7 @@ function SessionSegment({ session, latest }: { session: GameSessionDto; latest: 
                 <MapPin aria-hidden="true" className="size-4 shrink-0 text-primary" />
                 <span className="min-w-0 flex-1 truncate text-sm sm:flex-none">{session.worldName || session.worldId || session.location}</span>
                 {session.groupName ? <span className="min-w-0 truncate text-xs text-muted-foreground max-sm:hidden">({session.groupName})</span> : null}
-                <span className="shrink-0 text-[0.6875rem] text-muted-foreground max-sm:hidden">{formatDate(session.startedAt)}</span>
+                <span className="shrink-0 text-[0.6875rem] text-muted-foreground max-sm:hidden">{formatVrcxDate(session.startedAt, "long", dateSettings)}</span>
                 {duration ? <span className="h-4 rounded border border-border px-1 font-mono text-[0.625rem] leading-[0.875rem]">{duration}</span> : null}
                 {!duration && latest && session.current ? (
                     <span className="h-4 rounded border border-border px-1 text-[0.625rem] leading-[0.875rem]">
@@ -80,7 +76,7 @@ function SessionSegment({ session, latest }: { session: GameSessionDto; latest: 
                 ) : null}
                 <span className="flex w-full min-w-0 items-center gap-2 pl-[3.75rem] text-[0.6875rem] text-muted-foreground sm:hidden">
                     {session.groupName ? <span className="min-w-0 truncate">({session.groupName})</span> : null}
-                    <span className="ml-auto shrink-0">{formatDate(session.startedAt)}</span>
+                    <span className="ml-auto shrink-0">{formatVrcxDate(session.startedAt, "long", dateSettings)}</span>
                 </span>
             </button>
             {!collapsed ? (
@@ -98,7 +94,7 @@ function SessionSegment({ session, latest }: { session: GameSessionDto; latest: 
                         </span>
                         <span className="flex items-center gap-1 sm:justify-end">
                             <Clock3 aria-hidden="true" className="size-3" />
-                            Last observed {formatDate(session.lastObservedAt)}
+                            Last observed {formatVrcxDate(session.lastObservedAt, "long", dateSettings)}
                         </span>
                     </div>
                 </div>
